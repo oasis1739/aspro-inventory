@@ -538,6 +538,17 @@ let currentTab = 'all', editMode = false, expMode = 'all';
 
 
 
+
+// ── 사방넷 자체코드 → 이카운트 품번 직접 연결 (숫자형 자체코드 등 prefix 매칭 불가한 경우) ──
+const SAB_IC_OVERRIDE = {
+  '10058754926': 'N1012',   // 23SS 막스 / 바스켓 돌먼 ↔ 막스스튜디오 바스켓 반팔니트
+  '10058824019': 'N1009',   // 23SS 막스 / 라운드 썸머 쿨 니트 ↔ 막스스튜디오 썸머 쿨 니트
+};
+// 색상 오버라이드: 사방넷 색상명 → 이카운트 색상코드 (특수케이스)
+const SAB_COLOR_OVERRIDE = {
+  '10058754926': {'와인':'WN','베이지':'BE','네이비':'NA','크림':'CR'},
+  '10058824019': {'라이트그레이':'LG','썸머브라운':'BR','네이비':'NA'},
+};
 // ── 3종택1 복사상품 정적 매핑 (단색↔다색 동일 재고) ──
 const EXTRA_STATIC_MAP = {
   '100334-0005':'243NT05-88-AP',
@@ -1027,10 +1038,15 @@ function getIcountQty(sabData_row) {
     if (m) cc = COLOR_MAP[m[1]] || m[1];  // BG→BE 변환 적용
   }
 
-  // 후보군: 자체코드 직접 → prefix → fallback prefix
+  // 후보군: 자체코드 직접 → SAB_IC_OVERRIDE → prefix → fallback prefix
   const pfx = 자체.split('-')[0];
   const fb  = getFallbackPrefix(자체);
-  let items = icMap[자체] || icMap[pfx] || (fb ? icMap[fb] : null) || [];
+  const overrideKey = SAB_IC_OVERRIDE[자체];
+  if (overrideKey && SAB_COLOR_OVERRIDE[자체] && cc) {
+    const colorOvr = SAB_COLOR_OVERRIDE[자체];
+    cc = colorOvr[cc] || cc;
+  }
+  let items = icMap[자체] || (overrideKey ? icMap[overrideKey] : null) || icMap[pfx] || (fb ? icMap[fb] : null) || [];
 
   // ── 상품명 기반 보조 탐색 (자체코드로 못 찾을 때) ──
   if (!items.length && sabName) {
