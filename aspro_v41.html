@@ -1660,7 +1660,7 @@ async function loadFromSheets() {
     // matchMap + soldoutMap 업데이트 (시트가 마스터)
     matchMap = { ...imported };
     soldoutMap = { ...importedSoldout };
-    extraMap = {};
+    // extraMap 초기화 안 함 - 기존 수기 매핑 보존 (EXTRA_STATIC_MAP과 함께 항상 유지)
     try {
       localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap));
       localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap));
@@ -1741,6 +1741,7 @@ async function autoLoadFromSheets() {
       if (cnt > 0) {
         matchMap = { ...data.map };
         soldoutMap = { ...( data.soldout || {}) };
+        // extraMap 건드리지 않음 - 수기 매핑 항상 보존
         try {
           localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap));
           localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap));
