@@ -552,6 +552,18 @@ const EXTRA_STATIC_MAP = {
   '100334-0014':'243NT05-66-GR',
   '100334-0015':'243NT05-66-BK',
   '100334-0016':'243NT05-77-AP',
+  '101853-0001':'MW262C004CD-SI-55',
+  '101853-0002':'MW262C004CD-SI-66',
+  '101853-0003':'MW262C004CD-SI-77',
+  '101853-0004':'MW262C004CD-SI-88',
+  '101853-0005':'MW262C004CD-WH-55',
+  '101853-0006':'MW262C004CD-WH-66',
+  '101853-0007':'MW262C004CD-WH-77',
+  '101853-0008':'MW262C004CD-WH-88',
+  '101853-0009':'MW262C004CD-BK-55',
+  '101853-0010':'MW262C004CD-BK-66',
+  '101853-0011':'MW262C004CD-BK-77',
+  '101853-0012':'MW262C004CD-BK-88',
   '101854-0001':'MW262C002PO',
   '101854-0002':'MW262C002PO',
   '101854-0003':'MW262C002PO',
@@ -645,6 +657,11 @@ function loadExtra() {
   } catch(e) { soldoutMap = {}; }
   updateSavedMapCnt();
   updateSoldoutCnt();
+  // Sheets URL 미설정 시 기본값 자동 적용
+  if (!localStorage.getItem(SHEETS_URL_KEY) && DEFAULT_SHEETS_URL) {
+    localStorage.setItem(SHEETS_URL_KEY, DEFAULT_SHEETS_URL);
+    log('[OK] Sheets URL 자동 설정됨', 'ok');
+  }
 }
 
 function saveExtra() {
@@ -1620,11 +1637,13 @@ function exportMapExcel(){
 
 // ── Google Sheets 연동 ──
 const SHEETS_URL_KEY = 'aspro_sheets_url';
+// 기본 Sheets URL 하드코딩 (업데이트 시 자동 적용)
+const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
 
 function showSheetsModal() {
-  const saved = localStorage.getItem(SHEETS_URL_KEY) || '';
+  const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
   document.getElementById('sheetsUrl').value = saved;
-  if (saved) document.getElementById('sheetsUrlStatus').textContent = '✅ 저장된 URL 있음';
+  if (saved) document.getElementById('sheetsUrlStatus').textContent = '✅ URL 설정됨';
   document.getElementById('sheetsModal').classList.add('show');
 }
 
