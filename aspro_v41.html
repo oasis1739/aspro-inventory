@@ -537,6 +537,46 @@ let nomapRows = [];
 let currentTab = 'all', editMode = false, expMode = 'all';
 
 
+
+// ── 3종택1 복사상품 정적 매핑 (단색↔다색 동일 재고) ──
+const EXTRA_STATIC_MAP = {
+  '101854-0001':'MW262C002PO',
+  '101854-0002':'MW262C002PO',
+  '101854-0003':'MW262C002PO',
+  '101854-0004':'MW262C002PO',
+  '101854-0005':'MW262C002PO',
+  '101854-0006':'MW262C002PO',
+  '101854-0007':'MW262C002PO',
+  '101854-0008':'MW262C002PO',
+  '101854-0009':'MW262C002PO',
+  '101854-0010':'MW262C002PO',
+  '101854-0011':'MW262C002PO',
+  '101854-0012':'MW262C002PO',
+  '101860-0001':'ATG261002CD-5',
+  '101860-0002':'ATG261002CD-6',
+  '101860-0003':'ATG261002CD-7',
+  '101860-0004':'ATG261002CD-8',
+  '101860-0005':'ATG261002CD-5',
+  '101860-0006':'ATG261002CD-6',
+  '101860-0007':'ATG261002CD-7',
+  '101860-0008':'ATG261002CD-8',
+  '101860-0009':'ATG261002CD-5',
+  '101860-0010':'ATG261002CD-6',
+  '101860-0011':'ATG261002CD-7',
+  '101860-0012':'ATG261002CD-8',
+  '101864-0001':'243MW01-55-GR',
+  '101864-0002':'243MW01-66-GR',
+  '101864-0003':'243MW01-77-GR',
+  '101864-0004':'243MW01-8-GR',
+  '101864-0005':'243MW01-55-OL',
+  '101864-0006':'243MW01-66-OL',
+  '101864-0007':'243MW01-77-OL',
+  '101864-0008':'243MW01-88-OL',
+  '101864-0009':'243MW01-55-BK',
+  '101864-0010':'243MW01-66-BK',
+  '101864-0011':'243MW01-77-BK',
+  '101864-0012':'243MW01-88-BK'
+};
 // ── KCFI 재고 (이미지 기반 수동 입력, 2026-04-15 기준) ──
 // 이미지로 수신한 KCFI 창고 재고를 사방넷코드 직접 매핑
 // 업데이트: 이미지 수신 시 수동 수정 또는 별도 업로드 기능 사용
@@ -841,7 +881,7 @@ function tryLoadSavedMatchFile() {
 // MATCH LOGIC
 // ══════════════════════════════════════════════
 function getGimpoQty(sabCode, opt, sabName) {
-  let 물류 = matchMap[sabCode] || extraMap[sabCode];
+  let 물류 = matchMap[sabCode] || extraMap[sabCode] || EXTRA_STATIC_MAP[sabCode];
 
   // 매칭파일에 없으면 상품명+옵션으로 복사상품 매칭 시도
   if (!물류 && sabName && opt) {
@@ -1669,7 +1709,18 @@ function copyAppsScript() {
 // 페이지 로드 시 Sheets URL 있으면 자동 불러오기
 async function autoLoadFromSheets() {
   const url = localStorage.getItem(SHEETS_URL_KEY);
-  if (!url) return;
+  if (!url) {
+    // Sheets 미연동 시 헤더에 권장 배너 표시
+    const btn = document.getElementById('sheetBtn');
+    if (btn) {
+      btn.style.background = 'var(--warn)';
+      btn.style.color = '#000';
+      btn.style.borderColor = 'var(--warn)';
+      btn.title = '⚠ Google Sheets 미연동 — 팀 공유 및 데이터 백업을 위해 연동을 권장합니다';
+      btn.textContent = '⚠ Sheets 연동 필요';
+    }
+    return;
+  }
   try {
     const res = await fetch(url);
     const data = await res.json();
@@ -1686,6 +1737,9 @@ async function autoLoadFromSheets() {
         updateSoldoutCnt();
         const soCnt = Object.keys(soldoutMap).length;
         log(`[OK] Google Sheets 자동 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${soCnt}건`, 'ok');
+        // 연동 성공 시 버튼 정상화
+        const btn = document.getElementById('sheetBtn');
+        if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.title=''; btn.textContent='☁ Google Sheets 연동'; }
       }
     }
   } catch(e) {
