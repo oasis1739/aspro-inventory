@@ -229,7 +229,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
   <div class="sec">
     <div class="sec-ttl">📦 일괄 업로드</div>
     <div id="batchZone" style="border:2px dashed var(--text3);border-radius:8px;padding:10px;text-align:center;cursor:pointer;position:relative;transition:border-color .2s" onclick="document.getElementById('batchIn').click()">
-      <input type="file" id="batchIn" accept=".xlsx" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="loadBatch(event.target.files)">
+      <input type="file" id="batchIn" accept=".xlsx" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="loadBatch(event.target.files); this.value='';">
       <div style="font-size:18px">📂</div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px">여러 파일 한번에 선택</div>
       <div style="font-size:9px;color:var(--text3);margin-top:2px">파일명으로 자동 분류됩니다</div>
@@ -2017,7 +2017,6 @@ async function autoLoadFromSheets() {
         Object.entries(data.map).forEach(([k,v]) => { if(isValidGp(v)) filteredMap[k]=v; });
         const localCnt = Object.keys(matchMap).length;
         // Sheets와 로컬을 merge — 로컬 우선, Sheets는 없는 항목만 추가
-        // (Sheets가 로컬보다 적을 때 일방적으로 덮어쓰는 문제 방지)
         const merged = { ...filteredMap, ...matchMap };
         matchMap = merged;
         const mergedCnt = Object.keys(matchMap).length;
@@ -2033,6 +2032,7 @@ async function autoLoadFromSheets() {
           log(`  신원재고(KCFI): Sheets ${kcfiCnt}건 동기화`, 'ok');
         }
         // extraMap 건드리지 않음 - 수기 매핑 항상 보존
+        // localStorage는 항상 merge 결과(최대값)로 저장 — Sheets < 로컬이어도 손실 없음
         try {
           localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap));
           localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap));
@@ -2041,8 +2041,11 @@ async function autoLoadFromSheets() {
         updateSoldoutCnt();
         const soCnt = Object.keys(soldoutMap).length;
         const kcfiSyncCnt = data.kcfi ? Object.keys(data.kcfi).length : 0;
-        const addedFromSheets = mergedCnt - localCnt;
         log(`[OK] Google Sheets 자동 동기화: 매핑 ${mergedCnt.toLocaleString()}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiSyncCnt}건`, 'ok');
+        // 로컬이 Sheets보다 많으면 Sheets 업데이트 안내
+        if (mergedCnt > cnt) {
+          log(`[안내] 로컬(${mergedCnt}건) > Sheets(${cnt}건) — "Sheets에 저장" 클릭하면 동기화됩니다`, 'warn');
+        }
         // 연동 성공 시 버튼 정상화
         const btn = document.getElementById('sheetBtn');
         if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.title=''; btn.textContent='☁ Google Sheets 연동'; }
@@ -2307,9 +2310,13 @@ if (batchZoneEl) {
 }
 
 document.getElementById('expAll').style.border='2px solid var(--accent)';
-loadExtra();
-tryLoadSavedMatchFile();
-autoLoadFromSheets();  // Sheets 자동 동기화
+// 초기화 순서 보장: loadExtra → tryLoadSavedMatchFile → autoLoadFromSheets(fetch)
+// autoLoadFromSheets는 fetch 비동기라 tryLoad보다 먼저 matchMap 건드릴 수 있으므로 순서 강제
+(async () => {
+  loadExtra();
+  tryLoadSavedMatchFile();
+  await autoLoadFromSheets();  // Sheets 자동 동기화 (로컬 로드 완료 후)
+})();
 </script>
 </body>
 </html>
