@@ -145,11 +145,6 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
   <div class="ver">v4.1</div>
   <div class="hright">
     <span id="lastUp" style="font-size:10px;color:var(--text3);font-family:var(--mono)">대기중</span>
-    <button class="hbtn" onclick="exportMapJSON()">⬇ 매핑 JSON</button>
-    <button class="hbtn" onclick="exportMapExcel()">📊 매핑 엑셀</button>
-    <button class="hbtn" onclick="document.getElementById('importMapInput').click()">⬆ 매핑 가져오기</button>
-    <input type="file" id="importMapInput" accept=".json,.xlsx" style="display:none" onchange="importMapFile(event)">
-    <button class="hbtn" onclick="showMapInfo()">🔗 매핑 현황</button>
     <button class="hbtn" id="sheetBtn" onclick="showSheetsModal()">☁ Google Sheets 연동</button>
   </div>
 </div>
@@ -228,8 +223,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
   <!-- 일괄 업로드 -->
   <div class="sec">
     <div class="sec-ttl">📦 일괄 업로드</div>
-    <div id="batchZone" style="border:2px dashed var(--text3);border-radius:8px;padding:10px;text-align:center;cursor:pointer;position:relative;transition:border-color .2s" onclick="document.getElementById('batchIn').click()">
-      <input type="file" id="batchIn" accept=".xlsx" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="loadBatch(event.target.files); this.value='';">
+    <div id="batchZone" style="border:2px dashed var(--text3);border-radius:8px;padding:10px;text-align:center;cursor:pointer;position:relative;transition:border-color .2s" onclick="triggerBatchUpload()">
       <div style="font-size:18px">📂</div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px">여러 파일 한번에 선택</div>
       <div style="font-size:9px;color:var(--text3);margin-top:2px">파일명으로 자동 분류됩니다</div>
@@ -338,12 +332,10 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
     <!-- 매핑없음 탭 -->
     <div id="nomapWrap" style="display:none">
       <div class="notice nw"><span>⚠</span>
-        <div>김포 매칭파일에도, 이카운트에도 연결 정보가 없는 사방넷 단품입니다. 매칭파일을 업데이트하거나 아래에서 직접 김포 물류품번을 입력하세요.</div>
+        <div>매칭파일·이카운트에 없는 단품입니다. 아래에 물류품번 입력 후 저장하면 다음 매칭부터 반영됩니다.</div>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-pp" onclick="saveNomapEntries()">💾 입력된 매핑 저장</button>
-        <button class="btn btn-n" onclick="exportMapJSON()">⬇ JSON</button>
-        <button class="btn btn-n" onclick="exportMapExcel()">📊 엑셀</button>
         <span style="font-size:10px;color:var(--text3)" id="nomapTotal"></span>
       </div>
       <div class="twrap"><div class="tscroll">
@@ -385,8 +377,6 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
       <div style="display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap">
         <button class="btn btn-p" onclick="addMapRow()">+ 행 추가</button>
         <button class="btn btn-s" onclick="saveNomapEntries()">💾 전체 저장</button>
-        <button class="btn btn-n" onclick="exportMapJSON()">⬇ JSON</button>
-        <button class="btn btn-n" onclick="exportMapExcel()">📊 엑셀</button>
         <span style="font-size:10px;color:var(--text3);align-self:center" id="mapviewCnt"></span>
       </div>
       <div class="twrap"><div class="tscroll">
@@ -555,7 +545,7 @@ function doPost(e) {
 
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px">
       <button class="btn btn-p" onclick="saveSheetsUrlBtn()">💾 URL 저장</button>
-      <button class="btn btn-p" onclick="loadFromSheets()">⬇ Sheets 불러오기</button>
+      <button class="btn btn-p" onclick="loadFromSheets()">⬇ 불러오기</button>
       <button class="btn btn-s" onclick="saveToSheets()">⬆ Sheets에 저장</button>
       <button class="btn btn-n" onclick="copyAppsScript()">📋 코드 복사</button>
     </div>
@@ -1098,6 +1088,17 @@ function updateKCFICnt() {
 // ══════════════════════════════════════════════
 // 일괄 업로드 (파일명 자동 라우팅)
 // ══════════════════════════════════════════════
+function triggerBatchUpload() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.xlsx';
+  inp.multiple = true;
+  inp.style.display = 'none';
+  inp.onchange = () => { loadBatch(inp.files); document.body.removeChild(inp); };
+  document.body.appendChild(inp);
+  inp.click();
+}
+
 async function loadBatch(files) {
   const fileArr = Array.from(files);
   const routed = { ic: [], gp: [], sab: [], match: [], kcfi: [], unknown: [] };
@@ -1404,16 +1405,12 @@ function runMatch() {
       물류품번 = gpRes.물류품번 || '—';
       cGP++;
     } else {
-      // 3순위: KCFI(신원) — matchMap으로 물류품번 조회 후 kcfiMap에서 수량
-      const gp = matchMap[sc] || extraMap[sc];
-      if (gp) {
-        const gpUpper = String(gp).toUpperCase();
-        if (kcfiMap[gpUpper] !== undefined) {
-          finalQty = kcfiMap[gpUpper];
-          src = 'KCFI';
-          물류품번 = gp;
-          cGP++;
-        }
+      // 3순위: KCFI(신원) — 사방넷코드로 kcfiMap 직접 조회
+      if (kcfiMap[sc] !== undefined) {
+        finalQty = kcfiMap[sc];
+        src = 'KCFI';
+        물류품번 = matchMap[sc] || extraMap[sc] || '—';
+        cGP++;
       }
     }
     if (finalQty === null && soldoutMap[sc]) {
@@ -1927,14 +1924,22 @@ async function loadFromSheets() {
     if (!data.ok) throw new Error(data.error || '서버 오류');
     const imported = data.map || {};
     const importedSoldout = data.soldout || {};
+    const importedKcfi = data.kcfi || {};
     const cnt = Object.keys(imported).length;
     const soCnt = Object.keys(importedSoldout).length;
+    const kcfiCnt = Object.keys(importedKcfi).length;
     // matchMap + soldoutMap 업데이트 (시트가 마스터)
     const filteredImport = {};
     Object.entries(imported).forEach(([k,v]) => { if(isValidGp(v)) filteredImport[k]=v; });
     matchMap = filteredImport;
     soldoutMap = { ...importedSoldout };
-    // extraMap 초기화 안 함 - 기존 수기 매핑 보존 (EXTRA_STATIC_MAP과 함께 항상 유지)
+    // kcfiMap 업데이트
+    if (kcfiCnt > 0) {
+      kcfiMap = { ...importedKcfi };
+      try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
+      updateKCFICnt();
+    }
+    // extraMap 초기화 안 함 - 기존 수기 매핑 보존
     try {
       localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap));
       localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap));
@@ -1942,9 +1947,9 @@ async function loadFromSheets() {
     saveExtra();
     updateSavedMapCnt();
     updateSoldoutCnt();
-    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건`;
+    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건`;
     st.style.color = 'var(--success)';
-    log(`[OK] Google Sheets 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건`, 'ok');
+    log(`[OK] Google Sheets 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
   } catch(e) {
     st.textContent = `❌ 오류: ${e.message}`;
     st.style.color = 'var(--danger)';
@@ -2014,26 +2019,19 @@ async function autoLoadFromSheets() {
     if (data.ok && data.map) {
       const cnt = Object.keys(data.map).length;
       if (cnt > 0) {
+        // Sheets가 마스터 — 완전히 덮어씀 (merge 없음)
         const filteredMap = {};
         Object.entries(data.map).forEach(([k,v]) => { if(isValidGp(v)) filteredMap[k]=v; });
-        const localCnt = Object.keys(matchMap).length;
-        // Sheets와 로컬을 merge — 로컬 우선, Sheets는 없는 항목만 추가
-        const merged = { ...filteredMap, ...matchMap };
-        matchMap = merged;
-        const mergedCnt = Object.keys(matchMap).length;
-        soldoutMap = { ...( data.soldout || {}) };
-        // KCFI 신원재고 — Sheets가 마스터 (파일 업로드보다 Sheets 우선)
+        matchMap = filteredMap;
+        soldoutMap = { ...(data.soldout || {}) };
+        // KCFI
         if (data.kcfi && Object.keys(data.kcfi).length > 0) {
-          const kcfiCnt = Object.keys(data.kcfi).length;
-          kcfiMap = { ...kcfiMap, ...data.kcfi }; // Sheets가 로컬 덮어씀 (Sheets=마스터)
+          kcfiMap = { ...data.kcfi };
           try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
           updateKCFICnt();
           const list = document.getElementById('kcfiList');
-          if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 신원재고</div><div class="fcnt">${kcfiCnt}건</div></div>`;
-          log(`  신원재고(KCFI): Sheets ${kcfiCnt}건 동기화`, 'ok');
+          if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 신원재고</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
         }
-        // extraMap 건드리지 않음 - 수기 매핑 항상 보존
-        // localStorage는 항상 merge 결과(최대값)로 저장 — Sheets < 로컬이어도 손실 없음
         try {
           localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap));
           localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap));
@@ -2041,19 +2039,29 @@ async function autoLoadFromSheets() {
         updateSavedMapCnt();
         updateSoldoutCnt();
         const soCnt = Object.keys(soldoutMap).length;
-        const kcfiSyncCnt = data.kcfi ? Object.keys(data.kcfi).length : 0;
-        log(`[OK] Google Sheets 자동 동기화: 매핑 ${mergedCnt.toLocaleString()}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiSyncCnt}건`, 'ok');
-        // 로컬이 Sheets보다 많으면 Sheets 업데이트 안내
-        if (mergedCnt > cnt) {
-          log(`[안내] 로컬(${mergedCnt}건) > Sheets(${cnt}건) — "Sheets에 저장" 클릭하면 동기화됩니다`, 'warn');
-        }
-        // 연동 성공 시 버튼 정상화
+        const kcfiCnt = Object.keys(kcfiMap).length;
+        log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
         const btn = document.getElementById('sheetBtn');
         if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.title=''; btn.textContent='☁ Google Sheets 연동'; }
       }
     }
   } catch(e) {
-    log(`[INFO] Sheets 자동 동기화 실패 (오프라인 가능): ${e.message}`, 'info');
+    log(`[INFO] Sheets 자동 동기화 실패 — 5초 후 재시도: ${e.message}`, 'info');
+    // 5초 후 1회 재시도
+    setTimeout(async () => {
+      try {
+        const url2 = localStorage.getItem(SHEETS_URL_KEY);
+        if (!url2) return;
+        const res2 = await fetch(url2);
+        const data2 = await res2.json();
+        if (data2.ok) {
+          log('[OK] Sheets 재시도 성공', 'ok');
+          await autoLoadFromSheets();  // 성공하면 정상 로드
+        }
+      } catch(e2) {
+        log(`[INFO] Sheets 재시도도 실패 (오프라인): ${e2.message}`, 'info');
+      }
+    }, 5000);
   }
 }
 
