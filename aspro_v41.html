@@ -734,7 +734,6 @@ function loadExtra() {
       if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">💾 신원재고 localStorage</div><div class="fcnt">${n}건</div></div>`;
     }
   } catch(e) { kcfiMap = {}; }
-  updateSavedMapCnt();
   updateSoldoutCnt();
   updateKCFICnt();
   // Sheets URL 미설정 시 기본값 자동 적용
