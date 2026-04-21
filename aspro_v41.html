@@ -2319,12 +2319,11 @@ if (batchZoneEl) {
 }
 
 document.getElementById('expAll').style.border='2px solid var(--accent)';
-// 초기화 순서 보장: loadExtra → tryLoadSavedMatchFile → autoLoadFromSheets(fetch)
-// autoLoadFromSheets는 fetch 비동기라 tryLoad보다 먼저 matchMap 건드릴 수 있으므로 순서 강제
 (async () => {
-  loadExtra();
-  tryLoadSavedMatchFile();
-  await autoLoadFromSheets();  // Sheets 자동 동기화 (로컬 로드 완료 후)
+  loadExtra();  // extraMap, soldoutMap, kcfiMap localStorage 로드
+  await autoLoadFromSheets();  // Sheets가 마스터 — matchMap 완전 덮어씀
+  // Sheets 실패 시에만 localStorage 백업 사용
+  if (Object.keys(matchMap).length === 0) tryLoadSavedMatchFile();
 })();
 </script>
 </body>
