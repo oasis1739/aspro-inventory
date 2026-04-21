@@ -750,7 +750,7 @@ function saveExtra() {
 }
 
 function updateSavedMapCnt() {
-  const total = Object.keys(matchMap).length + Object.keys(extraMap).length;
+  const total = Object.keys(matchMap).length;
   document.getElementById('savedMapCnt').textContent = total.toLocaleString();
 }
 
@@ -2319,10 +2319,9 @@ if (batchZoneEl) {
 
 document.getElementById('expAll').style.border='2px solid var(--accent)';
 (async () => {
-  loadExtra();  // extraMap, soldoutMap, kcfiMap localStorage 로드
-  await autoLoadFromSheets();  // Sheets가 마스터 — matchMap 완전 덮어씀
-  // Sheets 실패 시에만 localStorage 백업 사용
-  if (Object.keys(matchMap).length === 0) tryLoadSavedMatchFile();
+  loadExtra();
+  await autoLoadFromSheets();
+  if (Object.keys(matchMap).length === 0) tryLoadSavedMatchFile(); // Sheets 실패시만
 })();
 </script>
 </body>
