@@ -1422,7 +1422,8 @@ function runMatch() {
       src = '품절처리';
       물류품번 = '—';
       cZ++;  // 재고0으로 카운트
-    } else {
+    } else if (finalQty === null) {
+      // 매핑없음 — matchMap에도 extraMap에도 이카운트에도 없는 상품
       cNM++;
       nomapRows.push({ ...sab, _manualGimpo: '' });
     }
