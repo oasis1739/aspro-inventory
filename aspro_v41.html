@@ -1842,7 +1842,12 @@ async function autoLoadFromSheets() {
       if (cnt > 0) {
         const filteredMap = {};
         Object.entries(data.map).forEach(([k,v]) => { if(isValidGp(v)) filteredMap[k]=v; });
-        matchMap = filteredMap;
+        const localCnt = Object.keys(matchMap).length;
+        // Sheets와 로컬을 merge — 로컬 우선, Sheets는 없는 항목만 추가
+        // (Sheets가 로컬보다 적을 때 일방적으로 덮어쓰는 문제 방지)
+        const merged = { ...filteredMap, ...matchMap };
+        matchMap = merged;
+        const mergedCnt = Object.keys(matchMap).length;
         soldoutMap = { ...( data.soldout || {}) };
         // extraMap 건드리지 않음 - 수기 매핑 항상 보존
         try {
@@ -1852,7 +1857,8 @@ async function autoLoadFromSheets() {
         updateSavedMapCnt();
         updateSoldoutCnt();
         const soCnt = Object.keys(soldoutMap).length;
-        log(`[OK] Google Sheets 자동 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${soCnt}건`, 'ok');
+        const addedFromSheets = mergedCnt - localCnt;
+        log(`[OK] Google Sheets 자동 동기화: Sheets ${cnt.toLocaleString()}건 + 로컬 ${localCnt.toLocaleString()}건 → merge ${mergedCnt.toLocaleString()}건 (Sheets 추가분: ${addedFromSheets}건) / 품절 ${soCnt}건`, 'ok');
         // 연동 성공 시 버튼 정상화
         const btn = document.getElementById('sheetBtn');
         if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.title=''; btn.textContent='☁ Google Sheets 연동'; }
