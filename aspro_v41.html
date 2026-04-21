@@ -145,6 +145,11 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
   <div class="ver">v4.1</div>
   <div class="hright">
     <span id="lastUp" style="font-size:10px;color:var(--text3);font-family:var(--mono)">대기중</span>
+    <button class="hbtn" onclick="exportMapJSON()">⬇ 매핑 JSON</button>
+    <button class="hbtn" onclick="exportMapExcel()">📊 매핑 엑셀</button>
+    <button class="hbtn" onclick="document.getElementById('importMapInput').click()">⬆ 매핑 가져오기</button>
+    <input type="file" id="importMapInput" accept=".json,.xlsx" style="display:none" onchange="importMapFile(event)">
+    <button class="hbtn" onclick="showMapInfo()">🔗 매핑 현황</button>
     <button class="hbtn" id="sheetBtn" onclick="showSheetsModal()">☁ Google Sheets 연동</button>
   </div>
 </div>
@@ -204,39 +209,6 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
     </div>
   </div>
 
-  <!-- ⑤ 신원재고 -->
-  <div class="sec">
-    <div class="sec-ttl">⑤ 신원 재고 <span class="stag" style="background:var(--pp);color:#fff">저장됨</span></div>
-    <div class="uzone" id="kcfiZone" style="cursor:pointer;position:relative" onclick="document.getElementById('kcfiIn').click()">
-      <input type="file" id="kcfiIn" accept=".xlsx" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="loadKCFI(event)">
-      <div class="uz-icon">💜</div>
-      <div class="uz-lbl">PK/FK/BK/SK_양식.xlsx</div>
-      <div class="uz-sub">품번+색상+사이즈 → 현재고 (복수파일 가능)</div>
-    </div>
-    <div class="flist" id="kcfiList"></div>
-    <div style="margin-top:4px;font-size:10px;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
-      <span>저장된 신원재고: <span id="kcfiCnt" style="color:var(--pp);font-family:var(--mono)">0</span>건</span>
-      <button onclick="clearKCFI()" style="font-size:9px;padding:1px 6px;background:transparent;border:1px solid var(--text3);color:var(--text3);border-radius:3px;cursor:pointer">초기화</button>
-    </div>
-  </div>
-
-  <!-- 일괄 업로드 -->
-  <div class="sec">
-    <div class="sec-ttl">📦 일괄 업로드</div>
-    <div id="batchZone" style="border:2px dashed var(--text3);border-radius:8px;padding:10px;text-align:center;cursor:pointer;position:relative;transition:border-color .2s" onclick="triggerBatchUpload()">
-      <div style="font-size:18px">📂</div>
-      <div style="font-size:11px;color:var(--text2);margin-top:2px">여러 파일 한번에 선택</div>
-      <div style="font-size:9px;color:var(--text3);margin-top:2px">파일명으로 자동 분류됩니다</div>
-    </div>
-    <div style="margin-top:5px;font-size:9px;color:var(--text3);line-height:1.6">
-      📌 <b>이카운트</b>: 파일명에 "이카운트"<br>
-      📌 <b>김포재고</b>: "김포" (매칭 제외)<br>
-      📌 <b>사방넷</b>: "사방넷" or "단품"<br>
-      📌 <b>매칭파일</b>: "매칭" or "match"<br>
-      📌 <b>신원재고</b>: PK/FK/BK/SK로 시작
-    </div>
-  </div>
-
   <!-- 현황 -->
   <div class="sec">
     <div class="sec-ttl">매칭 현황</div>
@@ -271,7 +243,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
     <div class="notice ni">
       <span>ℹ</span>
       <div>
-        <strong>사용 순서:</strong> ① 이카운트 → ② 김포재고(선택) → ③ 사방넷단품 → ④ 매칭파일(저장됨이면 생략) → ⑤ 신원재고(저장됨이면 생략) → ⚡ 실행 → ⬇ 내보내기
+        <strong>사용 순서:</strong> ① 이카운트 → ② 김포재고(선택) → ③ 사방넷단품 → ④ 매칭파일(선택, 저장됨이면 생략가능) → ⚡ 실행 → ⬇ 내보내기
         <br><span style="color:#93c5fd;display:block;margin-top:3px">매칭파일 한번 업로드하면 localStorage에 저장 → 이후 생략 가능</span>
       </div>
     </div>
@@ -332,10 +304,12 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
     <!-- 매핑없음 탭 -->
     <div id="nomapWrap" style="display:none">
       <div class="notice nw"><span>⚠</span>
-        <div>매칭파일·이카운트에 없는 단품입니다. 아래에 물류품번 입력 후 저장하면 다음 매칭부터 반영됩니다.</div>
+        <div>김포 매칭파일에도, 이카운트에도 연결 정보가 없는 사방넷 단품입니다. 매칭파일을 업데이트하거나 아래에서 직접 김포 물류품번을 입력하세요.</div>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-pp" onclick="saveNomapEntries()">💾 입력된 매핑 저장</button>
+        <button class="btn btn-n" onclick="exportMapJSON()">⬇ JSON</button>
+        <button class="btn btn-n" onclick="exportMapExcel()">📊 엑셀</button>
         <span style="font-size:10px;color:var(--text3)" id="nomapTotal"></span>
       </div>
       <div class="twrap"><div class="tscroll">
@@ -377,6 +351,8 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
       <div style="display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap">
         <button class="btn btn-p" onclick="addMapRow()">+ 행 추가</button>
         <button class="btn btn-s" onclick="saveNomapEntries()">💾 전체 저장</button>
+        <button class="btn btn-n" onclick="exportMapJSON()">⬇ JSON</button>
+        <button class="btn btn-n" onclick="exportMapExcel()">📊 엑셀</button>
         <span style="font-size:10px;color:var(--text3);align-self:center" id="mapviewCnt"></span>
       </div>
       <div class="twrap"><div class="tscroll">
@@ -468,36 +444,26 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
       <pre id="appsScriptCode" style="font-size:10px;color:#86efac;line-height:1.6;white-space:pre;margin:0">// 기존 Code.gs 맨 아래에 추가
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  // 매핑 시트 (aspro_match)
+  // 매핑 시트
   let sh = ss.getSheetByName('aspro_match');
   if (!sh) { sh = ss.insertSheet('aspro_match'); sh.appendRow(['사방넷코드','김포물류품번','메모','등록일']); }
   const data = sh.getDataRange().getValues();
   const map = {};
   data.slice(1).forEach(r => { if (r[0]) map[String(r[0])] = String(r[1]); });
-  // 품절 시트 (aspro_soldout)
+  // 품절 시트
   let so = ss.getSheetByName('aspro_soldout');
   if (!so) { so = ss.insertSheet('aspro_soldout'); so.appendRow(['사방넷코드','등록일']); }
   const soData = so.getDataRange().getValues();
   const soldout = {};
   soData.slice(1).forEach(r => { if (r[0]) soldout[String(r[0])] = true; });
-  // KCFI 신원재고 시트 (aspro_kcfi) — 사방넷코드 → 재고수량
-  let kc = ss.getSheetByName('aspro_kcfi');
-  if (!kc) { kc = ss.insertSheet('aspro_kcfi'); kc.appendRow(['사방넷코드','상품명','타입','색상','사이즈','재고','업데이트일','비고']); }
-  const kcData = kc.getDataRange().getValues();
-  const kcfi = {};
-  kcData.slice(1).forEach(r => {
-    const sc = String(r[0] || '').trim();
-    const qty = parseInt(r[5], 10);
-    if (sc && !isNaN(qty)) kcfi[sc] = qty;
-  });
-  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout, kcfi}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const body = JSON.parse(e.postData.contents);
-  // 매핑 저장 (aspro_match)
+  // 매핑 저장
   let sh = ss.getSheetByName('aspro_match');
   if (!sh) { sh = ss.insertSheet('aspro_match'); sh.appendRow(['사방넷코드','김포물류품번','메모','등록일']); }
   const entries = Object.entries(body.map || {});
@@ -510,7 +476,7 @@ function doPost(e) {
     else sh.appendRow([sc, gp, '', new Date().toLocaleDateString('ko-KR')]);
     saved++;
   });
-  // 품절 저장 (aspro_soldout)
+  // 품절 저장
   if (body.soldout) {
     let so = ss.getSheetByName('aspro_soldout');
     if (!so) { so = ss.insertSheet('aspro_soldout'); so.appendRow(['사방넷코드','등록일']); }
@@ -522,22 +488,6 @@ function doPost(e) {
       if (!soIdx[sc]) so.appendRow([sc, new Date().toLocaleDateString('ko-KR')]);
     });
   }
-  // KCFI 재고 저장 (aspro_kcfi) — 재고 수량만 업데이트
-  if (body.kcfi) {
-    let kc = ss.getSheetByName('aspro_kcfi');
-    if (!kc) { kc = ss.insertSheet('aspro_kcfi'); kc.appendRow(['사방넷코드','상품명','타입','색상','사이즈','재고','업데이트일','비고']); }
-    const kcData = kc.getDataRange().getValues();
-    const kcIdx = {};
-    kcData.slice(1).forEach((r,i) => { if (r[0]) kcIdx[String(r[0])] = i+2; });
-    const today = new Date().toLocaleDateString('ko-KR');
-    Object.entries(body.kcfi).forEach(([sc, qty]) => {
-      if (kcIdx[sc]) {
-        kc.getRange(kcIdx[sc], 6).setValue(qty);   // F열: 재고
-        kc.getRange(kcIdx[sc], 7).setValue(today);  // G열: 업데이트일
-      }
-      // 없는 코드는 추가 안 함 — Sheets가 마스터, 앱은 재고만 수정
-    });
-  }
   return ContentService.createTextOutput(JSON.stringify({ok:true, saved}))
     .setMimeType(ContentService.MimeType.JSON);
 }</pre>
@@ -545,7 +495,7 @@ function doPost(e) {
 
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px">
       <button class="btn btn-p" onclick="saveSheetsUrlBtn()">💾 URL 저장</button>
-      <button class="btn btn-p" onclick="loadFromSheets()">⬇ 불러오기</button>
+      <button class="btn btn-p" onclick="loadFromSheets()">⬇ Sheets 불러오기</button>
       <button class="btn btn-s" onclick="saveToSheets()">⬆ Sheets에 저장</button>
       <button class="btn btn-n" onclick="copyAppsScript()">📋 코드 복사</button>
     </div>
@@ -575,8 +525,7 @@ let matchMap = {};
 let normOptMap = {};
 // 품절 처리 목록: key=사방넷코드, value=true
 let soldoutMap = {};
-// KCFI(신원) 재고 (3순위): key=물류품번(대문자), value=재고수량 — 파일 업로드 or localStorage
-let kcfiMap = {};
+// KCFI 재고 (3순위): key=사방넷코드, value=재고수량 (이미지 기반 하드코딩)
 
 // SKIP 집합
 const SKIP_GP = new Set(['nan','','슈컴퍼니-김포이관','확인요망','삭제요망']);
@@ -705,7 +654,43 @@ const EXTRA_STATIC_MAP = {
   '101864-0011':'243MW01-77-BK',
   '101864-0012':'243MW01-88-BK'
 };
-
+// ── KCFI 재고 (이미지 기반 수동 입력, 2026-04-15 기준) ──
+// 이미지로 수신한 KCFI 창고 재고를 사방넷코드 직접 매핑
+// 업데이트: 이미지 수신 시 수동 수정 또는 별도 업로드 기능 사용
+const KCFI_MAP = {
+  '101489-0001':85,'101489-0002':134,'101489-0003':0,'101489-0004':0,
+  '101489-0005':101,'101489-0006':133,'101489-0007':0,'101489-0008':0,
+  '101489-0009':115,'101489-0010':227,'101489-0011':2,'101489-0012':0,
+  '101490-0001':1,'101490-0002':0,'101490-0003':2,
+  '101490-0004':45,'101490-0005':20,'101490-0006':2,
+  '101490-0007':10,'101490-0008':18,'101490-0009':0,
+  '101491-0001':81,'101491-0002':9,'101491-0003':20,'101491-0004':2,
+  '101491-0005':0,'101491-0006':1,'101491-0007':0,'101491-0008':0,
+  '101491-0009':1,'101491-0010':0,'101491-0011':5,'101491-0012':1,
+  '101491-0013':102,'101491-0014':0,'101491-0015':0,'101491-0016':0,
+  '101497-0001':116,'101497-0002':282,'101497-0003':293,'101497-0004':203,
+  '101497-0005':97,'101497-0006':233,'101497-0007':277,'101497-0008':214,
+  '101497-0009':1,'101497-0010':9,'101497-0011':5,'101497-0012':10,
+  '101497-0013':88,'101497-0014':212,'101497-0015':262,'101497-0016':190,
+  '101497-0017':8,'101497-0018':14,'101497-0019':10,'101497-0020':0,
+  // 크리스탈 니트 자켓3종 = 메탈 라운드 니트 가디건 5종택1 (FM251W0001-5CD)
+  '101498-0001':732,'101498-0002':756,'101498-0003':175,'101498-0004':58,
+  '101498-0005':734,'101498-0006':757,'101498-0007':176,'101498-0008':58,
+  '101498-0009':245,'101498-0010':425,'101498-0011':136,'101498-0012':37,
+  '101498-0013':270,'101498-0014':185,'101498-0015':22,'101498-0016':19,
+  '101498-0017':202,'101498-0018':141,'101498-0019':28,'101498-0020':15,
+  '101499-0001':844,'101499-0002':937,'101499-0003':654,'101499-0004':216,
+  '101499-0005':286,'101499-0006':448,'101499-0007':125,'101499-0008':26,
+  '101499-0009':201,'101499-0010':246,'101499-0011':288,'101499-0012':122,
+  '101499-0013':21,'101499-0014':31,'101499-0015':27,'101499-0016':13,
+  '101499-0017':72,'101499-0018':107,'101499-0019':79,'101499-0020':21,
+  '101500-0001':936,'101500-0002':1384,'101500-0003':991,'101500-0004':520,
+  '101500-0005':935,'101500-0006':1379,'101500-0007':993,'101500-0008':521,
+  '101500-0009':155,'101500-0010':201,'101500-0011':72,'101500-0012':65,
+  '101500-0013':322,'101500-0014':479,'101500-0015':416,'101500-0016':216,
+  '101500-0017':448,'101500-0018':697,'101500-0019':483,'101500-0020':228,
+  '101500-0021':14,'101500-0022':14,'101500-0023':10,'101500-0024':0,
+};
 
 // ── LS 로드 ──
 function loadExtra() {
@@ -723,19 +708,8 @@ function loadExtra() {
       log(`[OK] 저장된 품절처리 로드: ${Object.keys(soldoutMap).length}건`, 'ok');
     }
   } catch(e) { soldoutMap = {}; }
-  // KCFI 신원재고 로드
-  try {
-    const kc = localStorage.getItem('aspro_kcfi_v1');
-    if (kc) {
-      kcfiMap = JSON.parse(kc);
-      const n = Object.keys(kcfiMap).length;
-      log(`[OK] 저장된 신원재고 로드: ${n}건`, 'ok');
-      const list = document.getElementById('kcfiList');
-      if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">💾 신원재고 localStorage</div><div class="fcnt">${n}건</div></div>`;
-    }
-  } catch(e) { kcfiMap = {}; }
+  updateSavedMapCnt();
   updateSoldoutCnt();
-  updateKCFICnt();
   // Sheets URL 미설정 시 기본값 자동 적용
   if (!localStorage.getItem(SHEETS_URL_KEY) && DEFAULT_SHEETS_URL) {
     localStorage.setItem(SHEETS_URL_KEY, DEFAULT_SHEETS_URL);
@@ -750,28 +724,8 @@ function saveExtra() {
 }
 
 function updateSavedMapCnt() {
-  const total = Object.keys(matchMap).length;
+  const total = Object.keys(matchMap).length + Object.keys(extraMap).length;
   document.getElementById('savedMapCnt').textContent = total.toLocaleString();
-}
-
-function updateKCFICnt() {
-  const n = Object.keys(kcfiMap).length;
-  const el = document.getElementById('kcfiCnt');
-  if (el) el.textContent = n.toLocaleString();
-  const el2 = document.getElementById('srcKCFI');
-  if (el2) el2.textContent = n > 0 ? n.toLocaleString() : '—';
-}
-
-function clearKCFI() {
-  if (!confirm('신원재고 데이터를 초기화하시겠습니까?')) return;
-  kcfiMap = {};
-  localStorage.removeItem('aspro_kcfi_v1');
-  updateKCFICnt();
-  const zone = document.getElementById('kcfiZone');
-  if (zone) zone.classList.remove('ok');
-  const list = document.getElementById('kcfiList');
-  if (list) list.innerHTML = '';
-  log('[INFO] 신원재고 초기화 완료', 'info');
 }
 
 // ══════════════════════════════════════════════
@@ -1006,131 +960,6 @@ function tryLoadSavedMatchFile() {
     }
   } catch(e) {}
   return false;
-}
-
-// ══════════════════════════════════════════════
-// KCFI(신원) 재고 업로드
-// ══════════════════════════════════════════════
-async function loadKCFI(e) {
-  const files = e.target ? e.target.files : e;
-  if (!files || !files.length) return;
-  let totalLoaded = 0;
-  const newMap = { ...kcfiMap }; // 기존 데이터 유지하며 누적
-  for (const file of Array.from(files)) {
-    try {
-      const sheets = await readXLSX(file);
-      const rows = sheets[0];
-      if (!rows || rows.length < 2) continue;
-      // 헤더: 품번 색상 사이즈 최초가 현재고 행거박스
-      // 품번+색상+사이즈 → 물류품번 형태로 조합 or 품번 그대로 키로
-      let n = 0;
-      for (let i = 1; i < rows.length; i++) {
-        const r = rows[i];
-        if (!r || !r[0]) continue;
-        const 품번 = String(r[0] || '').trim().toUpperCase();
-        const 색상 = String(r[1] || '').trim().toUpperCase();
-        const 사이즈 = String(r[2] || '').trim().toUpperCase();
-        const 현재고 = parseInt(r[4], 10);
-        if (!품번 || isNaN(현재고)) continue;
-        // 품번 단독 키 (NA/FRE 등 단일 옵션 상품)
-        if (!newMap[품번]) newMap[품번] = 0;
-        newMap[품번] += 현재고;
-        // 색상/사이즈가 실질적인 값인 경우 복합키도 등록
-        const 유효색상 = 색상 && 색상 !== 'NA' && 색상 !== 'NAN';
-        const 유효사이즈 = 사이즈 && 사이즈 !== 'FRE' && 사이즈 !== 'NAN';
-        if (유효색상 || 유효사이즈) {
-          const key2 = `${품번}-${색상}-${사이즈}`;
-          newMap[key2] = 현재고;
-        }
-        n++;
-      }
-      totalLoaded += n;
-      log(`[OK] 신원재고 ${file.name}: ${n}건 로드`, 'ok');
-    } catch(ex) {
-      log(`[ERR] 신원재고 ${file.name}: ${ex.message}`, 'err');
-    }
-  }
-  kcfiMap = newMap;
-  // localStorage 저장
-  try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
-  updateKCFICnt();
-  log(`[OK] 신원재고 누적 총 ${Object.keys(kcfiMap).length}건 저장됨`, 'ok');
-  // UI 업데이트
-  const zone = document.getElementById('kcfiZone');
-  if (zone) zone.classList.add('ok');
-  const list = document.getElementById('kcfiList');
-  if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">💜 신원재고 업로드</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
-}
-
-function tryLoadSavedKCFI() {
-  try {
-    const raw = localStorage.getItem('aspro_kcfi_v1');
-    if (raw) {
-      kcfiMap = JSON.parse(raw);
-      const n = Object.keys(kcfiMap).length;
-      updateKCFICnt();
-      log(`[OK] 저장된 신원재고 자동 로드: ${n}건`, 'ok');
-      const list = document.getElementById('kcfiList');
-      if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">💾 신원재고 localStorage</div><div class="fcnt">${n}건</div></div>`;
-      return true;
-    }
-  } catch(e) {}
-  return false;
-}
-
-function updateKCFICnt() {
-  const n = Object.keys(kcfiMap).length;
-  const el = document.getElementById('srcKCFI');
-  if (el) el.textContent = n > 0 ? n.toLocaleString() : '—';
-}
-
-// ══════════════════════════════════════════════
-// 일괄 업로드 (파일명 자동 라우팅)
-// ══════════════════════════════════════════════
-function triggerBatchUpload() {
-  const inp = document.createElement('input');
-  inp.type = 'file';
-  inp.accept = '.xlsx';
-  inp.multiple = true;
-  inp.style.display = 'none';
-  inp.onchange = () => { loadBatch(inp.files); document.body.removeChild(inp); };
-  document.body.appendChild(inp);
-  inp.click();
-}
-
-async function loadBatch(files) {
-  const fileArr = Array.from(files);
-  const routed = { ic: [], gp: [], sab: [], match: [], kcfi: [], unknown: [] };
-
-  for (const f of fileArr) {
-    const nm = f.name.toLowerCase();
-    if (nm.includes('이카운트') || nm.includes('icount') || nm.includes('ic_') || nm.includes('_ic')) {
-      routed.ic.push(f);
-    } else if ((nm.includes('김포') && nm.includes('매칭')) || nm.includes('kimpo_match') || nm.includes('match')) {
-      routed.match.push(f);
-    } else if (nm.includes('김포') || nm.includes('gimpo') || nm.includes('gp_') || nm.includes('_gp')) {
-      routed.gp.push(f);
-    } else if (nm.includes('사방넷') || nm.includes('sabang') || nm.includes('단품')) {
-      routed.sab.push(f);
-    } else if (nm.startsWith('pk') || nm.startsWith('fk') || nm.startsWith('bk') || nm.startsWith('sk') ||
-               nm.includes('신원') || nm.includes('kcfi') || nm.includes('베스띠') || nm.includes('지이크') || nm.includes('파렌')) {
-      routed.kcfi.push(f);
-    } else {
-      routed.unknown.push(f);
-    }
-  }
-
-  log(`[일괄업로드] 이카운트:${routed.ic.length} 김포:${routed.gp.length} 사방넷:${routed.sab.length} 매칭:${routed.match.length} 신원:${routed.kcfi.length} 미인식:${routed.unknown.length}`, 'info');
-
-  if (routed.ic.length)    await loadIC({ target: { files: routed.ic } });
-  if (routed.gp.length)    await loadGimpo({ target: { files: routed.gp } });
-  if (routed.sab.length)   await loadSab({ target: { files: routed.sab } });
-  if (routed.match.length) await loadMatchFile({ target: { files: routed.match } });
-  if (routed.kcfi.length)  await loadKCFI({ target: { files: routed.kcfi } });
-
-  if (routed.unknown.length > 0) {
-    log(`[주의] 파일명 미인식: ${routed.unknown.map(f=>f.name).join(', ')} — 수동으로 업로드하세요`, 'warn');
-  }
 }
 
 // ══════════════════════════════════════════════
@@ -1397,29 +1226,25 @@ function runMatch() {
       src = icRes.src;
       물류품번 = icRes.품목코드 || '—';
       cIC++;
+    } else if (KCFI_MAP[sc] !== undefined) {
+      // 2순위: KCFI (직접 코드 매핑된 상품 → 김포보다 우선)
+      finalQty = KCFI_MAP[sc];
+      src = 'KCFI';
+      물류품번 = '—';
+      cGP++;
     } else if (gpRes !== null) {
-      // 2순위: 김포
+      // 3순위: 김포
       finalQty = gpRes.qty;
       src = gpRes.src;
       물류품번 = gpRes.물류품번 || '—';
       cGP++;
-    } else {
-      // 3순위: KCFI(신원) — 사방넷코드로 kcfiMap 직접 조회
-      if (kcfiMap[sc] !== undefined) {
-        finalQty = kcfiMap[sc];
-        src = 'KCFI';
-        물류품번 = matchMap[sc] || extraMap[sc] || '—';
-        cGP++;
-      }
-    }
-    if (finalQty === null && soldoutMap[sc]) {
+    } else if (soldoutMap[sc]) {
       // 품절 처리된 항목 → 재고0, 공급상태2, 미매칭 탭에 안 나옴
       finalQty = 0;
       src = '품절처리';
       물류품번 = '—';
       cZ++;  // 재고0으로 카운트
-    } else if (finalQty === null) {
-      // 매핑없음 — matchMap에도 extraMap에도 이카운트에도 없는 상품
+    } else {
       cNM++;
       nomapRows.push({ ...sab, _manualGimpo: '' });
     }
@@ -1847,15 +1672,21 @@ function exportMapExcel(){
   // 매칭파일
   for (const [sc, gp] of Object.entries(matchMap)) {
     const s = sabLookup[sc] || {};
-    const kcfi = kcfiMap[String(gp).toUpperCase()] !== undefined ? kcfiMap[String(gp).toUpperCase()] : '';
+    const kcfi = KCFI_MAP[sc] !== undefined ? KCFI_MAP[sc] : '';
     rows.push([sc, s.nm||'', s.opt||'', gp, '매칭파일', kcfi]);
   }
   // 추가매핑
   for (const [sc, gp] of Object.entries(extraMap)) {
     if (matchMap[sc]) continue;
     const s = sabLookup[sc] || {};
-    const kcfi = kcfiMap[String(gp).toUpperCase()] !== undefined ? kcfiMap[String(gp).toUpperCase()] : '';
+    const kcfi = KCFI_MAP[sc] !== undefined ? KCFI_MAP[sc] : '';
     rows.push([sc, s.nm||'', s.opt||'', gp, '추가매핑', kcfi]);
+  }
+  // KCFI 전용 (매칭파일/추가매핑에 없는 것)
+  for (const [sc, qty] of Object.entries(KCFI_MAP)) {
+    if (matchMap[sc] || extraMap[sc]) continue;
+    const s = sabLookup[sc] || {};
+    rows.push([sc, s.nm||'', s.opt||'', '—', 'KCFI전용', qty]);
   }
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -1923,22 +1754,14 @@ async function loadFromSheets() {
     if (!data.ok) throw new Error(data.error || '서버 오류');
     const imported = data.map || {};
     const importedSoldout = data.soldout || {};
-    const importedKcfi = data.kcfi || {};
     const cnt = Object.keys(imported).length;
     const soCnt = Object.keys(importedSoldout).length;
-    const kcfiCnt = Object.keys(importedKcfi).length;
     // matchMap + soldoutMap 업데이트 (시트가 마스터)
     const filteredImport = {};
     Object.entries(imported).forEach(([k,v]) => { if(isValidGp(v)) filteredImport[k]=v; });
     matchMap = filteredImport;
     soldoutMap = { ...importedSoldout };
-    // kcfiMap 업데이트
-    if (kcfiCnt > 0) {
-      kcfiMap = { ...importedKcfi };
-      try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
-      updateKCFICnt();
-    }
-    // extraMap 초기화 안 함 - 기존 수기 매핑 보존
+    // extraMap 초기화 안 함 - 기존 수기 매핑 보존 (EXTRA_STATIC_MAP과 함께 항상 유지)
     try {
       localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap));
       localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap));
@@ -1946,9 +1769,11 @@ async function loadFromSheets() {
     saveExtra();
     updateSavedMapCnt();
     updateSoldoutCnt();
-    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건`;
+    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건`;
     st.style.color = 'var(--success)';
-    log(`[OK] Google Sheets 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
+    log(`[OK] Google Sheets 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건`, 'ok');
+    // 불러오기 후 사방넷 데이터 있으면 자동 재매칭
+    if (sabData.length > 0) { runMatch(); }
   } catch(e) {
     st.textContent = `❌ 오류: ${e.message}`;
     st.style.color = 'var(--danger)';
@@ -1961,27 +1786,26 @@ async function saveToSheets() {
   if (!url) { alert('Apps Script URL을 먼저 입력하세요.'); return; }
   const st = document.getElementById('sheetsStatus');
 
-  // matchMap + extraMap + soldoutMap + kcfiMap 전체 저장
+  // matchMap + extraMap + soldoutMap 전체 저장
   const allMap = { ...matchMap, ...extraMap };
   const total = Object.keys(allMap).length;
   if (total === 0) { alert('저장할 매핑 데이터가 없습니다.\n먼저 매칭파일을 업로드하세요.'); return; }
 
   const soldoutCount = Object.keys(soldoutMap).length;
-  const kcfiCount = Object.keys(kcfiMap).length;
-  st.textContent = `저장 중... (매핑 ${total.toLocaleString()}건 + 품절 ${soldoutCount}건 + 신원재고 ${kcfiCount}건)`;
+  st.textContent = `저장 중... (매핑 ${total.toLocaleString()}건 + 품절 ${soldoutCount}건)`;
   st.style.color = 'var(--accent2)';
 
   try {
     const res = await fetch(url, {
       method: 'POST',
-      body: JSON.stringify({ map: allMap, soldout: soldoutMap, kcfi: kcfiMap }),
+      body: JSON.stringify({ map: allMap, soldout: soldoutMap }),
       headers: { 'Content-Type': 'text/plain' }
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || '서버 오류');
-    st.textContent = `✅ 저장 완료 — 매핑 ${data.saved.toLocaleString()}건 + 품절 ${soldoutCount}건 + 신원재고 ${kcfiCount}건`;
+    st.textContent = `✅ 저장 완료 — 매핑 ${data.saved.toLocaleString()}건 + 품절 ${soldoutCount}건`;
     st.style.color = 'var(--success)';
-    log(`[OK] Google Sheets 저장 완료: 매핑 ${data.saved}건 / 품절 ${soldoutCount}건 / 신원재고 ${kcfiCount}건`, 'ok');
+    log(`[OK] Google Sheets 저장 완료: 매핑 ${data.saved}건 / 품절 ${soldoutCount}건`, 'ok');
   } catch(e) {
     st.textContent = `❌ 오류: ${e.message}`;
     st.style.color = 'var(--danger)';
@@ -2018,19 +1842,11 @@ async function autoLoadFromSheets() {
     if (data.ok && data.map) {
       const cnt = Object.keys(data.map).length;
       if (cnt > 0) {
-        // Sheets가 마스터 — 완전히 덮어씀 (merge 없음)
         const filteredMap = {};
         Object.entries(data.map).forEach(([k,v]) => { if(isValidGp(v)) filteredMap[k]=v; });
         matchMap = filteredMap;
-        soldoutMap = { ...(data.soldout || {}) };
-        // KCFI
-        if (data.kcfi && Object.keys(data.kcfi).length > 0) {
-          kcfiMap = { ...data.kcfi };
-          try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
-          updateKCFICnt();
-          const list = document.getElementById('kcfiList');
-          if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 신원재고</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
-        }
+        soldoutMap = { ...( data.soldout || {}) };
+        // extraMap 건드리지 않음 - 수기 매핑 항상 보존
         try {
           localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap));
           localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap));
@@ -2038,29 +1854,14 @@ async function autoLoadFromSheets() {
         updateSavedMapCnt();
         updateSoldoutCnt();
         const soCnt = Object.keys(soldoutMap).length;
-        const kcfiCnt = Object.keys(kcfiMap).length;
-        log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
+        log(`[OK] Google Sheets 자동 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${soCnt}건`, 'ok');
+        // 연동 성공 시 버튼 정상화
         const btn = document.getElementById('sheetBtn');
         if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.title=''; btn.textContent='☁ Google Sheets 연동'; }
       }
     }
   } catch(e) {
-    log(`[INFO] Sheets 자동 동기화 실패 — 5초 후 재시도: ${e.message}`, 'info');
-    // 5초 후 1회 재시도
-    setTimeout(async () => {
-      try {
-        const url2 = localStorage.getItem(SHEETS_URL_KEY);
-        if (!url2) return;
-        const res2 = await fetch(url2);
-        const data2 = await res2.json();
-        if (data2.ok) {
-          log('[OK] Sheets 재시도 성공', 'ok');
-          await autoLoadFromSheets();  // 성공하면 정상 로드
-        }
-      } catch(e2) {
-        log(`[INFO] Sheets 재시도도 실패 (오프라인): ${e2.message}`, 'info');
-      }
-    }, 5000);
+    log(`[INFO] Sheets 자동 동기화 실패 (오프라인 가능): ${e.message}`, 'info');
   }
 }
 
@@ -2260,9 +2061,9 @@ function log(msg, type='info'){
 }
 
 function resetAll(){
-  if(!confirm('초기화하시겠습니까? (매핑·신원재고는 유지)')) return;
+  if(!confirm('초기화하시겠습니까? (매핑은 유지)')) return;
   icMap={}; gpMap={}; sabData=[]; sabRaw=[]; resultRows=[]; filteredRows=[]; nomapRows=[]; normOptMap={}; soldoutMap={};
-  // matchMap, extraMap, kcfiMap은 유지
+  // matchMap, extraMap은 유지
   ['icList','gpList','sabList'].forEach(id=>document.getElementById(id).innerHTML='');
   ['icIn','gpIn','sabIn'].forEach(id=>document.getElementById(id).value='');
   ['icZone','gpZone','sabZone'].forEach(id=>document.getElementById(id).classList.remove('ok'));
@@ -2293,36 +2094,10 @@ function resetAll(){
   });
 });
 
-// kcfiZone 드래그앤드롭
-const kcfiZoneEl = document.getElementById('kcfiZone');
-if (kcfiZoneEl) {
-  kcfiZoneEl.addEventListener('dragover',e=>{e.preventDefault();kcfiZoneEl.classList.add('drag');});
-  kcfiZoneEl.addEventListener('dragleave',()=>kcfiZoneEl.classList.remove('drag'));
-  kcfiZoneEl.addEventListener('drop',e=>{
-    e.preventDefault();kcfiZoneEl.classList.remove('drag');
-    const files=e.dataTransfer.files; if(!files[0]) return;
-    loadKCFI({target:{files}});
-  });
-}
-
-// batchZone 드래그앤드롭
-const batchZoneEl = document.getElementById('batchZone');
-if (batchZoneEl) {
-  batchZoneEl.addEventListener('dragover',e=>{e.preventDefault();batchZoneEl.style.borderColor='var(--accent)';});
-  batchZoneEl.addEventListener('dragleave',()=>batchZoneEl.style.borderColor='var(--text3)');
-  batchZoneEl.addEventListener('drop',e=>{
-    e.preventDefault();batchZoneEl.style.borderColor='var(--text3)';
-    const files=e.dataTransfer.files; if(!files[0]) return;
-    loadBatch(files);
-  });
-}
-
 document.getElementById('expAll').style.border='2px solid var(--accent)';
-(async () => {
-  loadExtra();
-  await autoLoadFromSheets();
-  if (Object.keys(matchMap).length === 0) tryLoadSavedMatchFile(); // Sheets 실패시만
-})();
+loadExtra();
+tryLoadSavedMatchFile();
+autoLoadFromSheets();  // Sheets 자동 동기화
 </script>
 </body>
 </html>
