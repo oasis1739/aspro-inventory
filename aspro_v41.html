@@ -943,7 +943,10 @@ function tryLoadSavedMatchFile() {
   try {
     const raw = localStorage.getItem('aspro_matchfile_v2');
     if (raw) {
-      matchMap = JSON.parse(raw);
+      const rawParsed = JSON.parse(raw);
+      const filteredRaw = {};
+      Object.entries(rawParsed).forEach(([k,v]) => { if(isValidGp(v)) filteredRaw[k]=v; });
+      matchMap = filteredRaw;
       const n = Object.keys(matchMap).length;
       try {
         const rawN = localStorage.getItem('aspro_normoptmap_v1');
@@ -1698,6 +1701,23 @@ function exportMapExcel(){
 // ── Google Sheets 연동 ──
 const SHEETS_URL_KEY = 'aspro_sheets_url';
 // 기본 Sheets URL 하드코딩 (업데이트 시 자동 적용)
+// 구글시트에서 matchMap으로 넣으면 안 되는 무효 물류품번 목록
+const INVALID_GP_VALUES = new Set([
+  'KCFI 코드없음','슈컴퍼니','슈컴퍼니-김포이관','확인요망','#N/A',
+  '김포재고O상품코드X','삭제요청','삭제요청위에중복','품절',
+  '수량은 있는데 코드가 없음','공통색상코드없음','0',''
+]);
+function isValidGp(v) {
+  if (!v) return false;
+  const s = String(v).trim();
+  if (!s || s === '0') return false;
+  if (INVALID_GP_VALUES.has(s)) return false;
+  if (s.startsWith('김포재고O')) return false;
+  if (s.includes('???')) return false;
+  if (s.includes('중복')) return false;
+  if (s.includes('위에')) return false;
+  return true;
+}
 const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
 
 function showSheetsModal() {
@@ -1737,7 +1757,9 @@ async function loadFromSheets() {
     const cnt = Object.keys(imported).length;
     const soCnt = Object.keys(importedSoldout).length;
     // matchMap + soldoutMap 업데이트 (시트가 마스터)
-    matchMap = { ...imported };
+    const filteredImport = {};
+    Object.entries(imported).forEach(([k,v]) => { if(isValidGp(v)) filteredImport[k]=v; });
+    matchMap = filteredImport;
     soldoutMap = { ...importedSoldout };
     // extraMap 초기화 안 함 - 기존 수기 매핑 보존 (EXTRA_STATIC_MAP과 함께 항상 유지)
     try {
@@ -1818,7 +1840,9 @@ async function autoLoadFromSheets() {
     if (data.ok && data.map) {
       const cnt = Object.keys(data.map).length;
       if (cnt > 0) {
-        matchMap = { ...data.map };
+        const filteredMap = {};
+        Object.entries(data.map).forEach(([k,v]) => { if(isValidGp(v)) filteredMap[k]=v; });
+        matchMap = filteredMap;
         soldoutMap = { ...( data.soldout || {}) };
         // extraMap 건드리지 않음 - 수기 매핑 항상 보존
         try {
