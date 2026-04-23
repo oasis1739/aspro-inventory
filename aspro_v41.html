@@ -637,6 +637,24 @@ let soldoutMap = {};
 let kcfiMap = {};
 let forceZeroMap = {};  // 강제품절: 재고 무관하게 가상재고 0 고정
 
+// ── Sheets / 유효성 상수 (loadExtra 전에 선언 필요) ──
+const SHEETS_URL_KEY = 'aspro_sheets_url';
+const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
+const INVALID_GP_VALUES = new Set([
+  'KCFI 코드없음','슈컴퍼니','슈컴퍼니-김포이관','확인요망','#N/A',
+  '김포재고O상품코드X','삭제요청','삭제요청위에중복','품절',
+  '수량은 있는데 코드가 없음','공통색상코드없음','0',''
+]);
+function isValidGp(v) {
+  if (!v) return false;
+  const s = String(v).trim();
+  if (!s || s === '0') return false;
+  if (INVALID_GP_VALUES.has(s)) return false;
+  if (s.startsWith('김포재고O')) return false;
+  if (s.includes('???') || s.includes('중복') || s.includes('위에')) return false;
+  return true;
+}
+
 const SKIP_GP = new Set(['nan','','슈컴퍼니-김포이관','확인요망','삭제요망']);
 let extraMap = {};
 let resultRows = [], filteredRows = [];
@@ -1914,22 +1932,6 @@ function exportMapExcel(){
 }
 
 // ── Google Sheets 연동 ──
-const SHEETS_URL_KEY = 'aspro_sheets_url';
-const INVALID_GP_VALUES = new Set([
-  'KCFI 코드없음','슈컴퍼니','슈컴퍼니-김포이관','확인요망','#N/A',
-  '김포재고O상품코드X','삭제요청','삭제요청위에중복','품절',
-  '수량은 있는데 코드가 없음','공통색상코드없음','0',''
-]);
-function isValidGp(v) {
-  if (!v) return false;
-  const s = String(v).trim();
-  if (!s || s === '0') return false;
-  if (INVALID_GP_VALUES.has(s)) return false;
-  if (s.startsWith('김포재고O')) return false;
-  if (s.includes('???') || s.includes('중복') || s.includes('위에')) return false;
-  return true;
-}
-const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
 
 function showSheetsModal() {
   const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
