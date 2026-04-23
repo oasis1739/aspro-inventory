@@ -924,24 +924,61 @@ function isBundleProduct(name) {
 }
 
 function getBundleBaseMap() {
-  // 기존 매핑된 사방넷 상품들로부터 정규화 상품명 → 물류품번 맵 구성
-  // (묶음이 아닌 단품들 기준으로만 빌드)
   if (getBundleBaseMap._cache) return getBundleBaseMap._cache;
-  const baseMap = {}; // normName → { gp: 물류품번, 원래상품명 }
+  // 사방넷 묶음상품명 → 이카운트 품목코드 배열 매핑
+  // sabData의 묶음상품명을 키워드로 icMap과 매칭
+  const cache = {}; // normSabName → [{ gp: 품목코드, opt: 'CC:SZ' }]
+
+  // 1) matchMap/extraMap 단품 기반 (기존 방식, 가장 정확)
   const allMapped = { ...matchMap, ...extraMap };
   for (const [sc, gp] of Object.entries(allMapped)) {
     if (!gp || gp === '__DELETED__') continue;
     const row = sabData.find(s => s.사방넷코드 === sc);
-    if (!row) continue;
-    if (isBundleProduct(row.상품명)) continue; // 묶음상품은 소스로 쓰지 않음
+    if (!row || isBundleProduct(row.상품명)) continue;
     const norm = normName(row.상품명);
     if (norm.length >= 4) {
-      if (!baseMap[norm]) baseMap[norm] = [];
-      baseMap[norm].push({ gp, opt: row.옵션 });
+      if (!cache[norm]) cache[norm] = [];
+      cache[norm].push({ gp, opt: row.옵션 });
     }
   }
-  getBundleBaseMap._cache = baseMap;
-  return baseMap;
+
+  // 2) icMap 키워드 교집합 방식
+  // 묶음상품명 키워드 ↔ 이카운트 품명 키워드 비교 (브랜드명 제외)
+  // sabData에서 묶음상품 목록 추출
+  const bundleNames = new Set();
+  sabData.forEach(s => { if (isBundleProduct(s.상품명)) bundleNames.add(s.상품명); });
+
+  for (const bundleName of bundleNames) {
+    const normBundle = normName(bundleName);
+    if (cache[normBundle] && cache[normBundle].length > 0) continue; // 이미 1)에서 찾음
+    const sabKw = nameKeywords(bundleName);
+    if (sabKw.size < 2) continue;
+
+    // 이카운트 전체에서 키워드 교집합이 가장 높은 그룹 찾기
+    let bestScore = 0, bestKey = null;
+    for (const [key, items] of Object.entries(icMap)) {
+      if (!items.length) continue;
+      const icKw = nameKeywords(items[0].name);
+      const score = setIntersect(sabKw, icKw);
+      if (score > bestScore && score >= 3) { bestScore = score; bestKey = key; }
+    }
+
+    if (bestKey) {
+      if (!cache[normBundle]) cache[normBundle] = [];
+      for (const ic of icMap[bestKey]) {
+        const { c, s } = extractIcCS(ic.name);
+        if (!c || !s) continue;
+        const opt = c + ':' + s;
+        if (!cache[normBundle].find(e => e.gp === ic.품목코드)) {
+          cache[normBundle].push({ gp: ic.품목코드, opt, _icDirect: true });
+        }
+      }
+      log(`[INFO] 묶음매핑 키워드매칭: "${bundleName}" → icMap[${bestKey}] (점수${bestScore}, ${cache[normBundle].length}건)`, 'info');
+    }
+  }
+
+  getBundleBaseMap._cache = cache;
+  return cache;
 }
 // 매칭 실행 시 캐시 초기화
 function clearBundleCache() { getBundleBaseMap._cache = null; }
@@ -956,44 +993,58 @@ function getGimpoQty(sabCode, opt, sabName) {
     물류 = normOptMap[key] || null;
   }
 
-  // 묶음상품 자동 매핑: "N종 택1" 상품명에서 기본 상품명 추출 후 단품 매핑 검색
+  // 묶음상품 자동 매핑: "N종 택1" 상품명 → getBundleBaseMap으로 이카운트/김포 매핑
   if (!물류 && sabName && isBundleProduct(sabName)) {
-    const normBundle = normName(sabName); // "N종 택1" 등 제거된 정규화 이름
+    const normBundle = normName(sabName);
     const baseMap = getBundleBaseMap();
     if (baseMap[normBundle] && baseMap[normBundle].length > 0) {
       const candidates = baseMap[normBundle];
+      const { cc: bCC, sz: bSZ } = parseOpt(opt || '');
       const normOptVal = normOpt(opt || '');
 
-      // 1순위: 옵션 완전 일치 (색상:사이즈)
-      const exactMatch = candidates.find(e => normOpt(e.opt) === normOptVal);
-      if (exactMatch) {
-        물류 = exactMatch.gp;
-      } else {
-        // 묶음 옵션에서 색상/사이즈 추출
-        // 묶음은 "블랙" 단독, "블랙/FREE", "블랙 / 55", "블랙:FREE" 등 다양한 형태
-        const _optParts = normOptVal.replace(/\s*\/\s*/g, ':').split(':');
-        const bundleColor = _optParts[0].trim();
-        const bundleSize  = _optParts.length > 1 ? _optParts[_optParts.length-1].trim() : '';
+      // 옵션에서 색상코드 추출 (COLOR_MAP 기준)
+      const bundleColorCode = bCC ? bCC.toUpperCase() : '';
+      const bundleSize = bSZ || '';
 
-        // 2순위: 색상만 일치하는 단품이 하나뿐
-        const colorMatches = candidates.filter(e => {
-          const eColor = normOpt(e.opt).split(':')[0].trim();
-          return eColor === bundleColor && bundleColor.length >= 2;
+      // 후보에서 opt가 "CC:SZ" 형태 (icDirect) 또는 사방넷 옵션 형태
+      const findMatch = (cands) => {
+        // 1순위: 완전 일치
+        let m = cands.find(e => normOpt(e.opt) === normOptVal);
+        if (m) return m;
+        // 2순위: 색상코드 + 사이즈 일치 (icDirect: opt = "BK:55")
+        m = cands.find(e => {
+          const parts = e.opt.split(':');
+          const eCC = parts[0].trim().toUpperCase();
+          const eSZ = parts[parts.length-1].trim();
+          const colorMatch = eCC === bundleColorCode
+            || COLOR_MAP[eCC] === bCC
+            || eCC === bCC;
+          return colorMatch && eSZ === bundleSize;
         });
-        if (colorMatches.length === 1) {
-          물류 = colorMatches[0].gp;
-        } else if (colorMatches.length > 1 && bundleSize) {
-          // 3순위: 색상 + 사이즈 함께 일치
-          const szMatch = colorMatches.find(e => normOpt(e.opt).includes(bundleSize));
-          if (szMatch) 물류 = szMatch.gp;
-          else 물류 = colorMatches[0].gp; // 사이즈 불명확시 첫번째 사용
-        } else if (colorMatches.length > 1) {
-          // 색상만으로 여러 후보 → 첫번째 사용 (사이즈 없는 묶음 옵션)
-          물류 = colorMatches[0].gp;
-        } else if (candidates.length === 1) {
-          // 4순위: 후보가 하나뿐이면 무조건 매핑
-          물류 = candidates[0].gp;
+        if (m) return m;
+        // 3순위: 색상만 일치하는 후보가 하나
+        const colorOnly = cands.filter(e => {
+          const eCC = e.opt.split(':')[0].trim().toUpperCase();
+          return eCC === bundleColorCode || COLOR_MAP[eCC] === bCC || eCC === bCC;
+        });
+        if (colorOnly.length === 1) return colorOnly[0];
+        if (colorOnly.length > 1 && bundleSize) {
+          return colorOnly.find(e => e.opt.includes(bundleSize)) || colorOnly[0];
         }
+        if (colorOnly.length > 1) return colorOnly[0];
+        if (cands.length === 1) return cands[0];
+        return null;
+      };
+
+      const matched = findMatch(candidates);
+      if (matched) {
+        if (matched._icDirect) {
+          // 이카운트 직접 매핑: gpMap 대신 icMap에서 수량 가져옴
+          const icItem = icMap[matched.gp.split('-')[0]]?.find(ic => ic.품목코드 === matched.gp);
+          const qty = icItem ? icItem.qty : 0;
+          return { qty, src: '이카운트(묶음)', 물류품번: matched.gp };
+        }
+        물류 = matched.gp;
       }
     }
   }
@@ -1079,6 +1130,7 @@ function getIcountQty(sabData_row) {
   const fb  = getFallbackPrefix(자체);
   // _AL (전색상 묶음) 패턴 처리: N1009_AL → N1009, N1016_AL → N1016
   const alBase = 자체.match(/^(.+?)_AL$/i) ? 자체.replace(/_AL$/i, '') : null;
+  if (alBase) log(`[DEBUG] _AL묶음: 자체=${자체} → alBase=${alBase}, icMap있음=${!!icMap[alBase]}, cc=${cc||'?'}, sz=${sz||'?'}`, 'info');
   const overrideKey = SAB_IC_OVERRIDE[자체];
   if (overrideKey && SAB_COLOR_OVERRIDE[자체] && cc) {
     const colorOvr = SAB_COLOR_OVERRIDE[자체];
@@ -1211,18 +1263,19 @@ function runMatch() {
       finalQty = kcfiQty; src = 'KCFI';
       물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
     }
-    if (finalQty === null && soldoutMap[sc]) {
-      finalQty = 0; src = '품절처리'; 물류품번 = '—'; cZ++;
-    } else if (finalQty === null) {
-      cNM++;
-      nomapRows.push({ ...sab, _manualGimpo: '' });
-    }
-
-    // 품절 자동 해제: 품절처리된 상품이지만 실제 재고가 확인되면 자동 해제
-    if (soldoutMap[sc] && finalQty !== null && finalQty > 0) {
+    if (finalQty === null) {
+      if (soldoutMap[sc]) {
+        // 품절처리 항목: 매칭 실패 시에만 품절 유지
+        finalQty = 0; src = '품절처리'; 물류품번 = '—'; cZ++;
+      } else {
+        cNM++;
+        nomapRows.push({ ...sab, _manualGimpo: '' });
+      }
+    } else if (soldoutMap[sc]) {
+      // 품절처리 항목인데 매칭 성공 → 자동 해제
       delete soldoutMap[sc];
       saveExtra();
-      log(`[OK] 품절 자동해제 (재고 ${finalQty}개 확인): ${sc}`, 'ok');
+      log(`[OK] 품절 자동해제 (매칭성공 재고${finalQty}개): ${sc}`, 'ok');
     }
 
     let status;
@@ -1321,6 +1374,8 @@ function renderMain(rows) {
   tbody.innerHTML = rows.slice(0,MAX).map((r,i)=>{
     const srcHtml = r._src==='이카운트'||r._src==='이카운트(합산)'
       ? `<span class="bdg b-ic">${r._src}</span>`
+      : r._src==='이카운트(묶음)'
+      ? `<span class="bdg b-ic">이카운트</span><span class="bdg b-gy" style="font-size:9px;margin-left:2px">묶음</span>`
       : r._src==='KCFI'
       ? `<span class="bdg b-pp">${r._src}</span>`
       : r._src==='김포(묶음)'
