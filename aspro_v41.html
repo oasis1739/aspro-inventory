@@ -1036,6 +1036,13 @@ const COLOR_MAP = {
 
 function parseOpt(opt) {
   opt = String(opt||'').replace(/\(.*?\)/g,'').trim();
+  // [색상/사이즈] 또는 [색상 / 사이즈] 형태 처리 (묶음상품 옵션)
+  const bracketM = opt.match(/\[([^/\]]+)\/([^\]]+)\]/);
+  if (bracketM) {
+    const cRaw = bracketM[1].trim();
+    const cc = COLOR_MAP[cRaw.toUpperCase()] || COLOR_MAP[cRaw] || cRaw.slice(0,2).toUpperCase();
+    return { cc, sz: bracketM[2].trim() };
+  }
   if (opt.includes(':')) {
     const parts = opt.split(':');
     const cRaw = parts[0].trim();
@@ -1078,11 +1085,14 @@ function getIcountQty(sabData_row) {
   let items = icMap[자체] || (overrideKey ? icMap[overrideKey] : null) || icMap[pfx] || (fb ? icMap[fb] : null) || [];
 
   if (!items.length && sabName) {
-    const sabKw = nameKeywords(sabName);
+    // 묶음상품인 경우 normName으로 정규화해서 키워드 매칭
+    const normSabName = normName(sabName); // "N종 택1", 색상 제거
+    const sabKw = nameKeywords(normSabName.length >= 4 ? normSabName : sabName);
     let bestScore = 0, bestKey = null;
     for (const [key, arr] of Object.entries(icMap)) {
       if (!arr.length) continue;
-      const icKw = nameKeywords(arr[0].name);
+      const icNormName = normName(arr[0].name);
+      const icKw = nameKeywords(icNormName.length >= 4 ? icNormName : arr[0].name);
       const score = setIntersect(sabKw, icKw);
       if (score > bestScore && score >= 2) { bestScore = score; bestKey = key; }
     }
