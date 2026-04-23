@@ -1030,7 +1030,7 @@ const COLOR_MAP = {
   '딥그린':'GN','딥그레이':'DG','핑크':'PK','베이지':'BE','카키':'KH','브라운':'BR','크림':'CR',
   '오트밀':'OT','퍼플':'PU','플럼':'PL','와인':'WN','올리브':'OL','민트':'MT',
   '옐로우':'YE','라벤더':'LV','모카':'MO','오렌지':'OR',
-  'LG':'LG','DG':'DG','BG':'BE','SR':'SR','MG':'MG','BW':'BW',
+  'LG':'LG','DG':'DG','BG':'BE','SR':'SR','MG':'MG','BW':'BR',
   'CC':'CH','LA':'LV','WI':'WN','PL':'PL','NV':'NA','GY':'GR','YL':'YE',
 };
 
@@ -1077,12 +1077,16 @@ function getIcountQty(sabData_row) {
   }
   const pfx = 자체.split('-')[0];
   const fb  = getFallbackPrefix(자체);
+  // _AL (전색상 묶음) 패턴 처리: N1009_AL → N1009, N1016_AL → N1016
+  const alBase = 자체.match(/^(.+?)_AL$/i) ? 자체.replace(/_AL$/i, '') : null;
   const overrideKey = SAB_IC_OVERRIDE[자체];
   if (overrideKey && SAB_COLOR_OVERRIDE[자체] && cc) {
     const colorOvr = SAB_COLOR_OVERRIDE[자체];
     cc = colorOvr[cc] || cc;
   }
-  let items = icMap[자체] || (overrideKey ? icMap[overrideKey] : null) || icMap[pfx] || (fb ? icMap[fb] : null) || [];
+  let items = icMap[자체] || (overrideKey ? icMap[overrideKey] : null)
+    || (alBase ? icMap[alBase] : null)
+    || icMap[pfx] || (fb ? icMap[fb] : null) || [];
 
   if (!items.length && sabName) {
     // 묶음상품인 경우 normName으로 정규화해서 키워드 매칭
@@ -1101,14 +1105,36 @@ function getIcountQty(sabData_row) {
   if (!items.length) return null;
 
   if (cc && sz) {
+    // 1차: 품명에서 [색상/사이즈] 추출 후 비교
     for (const ic of items) {
       const { c, s } = extractIcCS(ic.name);
       if (c === cc && s === sz) return { qty: ic.qty, src: '이카운트', 품목코드: ic.품목코드 };
     }
+    // 2차: 품목코드에서 색상코드 추출 후 비교 (예: N1009-LG-55, N1009-BW-55)
+    // COLOR_MAP 역방향: cc값 → 가능한 코드들
+    const ccUpper = cc.toUpperCase();
+    for (const ic of items) {
+      const codeParts = ic.품목코드.toUpperCase().split('-');
+      // 코드에 색상코드가 포함되어 있고 사이즈도 일치하는지
+      const hasColor = codeParts.some(p => p === ccUpper || COLOR_MAP[p] === cc);
+      const hasSz    = codeParts.some(p => p === sz.toUpperCase() || p === sz);
+      if (hasColor && hasSz) return { qty: ic.qty, src: '이카운트', 품목코드: ic.품목코드 };
+    }
+    // 3차: 사이즈만 일치하는 것이 하나뿐이면 사용
+    const szOnly = items.filter(ic => {
+      const { s } = extractIcCS(ic.name);
+      if (s === sz) return true;
+      return ic.품목코드.toUpperCase().split('-').some(p => p === sz.toUpperCase() || p === sz);
+    });
+    if (szOnly.length === 1) return { qty: szOnly[0].qty, src: '이카운트', 품목코드: szOnly[0].품목코드 };
     if (items.length > 1) return null;
   }
   if (sz && !cc) {
-    const szMatch = items.filter(ic => extractIcCS(ic.name).s === sz);
+    const szMatch = items.filter(ic => {
+      const { s } = extractIcCS(ic.name);
+      if (s === sz) return true;
+      return ic.품목코드.toUpperCase().split('-').some(p => p === sz.toUpperCase() || p === sz);
+    });
     if (szMatch.length === 1) return { qty: szMatch[0].qty, src: '이카운트', 품목코드: szMatch[0].품목코드 };
     if (szMatch.length > 1)   return { qty: szMatch.reduce((s,ic) => s+ic.qty, 0), src: '이카운트(합산)', 품목코드: szMatch[0].품목코드 };
   }
