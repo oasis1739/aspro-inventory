@@ -237,6 +237,24 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
     </div>
   </div>
 
+  <!-- ⑥ 강제품절 관리 -->
+  <div class="sec">
+    <div class="sec-ttl" style="color:var(--danger)">⛔ 강제품절 관리 <span class="stag" style="color:var(--danger);border-color:var(--danger)">재고무관</span></div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:6px;line-height:1.6">
+      등록된 코드는 물류재고가 있어도<br>무조건 가상재고 <b style="color:var(--danger)">0</b>으로 내보내집니다
+    </div>
+    <textarea id="fzQuickInput" class="fi" rows="3"
+      placeholder="사방넷코드 입력&#10;여러 개는 줄바꿈으로 구분&#10;예: KNCD_AL&#10;MB26S-KNP01_AL"
+      style="width:100%;font-size:11px;font-family:var(--mono);resize:vertical;min-height:66px"></textarea>
+    <input class="fi" id="fzQuickReason" placeholder="사유 (예: 홈쇼핑 판매중지)" style="width:100%;margin-top:4px;font-size:11px">
+    <button class="btn btn-d btnf" style="margin-top:5px;font-size:11px" onclick="quickAddForceZero()">⛔ 강제품절 등록</button>
+    <div style="margin-top:6px;font-size:10px;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
+      <span>등록됨: <span id="forceZeroCnt" style="color:var(--danger);font-family:var(--mono);font-weight:700">0</span>건</span>
+      <button onclick="clearAllForceZero()" style="font-size:9px;padding:1px 6px;background:transparent;border:1px solid var(--text3);color:var(--text3);border-radius:3px;cursor:pointer">전체해제</button>
+    </div>
+    <div id="fzSideStatus" style="font-size:10px;margin-top:3px"></div>
+  </div>
+
   <!-- 현황 -->
   <div class="sec">
     <div class="sec-ttl">매칭 현황</div>
@@ -291,6 +309,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
       <button class="tab" onclick="switchTab('zero')">재고0</button>
       <button class="tab" onclick="switchTab('nomap')" id="tabNomap">매핑없음 <span class="tbdg" id="nomapCnt">0</span></button>
       <button class="tab" onclick="switchTab('soldout')" id="tabSoldout">품절관리 <span class="tbdg" id="soldoutCnt">0</span></button>
+      <button class="tab" onclick="switchTab('forcezero')" id="tabForceZero">⛔강제품절 <span class="tbdg" id="forceZeroTabBdg" style="display:none;background:var(--danger)">0</span></button>
       <button class="tab" onclick="switchTab('mapview')">매핑 마스터</button>
       <button class="tab" onclick="switchTab('log')">로그</button>
     </div>
@@ -365,6 +384,49 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
             <th>#</th><th>사방넷코드</th><th>자체코드</th><th>상품명</th><th>옵션</th><th>현재고</th><th>품절처리일</th><th>해제</th>
           </tr></thead>
           <tbody id="soldoutBody"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- 강제품절 탭 -->
+    <div id="forceZeroWrap" style="display:none">
+      <div class="notice" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5;margin-bottom:11px">
+        <span>⛔</span>
+        <div>
+          <b>강제품절</b>은 물류(이카운트·김포·신원) 재고가 있어도 무조건 가상재고 <b>0</b>으로 내보냅니다.<br>
+          <span style="font-size:11px;opacity:.8">홈쇼핑 판매중지, 특정 채널 판매 제한 등 재고와 무관하게 품절 처리가 필요한 경우에 사용하세요.</span>
+        </div>
+      </div>
+
+      <!-- 일괄 등록 영역 -->
+      <div class="rpanel" style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px">📋 코드 일괄 등록</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+          <div style="flex:1;min-width:220px">
+            <textarea id="fzBulkInput" class="fi" rows="4"
+              placeholder="사방넷코드 입력 (줄바꿈·쉼표·스페이스 구분)&#10;예:&#10;KNCD_AL&#10;KNCD-IV&#10;MB26S-KNP01_AL"
+              style="width:100%;font-family:var(--mono);font-size:11px;resize:vertical"></textarea>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;min-width:180px">
+            <input class="fi" id="fzBulkReason" placeholder="사유 (예: 홈쇼핑 판매중지)" style="font-size:11px">
+            <button class="btn btn-d" onclick="bulkAddForceZero()" style="justify-content:center">⛔ 일괄 등록</button>
+            <span id="fzAddResult" style="font-size:11px"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 목록 -->
+      <div style="display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap;align-items:center">
+        <input class="fi" id="fzSearch" placeholder="코드/상품명 검색..." oninput="renderForceZeroTab()" style="width:220px">
+        <span style="font-size:10px;color:var(--text3);margin-left:auto" id="fzTotal"></span>
+      </div>
+      <div class="twrap"><div class="tscroll">
+        <table>
+          <thead><tr>
+            <th>#</th><th>사방넷코드</th><th>자체코드</th><th>상품명</th><th>옵션</th>
+            <th>실제재고</th><th>사유</th><th>등록일</th><th>판매재개</th>
+          </tr></thead>
+          <tbody id="forceZeroBody"></tbody>
         </table>
       </div></div>
     </div>
@@ -522,6 +584,7 @@ let matchMap = {};
 let normOptMap = {};
 let soldoutMap = {};
 let kcfiMap = {};
+let forceZeroMap = {};  // 강제품절: 재고 무관하게 가상재고 0 고정
 
 const SKIP_GP = new Set(['nan','','슈컴퍼니-김포이관','확인요망','삭제요망']);
 let extraMap = {};
@@ -600,9 +663,16 @@ function loadExtra() {
       if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">💾 신원재고 localStorage</div><div class="fcnt">${n}건</div></div>`;
     }
   } catch(e) { kcfiMap = {}; }
+  try {
+    const fz = localStorage.getItem('aspro_forcezero_v1');
+    if (fz) {
+      forceZeroMap = JSON.parse(fz);
+      const n = Object.keys(forceZeroMap).length;
+      if (n > 0) log(`[OK] 저장된 강제품절 로드: ${n}건`, 'ok');
+    }
+  } catch(e) { forceZeroMap = {}; }
+  updateForceZeroCnt();
   updateSoldoutCnt();
-  updateKCFICnt();
-  if (!localStorage.getItem(SHEETS_URL_KEY) && DEFAULT_SHEETS_URL) {
     localStorage.setItem(SHEETS_URL_KEY, DEFAULT_SHEETS_URL);
     log('[OK] Sheets URL 자동 설정됨', 'ok');
   }
@@ -611,6 +681,7 @@ function loadExtra() {
 function saveExtra() {
   try { localStorage.setItem(LS_KEY, JSON.stringify(extraMap)); } catch(e) {}
   try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e) {}
+  try { localStorage.setItem('aspro_forcezero_v1', JSON.stringify(forceZeroMap)); } catch(e) {}
   return true;
 }
 
@@ -625,6 +696,14 @@ function updateKCFICnt() {
   if (el) el.textContent = n.toLocaleString();
   const el2 = document.getElementById('srcKCFI');
   if (el2) el2.textContent = n > 0 ? n.toLocaleString() : '—';
+}
+
+function updateForceZeroCnt() {
+  const n = Object.keys(forceZeroMap).length;
+  const el = document.getElementById('forceZeroCnt');
+  if (el) el.textContent = n.toLocaleString();
+  const bdg = document.getElementById('forceZeroBdg');
+  if (bdg) { bdg.textContent = n; bdg.style.display = n > 0 ? 'inline-block' : 'none'; }
 }
 
 function clearKCFI() {
@@ -918,71 +997,6 @@ async function loadBatch(files) {
 // ══════════════════════════════════════════════
 // MATCH LOGIC
 // ══════════════════════════════════════════════
-function isBundleProduct(name) {
-  // "N종 택1", "N종택1", "3종 택1", "5종택1" 등 묶음상품 여부 판단
-  return /\d+종\s*택\d+|\d+종\s*\d*택/.test(String(name || ''));
-}
-
-function getBundleBaseMap() {
-  if (getBundleBaseMap._cache) return getBundleBaseMap._cache;
-  // 사방넷 묶음상품명 → 이카운트 품목코드 배열 매핑
-  // sabData의 묶음상품명을 키워드로 icMap과 매칭
-  const cache = {}; // normSabName → [{ gp: 품목코드, opt: 'CC:SZ' }]
-
-  // 1) matchMap/extraMap 단품 기반 (기존 방식, 가장 정확)
-  const allMapped = { ...matchMap, ...extraMap };
-  for (const [sc, gp] of Object.entries(allMapped)) {
-    if (!gp || gp === '__DELETED__') continue;
-    const row = sabData.find(s => s.사방넷코드 === sc);
-    if (!row || isBundleProduct(row.상품명)) continue;
-    const norm = normName(row.상품명);
-    if (norm.length >= 4) {
-      if (!cache[norm]) cache[norm] = [];
-      cache[norm].push({ gp, opt: row.옵션 });
-    }
-  }
-
-  // 2) icMap 키워드 교집합 방식
-  // 묶음상품명 키워드 ↔ 이카운트 품명 키워드 비교 (브랜드명 제외)
-  // sabData에서 묶음상품 목록 추출
-  const bundleNames = new Set();
-  sabData.forEach(s => { if (isBundleProduct(s.상품명)) bundleNames.add(s.상품명); });
-
-  for (const bundleName of bundleNames) {
-    const normBundle = normName(bundleName);
-    if (cache[normBundle] && cache[normBundle].length > 0) continue; // 이미 1)에서 찾음
-    const sabKw = nameKeywords(bundleName);
-    if (sabKw.size < 2) continue;
-
-    // 이카운트 전체에서 키워드 교집합이 가장 높은 그룹 찾기
-    let bestScore = 0, bestKey = null;
-    for (const [key, items] of Object.entries(icMap)) {
-      if (!items.length) continue;
-      const icKw = nameKeywords(items[0].name);
-      const score = setIntersect(sabKw, icKw);
-      if (score > bestScore && score >= 3) { bestScore = score; bestKey = key; }
-    }
-
-    if (bestKey) {
-      if (!cache[normBundle]) cache[normBundle] = [];
-      for (const ic of icMap[bestKey]) {
-        const { c, s } = extractIcCS(ic.name);
-        if (!c || !s) continue;
-        const opt = c + ':' + s;
-        if (!cache[normBundle].find(e => e.gp === ic.품목코드)) {
-          cache[normBundle].push({ gp: ic.품목코드, opt, _icDirect: true });
-        }
-      }
-      log(`[INFO] 묶음매핑 키워드매칭: "${bundleName}" → icMap[${bestKey}] (점수${bestScore}, ${cache[normBundle].length}건)`, 'info');
-    }
-  }
-
-  getBundleBaseMap._cache = cache;
-  return cache;
-}
-// 매칭 실행 시 캐시 초기화
-function clearBundleCache() { getBundleBaseMap._cache = null; }
-
 function getGimpoQty(sabCode, opt, sabName) {
   let 물류 = extraMap[sabCode] || matchMap[sabCode] || EXTRA_STATIC_MAP[sabCode];
   // __DELETED__ 처리: extraMap에서 명시적으로 삭제된 항목
@@ -992,63 +1006,6 @@ function getGimpoQty(sabCode, opt, sabName) {
     const key = normName(sabName) + '||' + normOpt(opt);
     물류 = normOptMap[key] || null;
   }
-
-  // 묶음상품 자동 매핑: "N종 택1" 상품명 → getBundleBaseMap으로 이카운트/김포 매핑
-  if (!물류 && sabName && isBundleProduct(sabName)) {
-    const normBundle = normName(sabName);
-    const baseMap = getBundleBaseMap();
-    if (baseMap[normBundle] && baseMap[normBundle].length > 0) {
-      const candidates = baseMap[normBundle];
-      const { cc: bCC, sz: bSZ } = parseOpt(opt || '');
-      const normOptVal = normOpt(opt || '');
-
-      // 옵션에서 색상코드 추출 (COLOR_MAP 기준)
-      const bundleColorCode = bCC ? bCC.toUpperCase() : '';
-      const bundleSize = bSZ || '';
-
-      // 후보에서 opt가 "CC:SZ" 형태 (icDirect) 또는 사방넷 옵션 형태
-      const findMatch = (cands) => {
-        // 1순위: 완전 일치
-        let m = cands.find(e => normOpt(e.opt) === normOptVal);
-        if (m) return m;
-        // 2순위: 색상코드 + 사이즈 일치 (icDirect: opt = "BK:55")
-        m = cands.find(e => {
-          const parts = e.opt.split(':');
-          const eCC = parts[0].trim().toUpperCase();
-          const eSZ = parts[parts.length-1].trim();
-          const colorMatch = eCC === bundleColorCode
-            || COLOR_MAP[eCC] === bCC
-            || eCC === bCC;
-          return colorMatch && eSZ === bundleSize;
-        });
-        if (m) return m;
-        // 3순위: 색상만 일치하는 후보가 하나
-        const colorOnly = cands.filter(e => {
-          const eCC = e.opt.split(':')[0].trim().toUpperCase();
-          return eCC === bundleColorCode || COLOR_MAP[eCC] === bCC || eCC === bCC;
-        });
-        if (colorOnly.length === 1) return colorOnly[0];
-        if (colorOnly.length > 1 && bundleSize) {
-          return colorOnly.find(e => e.opt.includes(bundleSize)) || colorOnly[0];
-        }
-        if (colorOnly.length > 1) return colorOnly[0];
-        if (cands.length === 1) return cands[0];
-        return null;
-      };
-
-      const matched = findMatch(candidates);
-      if (matched) {
-        if (matched._icDirect) {
-          // 이카운트 직접 매핑: gpMap 대신 icMap에서 수량 가져옴
-          const icItem = icMap[matched.gp.split('-')[0]]?.find(ic => ic.품목코드 === matched.gp);
-          const qty = icItem ? icItem.qty : 0;
-          return { qty, src: '이카운트(묶음)', 물류품번: matched.gp };
-        }
-        물류 = matched.gp;
-      }
-    }
-  }
-
   if (!물류) return null;
 
   const gpQty = gpMap[물류] !== undefined ? gpMap[물류] : 0;
@@ -1065,9 +1022,8 @@ function getGimpoQty(sabCode, opt, sabName) {
     }
   }
   const finalQty = sameCount > 1 ? Math.floor(gpQty / sameCount) : gpQty;
-  const isBundleMatch = isBundleProduct(sabName) && !extraMap[sabCode] && !matchMap[sabCode] && !EXTRA_STATIC_MAP[sabCode];
-  const isCopyMatch = !isBundleMatch && !extraMap[sabCode] && !matchMap[sabCode];
-  const src = sameCount > 1 ? `김포(÷${sameCount})` : isBundleMatch ? '김포(묶음)' : isCopyMatch ? '김포(복사상품)' : '김포';
+  const isCopyMatch = !extraMap[sabCode] && !matchMap[sabCode];
+  const src = sameCount > 1 ? `김포(÷${sameCount})` : isCopyMatch ? '김포(복사상품)' : '김포';
   return { qty: finalQty, src, 물류품번: 물류 };
 }
 
@@ -1081,19 +1037,12 @@ const COLOR_MAP = {
   '딥그린':'GN','딥그레이':'DG','핑크':'PK','베이지':'BE','카키':'KH','브라운':'BR','크림':'CR',
   '오트밀':'OT','퍼플':'PU','플럼':'PL','와인':'WN','올리브':'OL','민트':'MT',
   '옐로우':'YE','라벤더':'LV','모카':'MO','오렌지':'OR',
-  'LG':'LG','DG':'DG','BG':'BE','SR':'SR','MG':'MG','BW':'BR',
+  'LG':'LG','DG':'DG','BG':'BE','SR':'SR','MG':'MG','BW':'BW',
   'CC':'CH','LA':'LV','WI':'WN','PL':'PL','NV':'NA','GY':'GR','YL':'YE',
 };
 
 function parseOpt(opt) {
   opt = String(opt||'').replace(/\(.*?\)/g,'').trim();
-  // [색상/사이즈] 또는 [색상 / 사이즈] 형태 처리 (묶음상품 옵션)
-  const bracketM = opt.match(/\[([^/\]]+)\/([^\]]+)\]/);
-  if (bracketM) {
-    const cRaw = bracketM[1].trim();
-    const cc = COLOR_MAP[cRaw.toUpperCase()] || COLOR_MAP[cRaw] || cRaw.slice(0,2).toUpperCase();
-    return { cc, sz: bracketM[2].trim() };
-  }
   if (opt.includes(':')) {
     const parts = opt.split(':');
     const cRaw = parts[0].trim();
@@ -1128,27 +1077,19 @@ function getIcountQty(sabData_row) {
   }
   const pfx = 자체.split('-')[0];
   const fb  = getFallbackPrefix(자체);
-  // _AL (전색상 묶음) 패턴 처리: N1009_AL → N1009, N1016_AL → N1016
-  const alBase = 자체.match(/^(.+?)_AL$/i) ? 자체.replace(/_AL$/i, '') : null;
-  if (alBase) log(`[DEBUG] _AL묶음: 자체=${자체} → alBase=${alBase}, icMap있음=${!!icMap[alBase]}, cc=${cc||'?'}, sz=${sz||'?'}`, 'info');
   const overrideKey = SAB_IC_OVERRIDE[자체];
   if (overrideKey && SAB_COLOR_OVERRIDE[자체] && cc) {
     const colorOvr = SAB_COLOR_OVERRIDE[자체];
     cc = colorOvr[cc] || cc;
   }
-  let items = icMap[자체] || (overrideKey ? icMap[overrideKey] : null)
-    || (alBase ? icMap[alBase] : null)
-    || icMap[pfx] || (fb ? icMap[fb] : null) || [];
+  let items = icMap[자체] || (overrideKey ? icMap[overrideKey] : null) || icMap[pfx] || (fb ? icMap[fb] : null) || [];
 
   if (!items.length && sabName) {
-    // 묶음상품인 경우 normName으로 정규화해서 키워드 매칭
-    const normSabName = normName(sabName); // "N종 택1", 색상 제거
-    const sabKw = nameKeywords(normSabName.length >= 4 ? normSabName : sabName);
+    const sabKw = nameKeywords(sabName);
     let bestScore = 0, bestKey = null;
     for (const [key, arr] of Object.entries(icMap)) {
       if (!arr.length) continue;
-      const icNormName = normName(arr[0].name);
-      const icKw = nameKeywords(icNormName.length >= 4 ? icNormName : arr[0].name);
+      const icKw = nameKeywords(arr[0].name);
       const score = setIntersect(sabKw, icKw);
       if (score > bestScore && score >= 2) { bestScore = score; bestKey = key; }
     }
@@ -1157,36 +1098,14 @@ function getIcountQty(sabData_row) {
   if (!items.length) return null;
 
   if (cc && sz) {
-    // 1차: 품명에서 [색상/사이즈] 추출 후 비교
     for (const ic of items) {
       const { c, s } = extractIcCS(ic.name);
       if (c === cc && s === sz) return { qty: ic.qty, src: '이카운트', 품목코드: ic.품목코드 };
     }
-    // 2차: 품목코드에서 색상코드 추출 후 비교 (예: N1009-LG-55, N1009-BW-55)
-    // COLOR_MAP 역방향: cc값 → 가능한 코드들
-    const ccUpper = cc.toUpperCase();
-    for (const ic of items) {
-      const codeParts = ic.품목코드.toUpperCase().split('-');
-      // 코드에 색상코드가 포함되어 있고 사이즈도 일치하는지
-      const hasColor = codeParts.some(p => p === ccUpper || COLOR_MAP[p] === cc);
-      const hasSz    = codeParts.some(p => p === sz.toUpperCase() || p === sz);
-      if (hasColor && hasSz) return { qty: ic.qty, src: '이카운트', 품목코드: ic.품목코드 };
-    }
-    // 3차: 사이즈만 일치하는 것이 하나뿐이면 사용
-    const szOnly = items.filter(ic => {
-      const { s } = extractIcCS(ic.name);
-      if (s === sz) return true;
-      return ic.품목코드.toUpperCase().split('-').some(p => p === sz.toUpperCase() || p === sz);
-    });
-    if (szOnly.length === 1) return { qty: szOnly[0].qty, src: '이카운트', 품목코드: szOnly[0].품목코드 };
     if (items.length > 1) return null;
   }
   if (sz && !cc) {
-    const szMatch = items.filter(ic => {
-      const { s } = extractIcCS(ic.name);
-      if (s === sz) return true;
-      return ic.품목코드.toUpperCase().split('-').some(p => p === sz.toUpperCase() || p === sz);
-    });
+    const szMatch = items.filter(ic => extractIcCS(ic.name).s === sz);
     if (szMatch.length === 1) return { qty: szMatch[0].qty, src: '이카운트', 품목코드: szMatch[0].품목코드 };
     if (szMatch.length > 1)   return { qty: szMatch.reduce((s,ic) => s+ic.qty, 0), src: '이카운트(합산)', 품목코드: szMatch[0].품목코드 };
   }
@@ -1238,12 +1157,22 @@ function runMatch() {
     alert('이카운트 또는 김포재고 파일을 업로드하세요.'); return;
   }
   log('[INFO] 매칭 시작...', 'info');
-  clearBundleCache(); // 묶음상품 캐시 초기화
   resultRows = []; nomapRows = [];
-  let cM=0, cU=0, cZ=0, cIC=0, cGP=0, cNM=0;
+  let cM=0, cU=0, cZ=0, cIC=0, cGP=0, cNM=0, cFZ=0;
 
   sabData.forEach(sab => {
     const sc = sab.사방넷코드;
+
+    // ★ 강제품절 최우선 체크 (재고/매핑 무관하게 무조건 0)
+    if (forceZeroMap[sc]) {
+      resultRows.push({
+        ...sab, _status:'zero', _qty:0, _src:'강제품절',
+        _물류품번:'—', _modified:false, _nomap:false, _forceZero:true
+      });
+      cZ++; cFZ++;
+      return;
+    }
+
     const icRes  = getIcountQty(sab);
     const gpRes  = getGimpoQty(sc, sab.옵션, sab.상품명);
     const kcfiQty = kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
@@ -1263,19 +1192,11 @@ function runMatch() {
       finalQty = kcfiQty; src = 'KCFI';
       물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
     }
-    if (finalQty === null) {
-      if (soldoutMap[sc]) {
-        // 품절처리 항목: 매칭 실패 시에만 품절 유지
-        finalQty = 0; src = '품절처리'; 물류품번 = '—'; cZ++;
-      } else {
-        cNM++;
-        nomapRows.push({ ...sab, _manualGimpo: '' });
-      }
-    } else if (soldoutMap[sc]) {
-      // 품절처리 항목인데 매칭 성공 → 자동 해제
-      delete soldoutMap[sc];
-      saveExtra();
-      log(`[OK] 품절 자동해제 (매칭성공 재고${finalQty}개): ${sc}`, 'ok');
+    if (finalQty === null && soldoutMap[sc]) {
+      finalQty = 0; src = '품절처리'; 물류품번 = '—'; cZ++;
+    } else if (finalQty === null) {
+      cNM++;
+      nomapRows.push({ ...sab, _manualGimpo: '' });
     }
 
     let status;
@@ -1302,10 +1223,12 @@ function runMatch() {
   document.getElementById('nomapCnt').textContent = cNM;
   document.getElementById('nomapTotal').textContent = `총 ${cNM}건`;
   const cKCFI = resultRows.filter(r=>r._src==='KCFI').length;
-  const cBundle = resultRows.filter(r=>r._src==='김포(묶음)').length;
   if (document.getElementById('srcKCFI')) document.getElementById('srcKCFI').textContent = cKCFI.toLocaleString();
+  const fzBdg = document.getElementById('forceZeroTabBdg');
+  if (fzBdg) { fzBdg.textContent = cFZ; fzBdg.style.display = cFZ>0?'inline-block':'none'; }
   log(`[OK] 매칭: ${cM} / 재고0: ${cZ} / 미매칭: ${cU} / 매핑없음: ${cNM}`, 'ok');
-  log(`  소스별: 이카운트 ${cIC} / 김포 ${cGP-cKCFI} / KCFI(신원) ${cKCFI}${cBundle>0?' / 묶음자동 '+cBundle+'건':''}`, 'info');
+  if (cFZ > 0) log(`  ⛔ 강제품절 적용: ${cFZ}건 (재고 무관 0 처리)`, 'warn');
+  log(`  소스별: 이카운트 ${cIC} / 김포 ${cGP-cKCFI} / KCFI(신원) ${cKCFI}`, 'info');
 
   document.getElementById('vEmpty').style.display = 'none';
   document.getElementById('vResult').style.display = 'block';
@@ -1322,9 +1245,11 @@ function runMatch() {
       <div class="ritem"><div class="rnum" style="color:var(--accent2)">${pct}%</div><div class="rlbl">매칭률</div></div>
       <div class="ritem"><div class="rnum cb">${cIC.toLocaleString()}</div><div class="rlbl">💙 이카운트</div></div>
       <div class="ritem"><div class="rnum ct">${cGP.toLocaleString()}</div><div class="rlbl">🩵 김포</div></div>
-      ${cBundle>0?`<div class="ritem"><div class="rnum" style="color:var(--warn)">${cBundle.toLocaleString()}</div><div class="rlbl">📦 묶음자동</div></div>`:''}
+      ${cFZ>0?`<div class="ritem"><div class="rnum" style="color:var(--danger)">${cFZ.toLocaleString()}</div><div class="rlbl">⛔ 강제품절</div></div>`:''}
     </div>
-    ${cNM>0?`<div class="notice nw" style="margin-top:11px;margin-bottom:0"><span>💡</span>
+    ${cFZ>0?`<div class="notice" style="margin-top:11px;margin-bottom:0;background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#fca5a5"><span>⛔</span>
+      <div><b>${cFZ}건</b>이 강제품절 처리됐습니다. 물류재고와 무관하게 가상재고 0으로 내보내집니다.</div></div>`:''}
+    ${cNM>0?`<div class="notice nw" style="margin-top:8px;margin-bottom:0"><span>💡</span>
       <div>"매핑없음" 탭 또는 <b>매핑 마스터</b> 탭에서 물류품번을 직접 수정/추가하세요.</div></div>`:''}
   `;
   switchTab('all');
@@ -1335,17 +1260,19 @@ function runMatch() {
 // ══════════════════════════════════════════════
 function switchTab(tab) {
   currentTab = tab;
-  const tabs = ['all','matched','unmatched','zero','nomap','soldout','mapview','log'];
+  const tabs = ['all','matched','unmatched','zero','nomap','soldout','forcezero','mapview','log'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabs[i]===tab));
   const showMain = ['all','matched','unmatched','zero'].includes(tab);
-  document.getElementById('mainWrap').style.display    = showMain?'block':'none';
-  document.getElementById('fbar').style.display        = showMain?'flex':'none';
-  document.getElementById('nomapWrap').style.display    = tab==='nomap'?'block':'none';
-  document.getElementById('soldoutWrap').style.display  = tab==='soldout'?'block':'none';
-  document.getElementById('mapviewWrap').style.display  = tab==='mapview'?'block':'none';
-  document.getElementById('logWrap').style.display     = tab==='log'?'block':'none';
+  document.getElementById('mainWrap').style.display      = showMain?'block':'none';
+  document.getElementById('fbar').style.display          = showMain?'flex':'none';
+  document.getElementById('nomapWrap').style.display     = tab==='nomap'?'block':'none';
+  document.getElementById('soldoutWrap').style.display   = tab==='soldout'?'block':'none';
+  document.getElementById('forceZeroWrap').style.display = tab==='forcezero'?'block':'none';
+  document.getElementById('mapviewWrap').style.display   = tab==='mapview'?'block':'none';
+  document.getElementById('logWrap').style.display       = tab==='log'?'block':'none';
   if (tab==='nomap') renderNomap();
   else if (tab==='soldout') renderSoldoutTab();
+  else if (tab==='forcezero') renderForceZeroTab();
   else if (tab==='mapview') renderMapview();
   else if (tab!=='log') applyFilter();
 }
@@ -1372,19 +1299,17 @@ function renderMain(rows) {
   const MAX = 600;
   const tbody = document.getElementById('mainBody');
   tbody.innerHTML = rows.slice(0,MAX).map((r,i)=>{
-    const srcHtml = r._src==='이카운트'||r._src==='이카운트(합산)'
+    const srcHtml = r._src==='강제품절'
+      ? `<span class="bdg b-no">⛔ 강제품절</span>`
+      : r._src==='이카운트'||r._src==='이카운트(합산)'
       ? `<span class="bdg b-ic">${r._src}</span>`
-      : r._src==='이카운트(묶음)'
-      ? `<span class="bdg b-ic">이카운트</span><span class="bdg b-gy" style="font-size:9px;margin-left:2px">묶음</span>`
-      : r._src==='KCFI'
-      ? `<span class="bdg b-pp">${r._src}</span>`
-      : r._src==='김포(묶음)'
-      ? `<span class="bdg b-gp">김포</span><span class="bdg b-gy" style="font-size:9px;margin-left:2px">묶음</span>`
-      : r._src.startsWith('김포')
-      ? `<span class="bdg b-gp">${r._src}</span>`
+      : r._src.startsWith('김포')||r._src==='KCFI'
+      ? `<span class="bdg ${r._src==='KCFI'?'b-pp':'b-gp'}">${r._src}</span>`
       : `<span style="color:var(--text3)">—</span>`;
 
-    const stHtml = r._status==='matched'
+    const stHtml = r._forceZero
+      ? `<span class="bdg b-no">⛔강제품절</span>`
+      : r._status==='matched'
       ? `<span class="bdg b-ok">매칭</span>`
       : r._status==='zero'
       ? `<span class="bdg b-z">재고0</span>`
@@ -1490,6 +1415,122 @@ function renderSoldoutTab() {
       </td>
     </tr>`;
   }).join('');
+}
+
+// ══════════════════════════════════════════════
+// 강제품절 관리
+// ══════════════════════════════════════════════
+function addForceZero(sc, reason) {
+  if (!sc) return;
+  forceZeroMap[sc] = { reason: reason || '', date: new Date().toLocaleDateString('ko-KR') };
+  saveExtra();
+  updateForceZeroCnt();
+  log(`[OK] 강제품절 등록: ${sc}`, 'warn');
+}
+
+function removeForceZero(sc) {
+  delete forceZeroMap[sc];
+  saveExtra();
+  updateForceZeroCnt();
+  log(`[OK] 강제품절 해제: ${sc}`, 'ok');
+}
+
+function renderForceZeroTab() {
+  const tbody = document.getElementById('forceZeroBody');
+  if (!tbody) return;
+  const q = (document.getElementById('fzSearch')?.value || '').toLowerCase();
+  const entries = Object.entries(forceZeroMap);
+  const sabMap = {};
+  sabData.forEach(s => { sabMap[s.사방넷코드] = s; });
+
+  const filtered = entries.filter(([sc]) => {
+    if (!q) return true;
+    const s = sabMap[sc];
+    return sc.toLowerCase().includes(q) || (s && (s.상품명.toLowerCase().includes(q) || s.자체코드.toLowerCase().includes(q)));
+  });
+
+  document.getElementById('fzTotal').textContent = `총 ${filtered.length}건`;
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr class="erow"><td colspan="8">${q ? '검색 결과 없음' : '강제품절 목록이 비어 있습니다'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(([sc, info], i) => {
+    const s = sabMap[sc];
+    const nm  = s ? s.상품명   : '(사방넷 파일 없음)';
+    const ja  = s ? s.자체코드 : '—';
+    const opt = s ? s.옵션     : '—';
+    const gpCode = extraMap[sc] || matchMap[sc] || '';
+    const gpQty  = gpCode ? (gpMap[gpCode] ?? '—') : '—';
+    const icRes  = s ? getIcountQty(s) : null;
+    const realQty = icRes ? icRes.qty : (gpQty !== '—' ? gpQty : '—');
+    const reason = typeof info === 'object' ? (info.reason || '') : '';
+    const date   = typeof info === 'object' ? (info.date || '—') : '—';
+    return `<tr>
+      <td style="color:var(--text3);font-size:10px">${i+1}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--danger)">${sc}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--text3)">${ja}</td>
+      <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis">${nm}</td>
+      <td style="font-size:10px;color:var(--text3)">${opt}</td>
+      <td style="font-size:11px;text-align:center;color:${realQty>0?'var(--success)':'var(--text3)'}">${realQty}</td>
+      <td style="font-size:10px;color:var(--text3)">${reason || '—'}</td>
+      <td style="font-size:10px;color:var(--text3)">${date}</td>
+      <td style="text-align:center">
+        <button class="btn" style="font-size:10px;padding:2px 10px;color:var(--success);border-color:var(--success)"
+          onclick="removeForceZero('${sc}');renderForceZeroTab()">⬆ 판매재개</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function quickAddForceZero() {
+  const raw = document.getElementById('fzQuickInput').value.trim();
+  if (!raw) { alert('사방넷코드를 입력하세요.'); return; }
+  const reason = document.getElementById('fzQuickReason').value.trim();
+  const codes = raw.split(/[\n,\s]+/).map(s=>s.trim()).filter(Boolean);
+  let added = 0;
+  codes.forEach(sc => {
+    if (sc) { forceZeroMap[sc] = { reason, date: new Date().toLocaleDateString('ko-KR') }; added++; }
+  });
+  saveExtra();
+  updateForceZeroCnt();
+  document.getElementById('fzQuickInput').value = '';
+  document.getElementById('fzQuickReason').value = '';
+  const st = document.getElementById('fzSideStatus');
+  if (st) { st.textContent = `✅ ${added}건 등록됨`; st.style.color = 'var(--success)'; }
+  log(`[OK] 강제품절 등록: ${added}건 (${codes.slice(0,3).join(', ')}${codes.length>3?'…':''})`, 'warn');
+  // 탭 배지 업데이트
+  const bdg = document.getElementById('forceZeroTabBdg');
+  if (bdg) { bdg.textContent = Object.keys(forceZeroMap).length; bdg.style.display = 'inline-block'; }
+}
+
+function bulkAddForceZero() {
+  const raw = document.getElementById('fzBulkInput').value.trim();
+  if (!raw) { alert('사방넷코드를 입력하세요.'); return; }
+  const reason = document.getElementById('fzBulkReason').value.trim();
+  const codes = raw.split(/[\n,\s]+/).map(s=>s.trim()).filter(Boolean);
+  let added = 0;
+  codes.forEach(sc => {
+    if (sc) { forceZeroMap[sc] = { reason, date: new Date().toLocaleDateString('ko-KR') }; added++; }
+  });
+  saveExtra();
+  updateForceZeroCnt();
+  document.getElementById('fzBulkInput').value = '';
+  document.getElementById('fzBulkReason').value = '';
+  document.getElementById('fzAddResult').textContent = `✅ ${added}건 등록 완료`;
+  document.getElementById('fzAddResult').style.color = 'var(--success)';
+  renderForceZeroTab();
+  log(`[OK] 강제품절 일괄등록: ${added}건`, 'warn');
+}
+
+function clearAllForceZero() {
+  if (!confirm(`강제품절 목록 전체(${Object.keys(forceZeroMap).length}건)를 초기화하시겠습니까?`)) return;
+  forceZeroMap = {};
+  saveExtra();
+  updateForceZeroCnt();
+  renderForceZeroTab();
+  log('[OK] 강제품절 전체 초기화', 'ok');
 }
 
 function setSoldout(sc, idx) {
@@ -2113,7 +2154,7 @@ function log(msg, type='info'){
 }
 
 function resetAll(){
-  if(!confirm('초기화하시겠습니까? (매핑·신원재고는 유지)')) return;
+  if(!confirm('초기화하시겠습니까? (매핑·신원재고·강제품절 목록은 유지됩니다)')) return;
   icMap={}; gpMap={}; sabData=[]; sabRaw=[]; resultRows=[]; filteredRows=[]; nomapRows=[]; normOptMap={}; soldoutMap={};
   ['icList','gpList','sabList'].forEach(id=>document.getElementById(id).innerHTML='');
   ['icIn','gpIn','sabIn'].forEach(id=>document.getElementById(id).value='');
@@ -2127,7 +2168,8 @@ function resetAll(){
   document.getElementById('progPct').textContent='0%';
   document.getElementById('logArea').innerHTML='';
   document.getElementById('lastUp').textContent='대기중';
-  log('[INFO] 초기화 완료 (매핑·매칭파일 데이터 유지)', 'info');
+  const fzCnt = Object.keys(forceZeroMap).length;
+  log(`[INFO] 초기화 완료 (매핑·강제품절(${fzCnt}건) 데이터 유지)`, 'info');
 }
 
 // 드래그앤드롭
