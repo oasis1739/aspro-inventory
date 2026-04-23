@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ASPRO 가상재고 v4.1</title>
+<title>ASPRO 가상재고 v4.2</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -142,7 +142,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
 <div class="hdr">
   <div class="logo">ASPRO<em> / 가상재고</em></div>
   <div class="hd"></div>
-  <div class="ver">v4.1</div>
+  <div class="ver">v4.2</div>
   <div class="hright">
     <span id="lastUp" style="font-size:10px;color:var(--text3);font-family:var(--mono)">대기중</span>
     <button class="hbtn" id="sheetBtn" onclick="showSheetsModal()">☁ Google Sheets 연동</button>
@@ -918,6 +918,34 @@ async function loadBatch(files) {
 // ══════════════════════════════════════════════
 // MATCH LOGIC
 // ══════════════════════════════════════════════
+function isBundleProduct(name) {
+  // "N종 택1", "N종택1", "3종 택1", "5종택1" 등 묶음상품 여부 판단
+  return /\d+종\s*택\d+|\d+종\s*\d*택/.test(String(name || ''));
+}
+
+function getBundleBaseMap() {
+  // 기존 매핑된 사방넷 상품들로부터 정규화 상품명 → 물류품번 맵 구성
+  // (묶음이 아닌 단품들 기준으로만 빌드)
+  if (getBundleBaseMap._cache) return getBundleBaseMap._cache;
+  const baseMap = {}; // normName → { gp: 물류품번, 원래상품명 }
+  const allMapped = { ...matchMap, ...extraMap };
+  for (const [sc, gp] of Object.entries(allMapped)) {
+    if (!gp || gp === '__DELETED__') continue;
+    const row = sabData.find(s => s.사방넷코드 === sc);
+    if (!row) continue;
+    if (isBundleProduct(row.상품명)) continue; // 묶음상품은 소스로 쓰지 않음
+    const norm = normName(row.상품명);
+    if (norm.length >= 4) {
+      if (!baseMap[norm]) baseMap[norm] = [];
+      baseMap[norm].push({ gp, opt: row.옵션 });
+    }
+  }
+  getBundleBaseMap._cache = baseMap;
+  return baseMap;
+}
+// 매칭 실행 시 캐시 초기화
+function clearBundleCache() { getBundleBaseMap._cache = null; }
+
 function getGimpoQty(sabCode, opt, sabName) {
   let 물류 = extraMap[sabCode] || matchMap[sabCode] || EXTRA_STATIC_MAP[sabCode];
   // __DELETED__ 처리: extraMap에서 명시적으로 삭제된 항목
@@ -927,6 +955,24 @@ function getGimpoQty(sabCode, opt, sabName) {
     const key = normName(sabName) + '||' + normOpt(opt);
     물류 = normOptMap[key] || null;
   }
+
+  // 묶음상품 자동 매핑: "N종 택1" 상품명에서 기본 상품명 추출 후 단품 매핑 검색
+  if (!물류 && sabName && isBundleProduct(sabName)) {
+    const normBundle = normName(sabName); // "N종 택1" 등 제거된 정규화 이름
+    const baseMap = getBundleBaseMap();
+    // 정규화 이름이 일치하는 단품 매핑 찾기
+    if (baseMap[normBundle] && baseMap[normBundle].length > 0) {
+      // 옵션(색상:사이즈)이 일치하는 단품 찾기
+      const normOptVal = normOpt(opt || '');
+      const exactMatch = baseMap[normBundle].find(e => normOpt(e.opt) === normOptVal);
+      if (exactMatch) {
+        물류 = exactMatch.gp;
+      } else if (baseMap[normBundle].length === 1) {
+        물류 = baseMap[normBundle][0].gp;
+      }
+    }
+  }
+
   if (!물류) return null;
 
   const gpQty = gpMap[물류] !== undefined ? gpMap[물류] : 0;
@@ -943,8 +989,9 @@ function getGimpoQty(sabCode, opt, sabName) {
     }
   }
   const finalQty = sameCount > 1 ? Math.floor(gpQty / sameCount) : gpQty;
-  const isCopyMatch = !extraMap[sabCode] && !matchMap[sabCode];
-  const src = sameCount > 1 ? `김포(÷${sameCount})` : isCopyMatch ? '김포(복사상품)' : '김포';
+  const isBundleMatch = isBundleProduct(sabName) && !extraMap[sabCode] && !matchMap[sabCode] && !EXTRA_STATIC_MAP[sabCode];
+  const isCopyMatch = !isBundleMatch && !extraMap[sabCode] && !matchMap[sabCode];
+  const src = sameCount > 1 ? `김포(÷${sameCount})` : isBundleMatch ? '김포(묶음)' : isCopyMatch ? '김포(복사상품)' : '김포';
   return { qty: finalQty, src, 물류품번: 물류 };
 }
 
@@ -1078,6 +1125,7 @@ function runMatch() {
     alert('이카운트 또는 김포재고 파일을 업로드하세요.'); return;
   }
   log('[INFO] 매칭 시작...', 'info');
+  clearBundleCache(); // 묶음상품 캐시 초기화
   resultRows = []; nomapRows = [];
   let cM=0, cU=0, cZ=0, cIC=0, cGP=0, cNM=0;
 
@@ -1109,6 +1157,13 @@ function runMatch() {
       nomapRows.push({ ...sab, _manualGimpo: '' });
     }
 
+    // 품절 자동 해제: 품절처리된 상품이지만 실제 재고가 확인되면 자동 해제
+    if (soldoutMap[sc] && finalQty !== null && finalQty > 0) {
+      delete soldoutMap[sc];
+      saveExtra();
+      log(`[OK] 품절 자동해제 (재고 ${finalQty}개 확인): ${sc}`, 'ok');
+    }
+
     let status;
     if (finalQty === null)  { status='unmatched'; cU++; }
     else if (finalQty===0)  { status='zero';      cZ++; }
@@ -1133,9 +1188,10 @@ function runMatch() {
   document.getElementById('nomapCnt').textContent = cNM;
   document.getElementById('nomapTotal').textContent = `총 ${cNM}건`;
   const cKCFI = resultRows.filter(r=>r._src==='KCFI').length;
+  const cBundle = resultRows.filter(r=>r._src==='김포(묶음)').length;
   if (document.getElementById('srcKCFI')) document.getElementById('srcKCFI').textContent = cKCFI.toLocaleString();
   log(`[OK] 매칭: ${cM} / 재고0: ${cZ} / 미매칭: ${cU} / 매핑없음: ${cNM}`, 'ok');
-  log(`  소스별: 이카운트 ${cIC} / 김포 ${cGP-cKCFI} / KCFI(신원) ${cKCFI}`, 'info');
+  log(`  소스별: 이카운트 ${cIC} / 김포 ${cGP-cKCFI} / KCFI(신원) ${cKCFI}${cBundle>0?' / 묶음자동 '+cBundle+'건':''}`, 'info');
 
   document.getElementById('vEmpty').style.display = 'none';
   document.getElementById('vResult').style.display = 'block';
@@ -1152,6 +1208,7 @@ function runMatch() {
       <div class="ritem"><div class="rnum" style="color:var(--accent2)">${pct}%</div><div class="rlbl">매칭률</div></div>
       <div class="ritem"><div class="rnum cb">${cIC.toLocaleString()}</div><div class="rlbl">💙 이카운트</div></div>
       <div class="ritem"><div class="rnum ct">${cGP.toLocaleString()}</div><div class="rlbl">🩵 김포</div></div>
+      ${cBundle>0?`<div class="ritem"><div class="rnum" style="color:var(--warn)">${cBundle.toLocaleString()}</div><div class="rlbl">📦 묶음자동</div></div>`:''}
     </div>
     ${cNM>0?`<div class="notice nw" style="margin-top:11px;margin-bottom:0"><span>💡</span>
       <div>"매핑없음" 탭 또는 <b>매핑 마스터</b> 탭에서 물류품번을 직접 수정/추가하세요.</div></div>`:''}
@@ -1203,8 +1260,12 @@ function renderMain(rows) {
   tbody.innerHTML = rows.slice(0,MAX).map((r,i)=>{
     const srcHtml = r._src==='이카운트'||r._src==='이카운트(합산)'
       ? `<span class="bdg b-ic">${r._src}</span>`
-      : r._src.startsWith('김포')||r._src==='KCFI'
-      ? `<span class="bdg ${r._src==='KCFI'?'b-pp':'b-gp'}">${r._src}</span>`
+      : r._src==='KCFI'
+      ? `<span class="bdg b-pp">${r._src}</span>`
+      : r._src==='김포(묶음)'
+      ? `<span class="bdg b-gp">김포</span><span class="bdg b-gy" style="font-size:9px;margin-left:2px">묶음</span>`
+      : r._src.startsWith('김포')
+      ? `<span class="bdg b-gp">${r._src}</span>`
       : `<span style="color:var(--text3)">—</span>`;
 
     const stHtml = r._status==='matched'
