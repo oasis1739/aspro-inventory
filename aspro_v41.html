@@ -960,15 +960,40 @@ function getGimpoQty(sabCode, opt, sabName) {
   if (!물류 && sabName && isBundleProduct(sabName)) {
     const normBundle = normName(sabName); // "N종 택1" 등 제거된 정규화 이름
     const baseMap = getBundleBaseMap();
-    // 정규화 이름이 일치하는 단품 매핑 찾기
     if (baseMap[normBundle] && baseMap[normBundle].length > 0) {
-      // 옵션(색상:사이즈)이 일치하는 단품 찾기
+      const candidates = baseMap[normBundle];
       const normOptVal = normOpt(opt || '');
-      const exactMatch = baseMap[normBundle].find(e => normOpt(e.opt) === normOptVal);
+
+      // 1순위: 옵션 완전 일치 (색상:사이즈)
+      const exactMatch = candidates.find(e => normOpt(e.opt) === normOptVal);
       if (exactMatch) {
         물류 = exactMatch.gp;
-      } else if (baseMap[normBundle].length === 1) {
-        물류 = baseMap[normBundle][0].gp;
+      } else {
+        // 묶음 옵션에서 색상/사이즈 추출
+        // 묶음은 "블랙" 단독, "블랙/FREE", "블랙 / 55", "블랙:FREE" 등 다양한 형태
+        const _optParts = normOptVal.replace(/\s*\/\s*/g, ':').split(':');
+        const bundleColor = _optParts[0].trim();
+        const bundleSize  = _optParts.length > 1 ? _optParts[_optParts.length-1].trim() : '';
+
+        // 2순위: 색상만 일치하는 단품이 하나뿐
+        const colorMatches = candidates.filter(e => {
+          const eColor = normOpt(e.opt).split(':')[0].trim();
+          return eColor === bundleColor && bundleColor.length >= 2;
+        });
+        if (colorMatches.length === 1) {
+          물류 = colorMatches[0].gp;
+        } else if (colorMatches.length > 1 && bundleSize) {
+          // 3순위: 색상 + 사이즈 함께 일치
+          const szMatch = colorMatches.find(e => normOpt(e.opt).includes(bundleSize));
+          if (szMatch) 물류 = szMatch.gp;
+          else 물류 = colorMatches[0].gp; // 사이즈 불명확시 첫번째 사용
+        } else if (colorMatches.length > 1) {
+          // 색상만으로 여러 후보 → 첫번째 사용 (사이즈 없는 묶음 옵션)
+          물류 = colorMatches[0].gp;
+        } else if (candidates.length === 1) {
+          // 4순위: 후보가 하나뿐이면 무조건 매핑
+          물류 = candidates[0].gp;
+        }
       }
     }
   }
