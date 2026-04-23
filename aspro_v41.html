@@ -613,9 +613,16 @@ function doPost(e) {
 
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px">
       <button class="btn btn-p" onclick="saveSheetsUrlBtn()">💾 URL 저장</button>
-      <button class="btn btn-p" onclick="loadFromSheets()">⬇ 불러오기</button>
+      <button class="btn btn-p" onclick="loadFromSheets()">⬇ 전체 불러오기</button>
       <button class="btn btn-s" onclick="saveToSheets()">⬆ Sheets에 저장</button>
       <button class="btn btn-n" onclick="copyAppsScript()">📋 코드 복사</button>
+    </div>
+    <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:8px;margin-bottom:8px;font-size:11px;color:#fca5a5">
+      <b>⛔ 강제품절 시트 직접 수정 후</b> → 아래 버튼으로 앱에 반영<br>
+      <span style="font-size:10px;opacity:.8">구글시트 aspro_forcezero에서 행 추가/삭제 후 동기화하세요</span>
+      <div style="margin-top:6px">
+        <button class="btn btn-d" style="font-size:11px" onclick="syncForceZeroFromSheets()">⛔ 강제품절 시트 → 앱 동기화</button>
+      </div>
     </div>
     <div style="font-size:11px;margin-top:8px" id="sheetsStatus"></div>
 
@@ -1523,6 +1530,30 @@ function syncForceZeroToSheets() {
   }).catch(() => log(`[WARN] 강제품절 Sheets 반영 실패 (수동 저장 필요)`, 'warn'));
 }
 
+async function syncForceZeroFromSheets() {
+  const url = localStorage.getItem(SHEETS_URL_KEY);
+  if (!url) { alert('Sheets URL이 설정되지 않았습니다.'); return; }
+  const st = document.getElementById('sheetsStatus');
+  st.textContent = '강제품절 동기화 중...'; st.style.color = 'var(--accent2)';
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || '서버 오류');
+    forceZeroMap = { ...(data.forcezero || {}) };
+    try { localStorage.setItem('aspro_forcezero_v1', JSON.stringify(forceZeroMap)); } catch(e2) {}
+    updateForceZeroCnt();
+    if (currentTab === 'forcezero') renderForceZeroTab();
+    const fzCnt = Object.keys(forceZeroMap).length;
+    st.textContent = `✅ 강제품절 동기화 완료 — ${fzCnt}건`;
+    st.style.color = 'var(--success)';
+    log(`[OK] 강제품절 Sheets → 앱 동기화: ${fzCnt}건`, 'ok');
+  } catch(e) {
+    st.textContent = `❌ 오류: ${e.message}`;
+    st.style.color = 'var(--danger)';
+    log(`[ERR] 강제품절 동기화 실패: ${e.message}`, 'err');
+  }
+}
+
 function renderForceZeroTab() {
   const tbody = document.getElementById('forceZeroBody');
   if (!tbody) return;
@@ -1980,7 +2011,7 @@ async function loadFromSheets() {
       try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
       updateKCFICnt();
     }
-    if (Object.keys(importedFZ).length > 0) {
+    if (Object.keys(importedFZ).length > 0 || data.forcezero !== undefined) {
       forceZeroMap = { ...importedFZ };
       try { localStorage.setItem('aspro_forcezero_v1', JSON.stringify(forceZeroMap)); } catch(e2) {}
       updateForceZeroCnt();
@@ -2069,8 +2100,8 @@ async function autoLoadFromSheets() {
         const list = document.getElementById('kcfiList');
         if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 신원재고</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
       }
-      if (data.forcezero && Object.keys(data.forcezero).length > 0) {
-        forceZeroMap = { ...data.forcezero };
+      if (data.forcezero !== undefined) {
+        forceZeroMap = { ...(data.forcezero || {}) };
         try { localStorage.setItem('aspro_forcezero_v1', JSON.stringify(forceZeroMap)); } catch(e2) {}
         updateForceZeroCnt();
       }
