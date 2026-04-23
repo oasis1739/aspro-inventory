@@ -530,29 +530,80 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
     </div>
 
     <div style="background:var(--bg,#0a0d13);border-radius:5px;padding:8px;margin-bottom:12px;overflow-x:auto">
-      <pre id="appsScriptCode" style="font-size:10px;color:#86efac;line-height:1.6;white-space:pre;margin:0">// 기존 Code.gs 맨 아래에 추가
+      <pre id="appsScriptCode" style="font-size:10px;color:#86efac;line-height:1.6;white-space:pre;margin:0">// 기존 Code.gs 맨 아래에 추가 (전체 교체)
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // 매핑
   let sh = ss.getSheetByName('aspro_match');
   if (!sh) { sh = ss.insertSheet('aspro_match'); sh.appendRow(['사방넷코드','김포물류품번','메모','등록일']); }
-  const data = sh.getDataRange().getValues();
   const map = {};
-  data.slice(1).forEach(r => { if (r[0]) map[String(r[0])] = String(r[1]); });
+  sh.getDataRange().getValues().slice(1).forEach(r => { if (r[0]) map[String(r[0])] = String(r[1]); });
+  // 품절
   let so = ss.getSheetByName('aspro_soldout');
   if (!so) { so = ss.insertSheet('aspro_soldout'); so.appendRow(['사방넷코드','등록일']); }
-  const soData = so.getDataRange().getValues();
   const soldout = {};
-  soData.slice(1).forEach(r => { if (r[0]) soldout[String(r[0])] = true; });
+  so.getDataRange().getValues().slice(1).forEach(r => { if (r[0]) soldout[String(r[0])] = true; });
+  // 신원재고
   let kc = ss.getSheetByName('aspro_kcfi');
   if (!kc) { kc = ss.insertSheet('aspro_kcfi'); kc.appendRow(['사방넷코드','상품명','타입','색상','사이즈','재고','업데이트일','비고']); }
-  const kcData = kc.getDataRange().getValues();
   const kcfi = {};
-  kcData.slice(1).forEach(r => {
+  kc.getDataRange().getValues().slice(1).forEach(r => {
     const sc = String(r[0] || '').trim();
     const qty = parseInt(r[5], 10);
     if (sc && !isNaN(qty)) kcfi[sc] = qty;
   });
-  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout, kcfi}))
+  // 강제품절
+  let fz = ss.getSheetByName('aspro_forcezero');
+  if (!fz) { fz = ss.insertSheet('aspro_forcezero'); fz.appendRow(['사방넷코드','사유','등록일']); }
+  const forcezero = {};
+  fz.getDataRange().getValues().slice(1).forEach(r => {
+    if (r[0]) forcezero[String(r[0])] = { reason: String(r[1]||''), date: String(r[2]||'') };
+  });
+  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout, kcfi, forcezero}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const body = JSON.parse(e.postData.contents);
+  // 매핑 저장
+  if (body.map) {
+    let sh = ss.getSheetByName('aspro_match');
+    if (!sh) { sh = ss.insertSheet('aspro_match'); }
+    sh.clearContents();
+    sh.appendRow(['사방넷코드','김포물류품번','메모','등록일']);
+    const rows = Object.entries(body.map).map(([k,v]) => [k, v, '', new Date().toLocaleDateString('ko-KR')]);
+    if (rows.length) sh.getRange(2,1,rows.length,4).setValues(rows);
+  }
+  // 품절 저장
+  if (body.soldout) {
+    let so = ss.getSheetByName('aspro_soldout');
+    if (!so) { so = ss.insertSheet('aspro_soldout'); }
+    so.clearContents();
+    so.appendRow(['사방넷코드','등록일']);
+    const rows = Object.entries(body.soldout).map(([k,v]) => [k, v]);
+    if (rows.length) so.getRange(2,1,rows.length,2).setValues(rows);
+  }
+  // 강제품절 저장
+  if (body.forcezero !== undefined) {
+    let fz = ss.getSheetByName('aspro_forcezero');
+    if (!fz) { fz = ss.insertSheet('aspro_forcezero'); }
+    fz.clearContents();
+    fz.appendRow(['사방넷코드','사유','등록일']);
+    const rows = Object.entries(body.forcezero).map(([k,v]) => [k, v.reason||'', v.date||'']);
+    if (rows.length) fz.getRange(2,1,rows.length,3).setValues(rows);
+  }
+  // 신원재고 저장
+  if (body.kcfi) {
+    let kc = ss.getSheetByName('aspro_kcfi');
+    if (!kc) { kc = ss.insertSheet('aspro_kcfi'); }
+    kc.clearContents();
+    kc.appendRow(['사방넷코드','재고','업데이트일']);
+    const rows = Object.entries(body.kcfi).map(([k,v]) => [k, v, new Date().toLocaleDateString('ko-KR')]);
+    if (rows.length) kc.getRange(2,1,rows.length,3).setValues(rows);
+  }
+  const saved = (body.map ? Object.keys(body.map).length : 0);
+  return ContentService.createTextOutput(JSON.stringify({ok:true, saved}))
     .setMimeType(ContentService.MimeType.JSON);
 }</pre>
     </div>
@@ -1425,6 +1476,7 @@ function addForceZero(sc, reason) {
   forceZeroMap[sc] = { reason: reason || '', date: new Date().toLocaleDateString('ko-KR') };
   saveExtra();
   updateForceZeroCnt();
+  syncForceZeroToSheets();
   log(`[OK] 강제품절 등록: ${sc}`, 'warn');
 }
 
@@ -1432,7 +1484,20 @@ function removeForceZero(sc) {
   delete forceZeroMap[sc];
   saveExtra();
   updateForceZeroCnt();
+  syncForceZeroToSheets();
   log(`[OK] 강제품절 해제: ${sc}`, 'ok');
+}
+
+function syncForceZeroToSheets() {
+  const url = localStorage.getItem(SHEETS_URL_KEY);
+  if (!url) return;
+  fetch(url, {
+    method: 'POST',
+    body: JSON.stringify({ forcezero: forceZeroMap }),
+    headers: { 'Content-Type': 'text/plain' }
+  }).then(r => r.json()).then(d => {
+    if (d.ok) log(`[OK] 강제품절 Sheets 자동 반영: ${Object.keys(forceZeroMap).length}건`, 'ok');
+  }).catch(() => log(`[WARN] 강제품절 Sheets 반영 실패 (수동 저장 필요)`, 'warn'));
 }
 
 function renderForceZeroTab() {
@@ -1499,6 +1564,7 @@ function quickAddForceZero() {
   document.getElementById('fzQuickReason').value = '';
   const st = document.getElementById('fzSideStatus');
   if (st) { st.textContent = `✅ ${added}건 등록됨`; st.style.color = 'var(--success)'; }
+  syncForceZeroToSheets();
   log(`[OK] 강제품절 등록: ${added}건 (${codes.slice(0,3).join(', ')}${codes.length>3?'…':''})`, 'warn');
   // 탭 배지 업데이트
   const bdg = document.getElementById('forceZeroTabBdg');
@@ -1520,6 +1586,7 @@ function bulkAddForceZero() {
   document.getElementById('fzBulkReason').value = '';
   document.getElementById('fzAddResult').textContent = `✅ ${added}건 등록 완료`;
   document.getElementById('fzAddResult').style.color = 'var(--success)';
+  syncForceZeroToSheets();
   renderForceZeroTab();
   log(`[OK] 강제품절 일괄등록: ${added}건`, 'warn');
 }
@@ -1529,6 +1596,7 @@ function clearAllForceZero() {
   forceZeroMap = {};
   saveExtra();
   updateForceZeroCnt();
+  syncForceZeroToSheets();
   renderForceZeroTab();
   log('[OK] 강제품절 전체 초기화', 'ok');
 }
@@ -1895,6 +1963,7 @@ async function loadFromSheets() {
     const imported = data.map || {};
     const importedSoldout = data.soldout || {};
     const importedKcfi = data.kcfi || {};
+    const importedFZ = data.forcezero || {};
     const filteredImport = {};
     Object.entries(imported).forEach(([k,v]) => { if(isValidGp(v)) filteredImport[k]=v; });
     matchMap = filteredImport;
@@ -1903,6 +1972,11 @@ async function loadFromSheets() {
       kcfiMap = { ...importedKcfi };
       try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
       updateKCFICnt();
+    }
+    if (Object.keys(importedFZ).length > 0) {
+      forceZeroMap = { ...importedFZ };
+      try { localStorage.setItem('aspro_forcezero_v1', JSON.stringify(forceZeroMap)); } catch(e2) {}
+      updateForceZeroCnt();
     }
     try {
       localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap));
@@ -1914,10 +1988,12 @@ async function loadFromSheets() {
     const cnt = Object.keys(matchMap).length;
     const soCnt = Object.keys(soldoutMap).length;
     const kcfiCnt = Object.keys(kcfiMap).length;
-    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건`;
+    const fzCnt = Object.keys(forceZeroMap).length;
+    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건 + 강제품절 ${fzCnt}건`;
     st.style.color = 'var(--success)';
-    log(`[OK] Google Sheets 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
+    log(`[OK] Google Sheets 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건 / 강제품절 ${fzCnt}건`, 'ok');
     if (currentTab === 'mapview') renderMapview();
+    if (currentTab === 'forcezero') renderForceZeroTab();
   } catch(e) {
     st.textContent = `❌ 오류: ${e.message}`;
     st.style.color = 'var(--danger)';
@@ -1932,18 +2008,19 @@ async function saveToSheets() {
   const allMap = { ...matchMap, ...extraMap };
   const total = Object.keys(allMap).length;
   if (total === 0) { alert('저장할 매핑 데이터가 없습니다.'); return; }
-  st.textContent = `저장 중... (${total.toLocaleString()}건)`; st.style.color = 'var(--accent2)';
+  const fzCnt = Object.keys(forceZeroMap).length;
+  st.textContent = `저장 중... (매핑 ${total.toLocaleString()}건 + 강제품절 ${fzCnt}건)`; st.style.color = 'var(--accent2)';
   try {
     const res = await fetch(url, {
       method: 'POST',
-      body: JSON.stringify({ map: allMap, soldout: soldoutMap, kcfi: kcfiMap }),
+      body: JSON.stringify({ map: allMap, soldout: soldoutMap, kcfi: kcfiMap, forcezero: forceZeroMap }),
       headers: { 'Content-Type': 'text/plain' }
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || '서버 오류');
-    st.textContent = `✅ 저장 완료 — ${data.saved.toLocaleString()}건`;
+    st.textContent = `✅ 저장 완료 — 매핑 ${data.saved.toLocaleString()}건 + 강제품절 ${fzCnt}건`;
     st.style.color = 'var(--success)';
-    log(`[OK] Google Sheets 저장: ${data.saved}건`, 'ok');
+    log(`[OK] Google Sheets 저장: 매핑 ${data.saved}건 / 강제품절 ${fzCnt}건`, 'ok');
   } catch(e) {
     st.textContent = `❌ 오류: ${e.message}`;
     st.style.color = 'var(--danger)';
@@ -1985,6 +2062,11 @@ async function autoLoadFromSheets() {
         const list = document.getElementById('kcfiList');
         if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 신원재고</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
       }
+      if (data.forcezero && Object.keys(data.forcezero).length > 0) {
+        forceZeroMap = { ...data.forcezero };
+        try { localStorage.setItem('aspro_forcezero_v1', JSON.stringify(forceZeroMap)); } catch(e2) {}
+        updateForceZeroCnt();
+      }
       try {
         localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap));
         localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap));
@@ -1992,7 +2074,8 @@ async function autoLoadFromSheets() {
       updateSavedMapCnt();
       updateSoldoutCnt();
       const cnt = Object.keys(matchMap).length;
-      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건`, 'ok');
+      const fzCnt = Object.keys(forceZeroMap).length;
+      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건 / 강제품절 ${fzCnt}건`, 'ok');
       const btn = document.getElementById('sheetBtn');
       if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.textContent='☁ Google Sheets 연동'; }
     }
