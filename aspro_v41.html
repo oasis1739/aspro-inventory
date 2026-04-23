@@ -742,6 +742,8 @@ function loadExtra() {
   } catch(e) { forceZeroMap = {}; }
   updateForceZeroCnt();
   updateSoldoutCnt();
+  updateKCFICnt();
+  if (!localStorage.getItem(SHEETS_URL_KEY) && DEFAULT_SHEETS_URL) {
     localStorage.setItem(SHEETS_URL_KEY, DEFAULT_SHEETS_URL);
     log('[OK] Sheets URL 자동 설정됨', 'ok');
   }
