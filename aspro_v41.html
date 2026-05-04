@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ASPRO 가상재고 v4.2</title>
+<title>ASPRO 가상재고 v4.3</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -142,7 +142,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
 <div class="hdr">
   <div class="logo">ASPRO<em> / 가상재고</em></div>
   <div class="hd"></div>
-  <div class="ver">v4.2</div>
+  <div class="ver">v4.3</div>
   <div class="hright">
     <span id="lastUp" style="font-size:10px;color:var(--text3);font-family:var(--mono)">대기중</span>
     <button class="hbtn" id="sheetBtn" onclick="showSheetsModal()">☁ Google Sheets 연동</button>
@@ -1018,13 +1018,24 @@ const COLOR_MAP = {
 
 function parseOpt(opt) {
   opt = String(opt||'').replace(/\(.*?\)/g,'').trim();
+  // 세트 감지: "블랙+플럼:55" — + 있고 : 도 있으면 세트
+  if (opt.includes('+') && opt.includes(':')) {
+    const colonIdx = opt.lastIndexOf(':');
+    const sz = opt.slice(colonIdx + 1).trim();
+    const colorPart = opt.slice(0, colonIdx);
+    const colors = colorPart.split('+').map(c => {
+      c = c.trim();
+      return COLOR_MAP[c.toUpperCase()] || COLOR_MAP[c] || c.slice(0,2).toUpperCase();
+    });
+    return { cc: colors[0], sz, isSet: true, setColors: colors };
+  }
   if (opt.includes(':')) {
     const parts = opt.split(':');
     const cRaw = parts[0].trim();
     const cc = COLOR_MAP[cRaw.toUpperCase()] || COLOR_MAP[cRaw] || cRaw.slice(0,2).toUpperCase();
-    return { cc, sz: parts[parts.length-1].trim() };
+    return { cc, sz: parts[parts.length-1].trim(), isSet: false };
   }
-  return { cc: null, sz: opt.trim() };
+  return { cc: null, sz: opt.trim(), isSet: false };
 }
 
 function extractIcCS(name) {
@@ -1045,7 +1056,9 @@ function getIcountQty(sabData_row) {
   const 자체 = sabData_row.자체코드;
   const 옵션 = sabData_row.옵션;
   const sabName = sabData_row.상품명 || '';
-  let { cc, sz } = parseOpt(옵션);
+  const parsedOpt = parseOpt(옵션);
+  let { cc, sz, isSet, setColors } = parsedOpt;
+
   if (!cc) {
     const m = 자체.match(/([A-Z]{2,3})\d?$/);
     if (m) cc = COLOR_MAP[m[1]] || m[1];
@@ -1059,15 +1072,14 @@ function getIcountQty(sabData_row) {
   }
   let items = icMap[자체] || (overrideKey ? icMap[overrideKey] : null) || icMap[pfx] || (fb ? icMap[fb] : null) || [];
 
+  // ── 이름 기반 매칭 ──
+  let nameMatchedGroup = null;
   if (!items.length && sabName) {
-    // 1차: normName 정규화 후 완전일치
     const sabNorm = normName(sabName);
-    // normOptMap에 이미 이름→물류품번 매핑이 있으면 김포에서 찾을 것이므로 패스
     for (const [key, arr] of Object.entries(icMap)) {
       if (!arr.length) continue;
       if (normName(arr[0].name) === sabNorm && sabNorm.length > 3) {
-        items = arr;
-        // 이름 기반 매칭 성공 → normOptMap에 기록 (상품명||옵션 형식)
+        items = arr; nameMatchedGroup = arr;
         const normKey = sabNorm + '||IC';
         if (!normOptMap[normKey]) {
           normOptMap[normKey] = arr[0].품목코드 || key;
@@ -1076,7 +1088,6 @@ function getIcountQty(sabData_row) {
         break;
       }
     }
-    // 2차: 키워드 교집합 (임계값 완화: 길이 4이상 키워드 1개 일치도 허용)
     if (!items.length) {
       const sabKw = nameKeywords(sabName);
       let bestScore = 0, bestKey = null;
@@ -1090,8 +1101,7 @@ function getIcountQty(sabData_row) {
         }
       }
       if (bestKey) {
-        items = icMap[bestKey];
-        // 키워드 매칭 성공도 기록
+        items = icMap[bestKey]; nameMatchedGroup = icMap[bestKey];
         const sabNorm2 = normName(sabName);
         const normKey2 = sabNorm2 + '||IC';
         if (sabNorm2.length > 3 && !normOptMap[normKey2]) {
@@ -1101,12 +1111,44 @@ function getIcountQty(sabData_row) {
       }
     }
   }
+
   if (!items.length) return null;
 
+  // ── 세트 처리 ──
+  if (isSet && setColors && setColors.length > 1 && sz) {
+    const qtys = setColors.map(col => {
+      for (const ic of items) {
+        const { c, s } = extractIcCS(ic.name);
+        if (c === col && s === sz) return ic.qty;
+      }
+      return null; // 해당 색상+사이즈 이카운트에 없음
+    });
+    const anyNull = qtys.some(q => q === null);
+    if (anyNull) {
+      // 구성 단품 자체가 없음 → 자동품절
+      log(`[WARN] 세트자동품절: "${sabName}" [${옵션}] — 구성단품 미존재`, 'warn');
+      return { qty: 0, src: '이카운트(세트품절)', 품목코드: items[0]?.품목코드||'—' };
+    }
+    const setQty = Math.min(...qtys);
+    log(`[INFO] 세트재고: [${옵션}] → 구성재고[${qtys.join(', ')}] → min=${setQty}`, 'info');
+    return { qty: setQty, src: '이카운트(세트)', 품목코드: items[0]?.품목코드||'—' };
+  }
+
+  // ── 일반 단품 처리 ──
   if (cc && sz) {
     for (const ic of items) {
       const { c, s } = extractIcCS(ic.name);
       if (c === cc && s === sz) return { qty: ic.qty, src: '이카운트', 품목코드: ic.품목코드 };
+    }
+    // 색상+사이즈 매칭 실패
+    if (nameMatchedGroup) {
+      const hasSameSize = items.some(ic => extractIcCS(ic.name).s === sz);
+      if (!hasSameSize) {
+        log(`[WARN] 자동품절(사이즈없음): "${sabName}" [${옵션}]`, 'warn');
+        return { qty: 0, src: '이카운트(자동품절)', 품목코드: items[0]?.품목코드||'—' };
+      }
+      log(`[WARN] 컬러불일치: "${sabName}" [${옵션}] cc=${cc}`, 'warn');
+      return { qty: 0, src: '이카운트(컬러불일치)', 품목코드: items[0]?.품목코드||'—' };
     }
     if (items.length > 1) return null;
   }
@@ -1114,6 +1156,10 @@ function getIcountQty(sabData_row) {
     const szMatch = items.filter(ic => extractIcCS(ic.name).s === sz);
     if (szMatch.length === 1) return { qty: szMatch[0].qty, src: '이카운트', 품목코드: szMatch[0].품목코드 };
     if (szMatch.length > 1)   return { qty: szMatch.reduce((s,ic) => s+ic.qty, 0), src: '이카운트(합산)', 품목코드: szMatch[0].품목코드 };
+    if (nameMatchedGroup) {
+      log(`[WARN] 자동품절(사이즈없음): "${sabName}" [${옵션}]`, 'warn');
+      return { qty: 0, src: '이카운트(자동품절)', 품목코드: items[0]?.품목코드||'—' };
+    }
   }
   if (items.length === 1) return { qty: items[0].qty, src: '이카운트', 품목코드: items[0].품목코드 };
   return null;
@@ -1234,9 +1280,11 @@ function runMatch() {
   document.getElementById('nomapCnt').textContent = cNM;
   document.getElementById('nomapTotal').textContent = `총 ${cNM}건`;
   const cKCFI = resultRows.filter(r=>r._src==='KCFI').length;
+  const cAutoSo = resultRows.filter(r=>r._src==='이카운트(자동품절)'||r._src==='이카운트(세트품절)'||r._src==='이카운트(컬러불일치)').length;
+  const cSet = resultRows.filter(r=>r._src==='이카운트(세트)').length;
   if (document.getElementById('srcKCFI')) document.getElementById('srcKCFI').textContent = cKCFI.toLocaleString();
   log(`[OK] 매칭: ${cM} / 재고0: ${cZ} / 미매칭: ${cU} / 매핑없음: ${cNM}`, 'ok');
-  log(`  소스별: 이카운트 ${cIC} / 김포 ${cGP-cKCFI} / KCFI(신원) ${cKCFI}`, 'info');
+  log(`  소스별: 이카운트 ${cIC} / 김포 ${cGP-cKCFI} / KCFI(신원) ${cKCFI}${cSet>0?' / 세트 '+cSet+'건':''}${cAutoSo>0?' / 자동품절 '+cAutoSo+'건':''}`, 'info');
 
   document.getElementById('vEmpty').style.display = 'none';
   document.getElementById('vResult').style.display = 'block';
@@ -1253,8 +1301,12 @@ function runMatch() {
       <div class="ritem"><div class="rnum" style="color:var(--accent2)">${pct}%</div><div class="rlbl">매칭률</div></div>
       <div class="ritem"><div class="rnum cb">${cIC.toLocaleString()}</div><div class="rlbl">💙 이카운트</div></div>
       <div class="ritem"><div class="rnum ct">${cGP.toLocaleString()}</div><div class="rlbl">🩵 김포</div></div>
+      ${cSet>0?`<div class="ritem"><div class="rnum" style="color:var(--accent)">🔗${cSet}</div><div class="rlbl">세트</div></div>`:''}
+      ${cAutoSo>0?`<div class="ritem"><div class="rnum" style="color:var(--danger)">⚡${cAutoSo}</div><div class="rlbl">자동품절</div></div>`:''}
     </div>
-    ${cNM>0?`<div class="notice nw" style="margin-top:11px;margin-bottom:0"><span>💡</span>
+    ${cAutoSo>0?`<div class="notice nw" style="margin-top:8px;margin-bottom:0"><span>⚡</span>
+      <div>이름매칭 후 옵션 불일치 <b>${cAutoSo}건</b>이 자동품절(재고0) 처리됐습니다. 로그 탭에서 확인하세요.</div></div>`:''}
+    ${cNM>0?`<div class="notice nw" style="margin-top:8px;margin-bottom:0"><span>💡</span>
       <div>"매핑없음" 탭 또는 <b>매핑 마스터</b> 탭에서 물류품번을 직접 수정/추가하세요.</div></div>`:''}
   `;
   switchTab('all');
@@ -1304,6 +1356,12 @@ function renderMain(rows) {
   tbody.innerHTML = rows.slice(0,MAX).map((r,i)=>{
     const srcHtml = r._src==='이카운트'||r._src==='이카운트(합산)'
       ? `<span class="bdg b-ic">${r._src}</span>`
+      : r._src==='이카운트(세트)'
+      ? `<span class="bdg b-ic" style="background:rgba(79,142,247,.25)">🔗세트</span>`
+      : r._src==='이카운트(자동품절)'||r._src==='이카운트(세트품절)'
+      ? `<span class="bdg b-no" style="font-size:9px">${r._src==='이카운트(세트품절)'?'🔗세트품절':'자동품절'}</span>`
+      : r._src==='이카운트(컬러불일치)'
+      ? `<span class="bdg b-z" style="font-size:9px">컬러?</span>`
       : r._src.startsWith('김포')||r._src==='KCFI'
       ? `<span class="bdg ${r._src==='KCFI'?'b-pp':'b-gp'}">${r._src}</span>`
       : `<span style="color:var(--text3)">—</span>`;
