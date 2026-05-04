@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ASPRO 가상재고 v4.5</title>
+<title>ASPRO 가상재고 v4.6</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -142,7 +142,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
 <div class="hdr">
   <div class="logo">ASPRO<em> / 가상재고</em></div>
   <div class="hd"></div>
-  <div class="ver">v4.5</div>
+  <div class="ver">v4.6</div>
   <div class="hright">
     <span id="lastUp" style="font-size:10px;color:var(--text3);font-family:var(--mono)">대기중</span>
     <button class="hbtn" id="sheetBtn" onclick="showSheetsModal()">☁ Google Sheets 연동</button>
@@ -376,6 +376,28 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
         <div>현재 저장된 전체 매핑 (사방넷코드 → 김포물류품번 / 이카운트 직접지정). 수정 후 저장하세요.<br>
         <span style="color:var(--accent2);font-size:11px">💡 이카운트 품목코드 직접 지정 시 → 이름이 달라도 해당 이카운트 그룹으로 직접 매칭됩니다.</span></div>
       </div>
+
+      <!-- 상품 단위 일괄 매핑 패널 -->
+      <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:12px;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--accent2);margin-bottom:8px">⚡ 상품 단위 일괄 매핑 <span style="font-weight:400;color:var(--text3)">(세트·다색상 상품용 — 사방넷 상품ID 하나로 전체 옵션 자동 적용)</span></div>
+        <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <label style="font-size:10px;color:var(--text3)">사방넷 상품ID (앞 숫자만)</label>
+            <input class="fi" id="bulkScId" placeholder="예: 102586" style="width:130px;font-family:var(--mono)">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <label style="font-size:10px;color:var(--text3)">이카운트 품목코드</label>
+            <input class="fi" id="bulkIcCode" placeholder="예: MW262C004" style="width:170px;font-family:var(--mono)">
+          </div>
+          <button class="btn btn-p" onclick="applyBulkIcMap()" style="height:31px">🔗 일괄 적용</button>
+          <span style="font-size:10px;color:var(--text3);align-self:center" id="bulkResult"></span>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.7">
+          ✔ 사방넷코드가 <b style="color:var(--text2)">102586-0001, 102586-0002...</b> 형태면 → <b style="color:var(--accent)">102586</b> 하나만 입력<br>
+          ✔ 적용 후 💾 전체 저장 눌러야 구글시트에 반영됩니다
+        </div>
+      </div>
+
       <div style="display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-p" onclick="addMapRow()">+ 행 추가</button>
         <button class="btn btn-s" onclick="saveNomapEntries()">💾 전체 저장</button>
@@ -1756,7 +1778,54 @@ function renderMapview() {
   }
 }
 
-function onMVic(el, sc) {
+// ── 상품 단위 일괄 이카운트 매핑 ──
+function applyBulkIcMap() {
+  const scId = document.getElementById('bulkScId').value.trim();
+  const icCode = document.getElementById('bulkIcCode').value.trim();
+  const resultEl = document.getElementById('bulkResult');
+
+  if (!scId || !icCode) {
+    resultEl.textContent = '⚠ 상품ID와 이카운트 품목코드 모두 입력하세요';
+    resultEl.style.color = 'var(--warn)';
+    return;
+  }
+
+  // sabData에서 해당 상품ID로 시작하는 단품 찾기
+  const matched = sabData.filter(s =>
+    s.사방넷코드.startsWith(scId + '-') || s.사방넷코드 === scId
+  );
+
+  if (!matched.length) {
+    // sabData 없어도 icCodeMap에 prefix로 저장 (매칭 실행 시 적용됨)
+    icCodeMap[scId] = icCode;
+    resultEl.textContent = `✅ prefix "${scId}" → "${icCode}" 저장됨 (사방넷 파일 로드 후 적용)`;
+    resultEl.style.color = 'var(--success)';
+    saveExtra();
+    return;
+  }
+
+  // 각 단품 사방넷코드에 개별 저장 + prefix도 저장
+  let cnt = 0;
+  matched.forEach(s => {
+    icCodeMap[s.사방넷코드] = icCode;
+    cnt++;
+  });
+  icCodeMap[scId] = icCode; // prefix도 저장 (나중에 추가될 옵션 대비)
+  saveExtra();
+
+  resultEl.textContent = `✅ ${cnt}개 단품 + prefix 저장 완료 → 💾 전체 저장 눌러서 Sheets 반영`;
+  resultEl.style.color = 'var(--success)';
+  log(`[OK] 일괄 이카운트 매핑: ${scId} (${cnt}개 단품) → ${icCode}`, 'ok');
+
+  // 입력 초기화
+  document.getElementById('bulkScId').value = '';
+  document.getElementById('bulkIcCode').value = '';
+
+  // 매핑 마스터 테이블 갱신
+  renderMapview();
+}
+
+
   const val = el.value.trim();
   const actualSc = el.dataset.sc || sc;
   if (val) {
