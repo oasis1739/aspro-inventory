@@ -4,9 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ASPRO 가상재고 v4.2</title>
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -145,7 +142,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
 <div class="hdr">
   <div class="logo">ASPRO<em> / 가상재고</em></div>
   <div class="hd"></div>
-  <div class="ver">v4.2.1776924061945</div>
+  <div class="ver">v4.2</div>
   <div class="hright">
     <span id="lastUp" style="font-size:10px;color:var(--text3);font-family:var(--mono)">대기중</span>
     <button class="hbtn" id="sheetBtn" onclick="showSheetsModal()">☁ Google Sheets 연동</button>
@@ -240,24 +237,6 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
     </div>
   </div>
 
-  <!-- ⑥ 강제품절 관리 -->
-  <div class="sec">
-    <div class="sec-ttl" style="color:var(--danger)">⛔ 강제품절 관리 <span class="stag" style="color:var(--danger);border-color:var(--danger)">재고무관</span></div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:6px;line-height:1.6">
-      등록된 코드는 물류재고가 있어도<br>무조건 가상재고 <b style="color:var(--danger)">0</b>으로 내보내집니다
-    </div>
-    <textarea id="fzQuickInput" class="fi" rows="3"
-      placeholder="사방넷코드 입력&#10;여러 개는 줄바꿈으로 구분&#10;예: KNCD_AL&#10;MB26S-KNP01_AL"
-      style="width:100%;font-size:11px;font-family:var(--mono);resize:vertical;min-height:66px"></textarea>
-    <input class="fi" id="fzQuickReason" placeholder="사유 (예: 홈쇼핑 판매중지)" style="width:100%;margin-top:4px;font-size:11px">
-    <button class="btn btn-d btnf" style="margin-top:5px;font-size:11px" onclick="quickAddForceZero()">⛔ 강제품절 등록</button>
-    <div style="margin-top:6px;font-size:10px;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
-      <span>등록됨: <span id="forceZeroCnt" style="color:var(--danger);font-family:var(--mono);font-weight:700">0</span>건</span>
-      <button onclick="clearAllForceZero()" style="font-size:9px;padding:1px 6px;background:transparent;border:1px solid var(--text3);color:var(--text3);border-radius:3px;cursor:pointer">전체해제</button>
-    </div>
-    <div id="fzSideStatus" style="font-size:10px;margin-top:3px"></div>
-  </div>
-
   <!-- 현황 -->
   <div class="sec">
     <div class="sec-ttl">매칭 현황</div>
@@ -312,7 +291,6 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
       <button class="tab" onclick="switchTab('zero')">재고0</button>
       <button class="tab" onclick="switchTab('nomap')" id="tabNomap">매핑없음 <span class="tbdg" id="nomapCnt">0</span></button>
       <button class="tab" onclick="switchTab('soldout')" id="tabSoldout">품절관리 <span class="tbdg" id="soldoutCnt">0</span></button>
-      <button class="tab" onclick="switchTab('forcezero')" id="tabForceZero">⛔강제품절 <span class="tbdg" id="forceZeroTabBdg" style="display:none;background:var(--danger)">0</span></button>
       <button class="tab" onclick="switchTab('mapview')">매핑 마스터</button>
       <button class="tab" onclick="switchTab('log')">로그</button>
     </div>
@@ -387,49 +365,6 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
             <th>#</th><th>사방넷코드</th><th>자체코드</th><th>상품명</th><th>옵션</th><th>현재고</th><th>품절처리일</th><th>해제</th>
           </tr></thead>
           <tbody id="soldoutBody"></tbody>
-        </table>
-      </div></div>
-    </div>
-
-    <!-- 강제품절 탭 -->
-    <div id="forceZeroWrap" style="display:none">
-      <div class="notice" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5;margin-bottom:11px">
-        <span>⛔</span>
-        <div>
-          <b>강제품절</b>은 물류(이카운트·김포·신원) 재고가 있어도 무조건 가상재고 <b>0</b>으로 내보냅니다.<br>
-          <span style="font-size:11px;opacity:.8">홈쇼핑 판매중지, 특정 채널 판매 제한 등 재고와 무관하게 품절 처리가 필요한 경우에 사용하세요.</span>
-        </div>
-      </div>
-
-      <!-- 일괄 등록 영역 -->
-      <div class="rpanel" style="margin-bottom:12px">
-        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px">📋 코드 일괄 등록</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
-          <div style="flex:1;min-width:220px">
-            <textarea id="fzBulkInput" class="fi" rows="4"
-              placeholder="사방넷코드 입력 (줄바꿈·쉼표·스페이스 구분)&#10;예:&#10;KNCD_AL&#10;KNCD-IV&#10;MB26S-KNP01_AL"
-              style="width:100%;font-family:var(--mono);font-size:11px;resize:vertical"></textarea>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px;min-width:180px">
-            <input class="fi" id="fzBulkReason" placeholder="사유 (예: 홈쇼핑 판매중지)" style="font-size:11px">
-            <button class="btn btn-d" onclick="bulkAddForceZero()" style="justify-content:center">⛔ 일괄 등록</button>
-            <span id="fzAddResult" style="font-size:11px"></span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 목록 -->
-      <div style="display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap;align-items:center">
-        <input class="fi" id="fzSearch" placeholder="코드/상품명 검색..." oninput="renderForceZeroTab()" style="width:220px">
-        <span style="font-size:10px;color:var(--text3);margin-left:auto" id="fzTotal"></span>
-      </div>
-      <div class="twrap"><div class="tscroll">
-        <table>
-          <thead><tr>
-            <th>#</th><th>사방넷코드</th><th>자체코드</th><th>상품명</th><th>옵션</th>
-            <th>실제재고</th><th>사유</th><th>등록일</th><th>판매재개</th>
-          </tr></thead>
-          <tbody id="forceZeroBody"></tbody>
         </table>
       </div></div>
     </div>
@@ -533,96 +468,92 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
     </div>
 
     <div style="background:var(--bg,#0a0d13);border-radius:5px;padding:8px;margin-bottom:12px;overflow-x:auto">
-      <pre id="appsScriptCode" style="font-size:10px;color:#86efac;line-height:1.6;white-space:pre;margin:0">// 기존 Code.gs 맨 아래에 추가 (전체 교체)
+      <pre id="appsScriptCode" style="font-size:10px;color:#86efac;line-height:1.6;white-space:pre;margin:0">// 기존 Code.gs 맨 아래에 추가
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  // 매핑
   let sh = ss.getSheetByName('aspro_match');
   if (!sh) { sh = ss.insertSheet('aspro_match'); sh.appendRow(['사방넷코드','김포물류품번','메모','등록일']); }
+  const data = sh.getDataRange().getValues();
   const map = {};
-  sh.getDataRange().getValues().slice(1).forEach(r => { if (r[0]) map[String(r[0])] = String(r[1]); });
-  // 품절
+  data.slice(1).forEach(r => { if (r[0]) map[String(r[0])] = String(r[1]); });
   let so = ss.getSheetByName('aspro_soldout');
   if (!so) { so = ss.insertSheet('aspro_soldout'); so.appendRow(['사방넷코드','등록일']); }
+  const soData = so.getDataRange().getValues();
   const soldout = {};
-  so.getDataRange().getValues().slice(1).forEach(r => { if (r[0]) soldout[String(r[0])] = true; });
-  // 신원재고
+  soData.slice(1).forEach(r => { if (r[0]) soldout[String(r[0])] = true; });
   let kc = ss.getSheetByName('aspro_kcfi');
   if (!kc) { kc = ss.insertSheet('aspro_kcfi'); kc.appendRow(['사방넷코드','상품명','타입','색상','사이즈','재고','업데이트일','비고']); }
+  const kcData = kc.getDataRange().getValues();
   const kcfi = {};
-  kc.getDataRange().getValues().slice(1).forEach(r => {
+  kcData.slice(1).forEach(r => {
     const sc = String(r[0] || '').trim();
     const qty = parseInt(r[5], 10);
     if (sc && !isNaN(qty)) kcfi[sc] = qty;
   });
-  // 강제품절
-  let fz = ss.getSheetByName('aspro_forcezero');
-  if (!fz) { fz = ss.insertSheet('aspro_forcezero'); fz.appendRow(['사방넷코드','사유','등록일']); }
-  const forcezero = {};
-  fz.getDataRange().getValues().slice(1).forEach(r => {
-    if (r[0]) forcezero[String(r[0])] = { reason: String(r[1]||''), date: String(r[2]||'') };
-  });
-  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout, kcfi, forcezero}))
+  // aspro_normname: 정규화된 상품명 → 물류품번 매핑 (이름 기반 자동매칭용)
+  let nn = ss.getSheetByName('aspro_normname');
+  if (!nn) { nn = ss.insertSheet('aspro_normname'); nn.appendRow(['정규화상품명(normName)','물류품번','원본사방넷상품명','등록일']); }
+  const nnData = nn.getDataRange().getValues();
+  const normname = {};
+  nnData.slice(1).forEach(r => { if (r[0] && r[1]) normname[String(r[0])] = String(r[1]); });
+  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout, kcfi, normname}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const body = JSON.parse(e.postData.contents);
-  // 매핑 저장
-  if (body.map) {
-    let sh = ss.getSheetByName('aspro_match');
-    if (!sh) { sh = ss.insertSheet('aspro_match'); }
-    sh.clearContents();
-    sh.appendRow(['사방넷코드','김포물류품번','메모','등록일']);
-    const rows = Object.entries(body.map).map(([k,v]) => [k, v, '', new Date().toLocaleDateString('ko-KR')]);
-    if (rows.length) sh.getRange(2,1,rows.length,4).setValues(rows);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const payload = JSON.parse(e.postData.contents);
+    // aspro_match 저장
+    if (payload.map) {
+      let sh = ss.getSheetByName('aspro_match');
+      if (!sh) { sh = ss.insertSheet('aspro_match'); }
+      sh.clearContents();
+      sh.appendRow(['사방넷코드','김포물류품번','메모','등록일']);
+      const now = new Date().toLocaleDateString('ko-KR');
+      Object.entries(payload.map).forEach(([k,v]) => { sh.appendRow([k, v, '', now]); });
+    }
+    // aspro_soldout 저장
+    if (payload.soldout) {
+      let so = ss.getSheetByName('aspro_soldout');
+      if (!so) { so = ss.insertSheet('aspro_soldout'); }
+      so.clearContents();
+      so.appendRow(['사방넷코드','등록일']);
+      Object.entries(payload.soldout).forEach(([k,v]) => { so.appendRow([k, v]); });
+    }
+    // aspro_kcfi 저장
+    if (payload.kcfi && Object.keys(payload.kcfi).length > 0) {
+      let kc = ss.getSheetByName('aspro_kcfi');
+      if (!kc) { kc = ss.insertSheet('aspro_kcfi'); }
+      kc.clearContents();
+      kc.appendRow(['사방넷코드','상품명','타입','색상','사이즈','재고','업데이트일','비고']);
+      const now2 = new Date().toLocaleDateString('ko-KR');
+      Object.entries(payload.kcfi).forEach(([k,v]) => { kc.appendRow([k,'','','','',v,now2,'']); });
+    }
+    // aspro_normname 저장 (이름 기반 자동매핑)
+    if (payload.normname && Object.keys(payload.normname).length > 0) {
+      let nn = ss.getSheetByName('aspro_normname');
+      if (!nn) { nn = ss.insertSheet('aspro_normname'); }
+      nn.clearContents();
+      nn.appendRow(['정규화상품명(normName)','물류품번','원본사방넷상품명','등록일']);
+      const now3 = new Date().toLocaleDateString('ko-KR');
+      Object.entries(payload.normname).forEach(([k,v]) => { nn.appendRow([k, v, '', now3]); });
+    }
+    const saved = payload.map ? Object.keys(payload.map).length : 0;
+    return ContentService.createTextOutput(JSON.stringify({ok:true, saved}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({ok:false, error: err.message}))
+      .setMimeType(ContentService.MimeType.JSON);
   }
-  // 품절 저장
-  if (body.soldout) {
-    let so = ss.getSheetByName('aspro_soldout');
-    if (!so) { so = ss.insertSheet('aspro_soldout'); }
-    so.clearContents();
-    so.appendRow(['사방넷코드','등록일']);
-    const rows = Object.entries(body.soldout).map(([k,v]) => [k, v]);
-    if (rows.length) so.getRange(2,1,rows.length,2).setValues(rows);
-  }
-  // 강제품절 저장
-  if (body.forcezero !== undefined) {
-    let fz = ss.getSheetByName('aspro_forcezero');
-    if (!fz) { fz = ss.insertSheet('aspro_forcezero'); }
-    fz.clearContents();
-    fz.appendRow(['사방넷코드','사유','등록일']);
-    const rows = Object.entries(body.forcezero).map(([k,v]) => [k, v.reason||'', v.date||'']);
-    if (rows.length) fz.getRange(2,1,rows.length,3).setValues(rows);
-  }
-  // 신원재고 저장
-  if (body.kcfi) {
-    let kc = ss.getSheetByName('aspro_kcfi');
-    if (!kc) { kc = ss.insertSheet('aspro_kcfi'); }
-    kc.clearContents();
-    kc.appendRow(['사방넷코드','재고','업데이트일']);
-    const rows = Object.entries(body.kcfi).map(([k,v]) => [k, v, new Date().toLocaleDateString('ko-KR')]);
-    if (rows.length) kc.getRange(2,1,rows.length,3).setValues(rows);
-  }
-  const saved = (body.map ? Object.keys(body.map).length : 0);
-  return ContentService.createTextOutput(JSON.stringify({ok:true, saved}))
-    .setMimeType(ContentService.MimeType.JSON);
 }</pre>
     </div>
 
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px">
       <button class="btn btn-p" onclick="saveSheetsUrlBtn()">💾 URL 저장</button>
-      <button class="btn btn-p" onclick="loadFromSheets()">⬇ 전체 불러오기</button>
+      <button class="btn btn-p" onclick="loadFromSheets()">⬇ 불러오기</button>
       <button class="btn btn-s" onclick="saveToSheets()">⬆ Sheets에 저장</button>
       <button class="btn btn-n" onclick="copyAppsScript()">📋 코드 복사</button>
-    </div>
-    <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:8px;margin-bottom:8px;font-size:11px;color:#fca5a5">
-      <b>⛔ 강제품절 시트 직접 수정 후</b> → 아래 버튼으로 앱에 반영<br>
-      <span style="font-size:10px;opacity:.8">구글시트 aspro_forcezero에서 행 추가/삭제 후 동기화하세요</span>
-      <div style="margin-top:6px">
-        <button class="btn btn-d" style="font-size:11px" onclick="syncForceZeroFromSheets()">⛔ 강제품절 시트 → 앱 동기화</button>
-      </div>
     </div>
     <div style="font-size:11px;margin-top:8px" id="sheetsStatus"></div>
 
@@ -645,25 +576,6 @@ let matchMap = {};
 let normOptMap = {};
 let soldoutMap = {};
 let kcfiMap = {};
-let forceZeroMap = {};  // 강제품절: 재고 무관하게 가상재고 0 고정
-
-// ── Sheets / 유효성 상수 (loadExtra 전에 선언 필요) ──
-const SHEETS_URL_KEY = 'aspro_sheets_url';
-const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
-const INVALID_GP_VALUES = new Set([
-  'KCFI 코드없음','슈컴퍼니','슈컴퍼니-김포이관','확인요망','#N/A',
-  '김포재고O상품코드X','삭제요청','삭제요청위에중복','품절',
-  '수량은 있는데 코드가 없음','공통색상코드없음','0',''
-]);
-function isValidGp(v) {
-  if (!v) return false;
-  const s = String(v).trim();
-  if (!s || s === '0') return false;
-  if (INVALID_GP_VALUES.has(s)) return false;
-  if (s.startsWith('김포재고O')) return false;
-  if (s.includes('???') || s.includes('중복') || s.includes('위에')) return false;
-  return true;
-}
 
 const SKIP_GP = new Set(['nan','','슈컴퍼니-김포이관','확인요망','삭제요망']);
 let extraMap = {};
@@ -742,15 +654,6 @@ function loadExtra() {
       if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">💾 신원재고 localStorage</div><div class="fcnt">${n}건</div></div>`;
     }
   } catch(e) { kcfiMap = {}; }
-  try {
-    const fz = localStorage.getItem('aspro_forcezero_v1');
-    if (fz) {
-      forceZeroMap = JSON.parse(fz);
-      const n = Object.keys(forceZeroMap).length;
-      if (n > 0) log(`[OK] 저장된 강제품절 로드: ${n}건`, 'ok');
-    }
-  } catch(e) { forceZeroMap = {}; }
-  updateForceZeroCnt();
   updateSoldoutCnt();
   updateKCFICnt();
   if (!localStorage.getItem(SHEETS_URL_KEY) && DEFAULT_SHEETS_URL) {
@@ -762,7 +665,6 @@ function loadExtra() {
 function saveExtra() {
   try { localStorage.setItem(LS_KEY, JSON.stringify(extraMap)); } catch(e) {}
   try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e) {}
-  try { localStorage.setItem('aspro_forcezero_v1', JSON.stringify(forceZeroMap)); } catch(e) {}
   return true;
 }
 
@@ -777,14 +679,6 @@ function updateKCFICnt() {
   if (el) el.textContent = n.toLocaleString();
   const el2 = document.getElementById('srcKCFI');
   if (el2) el2.textContent = n > 0 ? n.toLocaleString() : '—';
-}
-
-function updateForceZeroCnt() {
-  const n = Object.keys(forceZeroMap).length;
-  const el = document.getElementById('forceZeroCnt');
-  if (el) el.textContent = n.toLocaleString();
-  const bdg = document.getElementById('forceZeroBdg');
-  if (bdg) { bdg.textContent = n; bdg.style.display = n > 0 ? 'inline-block' : 'none'; }
 }
 
 function clearKCFI() {
@@ -1166,15 +1060,46 @@ function getIcountQty(sabData_row) {
   let items = icMap[자체] || (overrideKey ? icMap[overrideKey] : null) || icMap[pfx] || (fb ? icMap[fb] : null) || [];
 
   if (!items.length && sabName) {
-    const sabKw = nameKeywords(sabName);
-    let bestScore = 0, bestKey = null;
+    // 1차: normName 정규화 후 완전일치
+    const sabNorm = normName(sabName);
+    // normOptMap에 이미 이름→물류품번 매핑이 있으면 김포에서 찾을 것이므로 패스
     for (const [key, arr] of Object.entries(icMap)) {
       if (!arr.length) continue;
-      const icKw = nameKeywords(arr[0].name);
-      const score = setIntersect(sabKw, icKw);
-      if (score > bestScore && score >= 2) { bestScore = score; bestKey = key; }
+      if (normName(arr[0].name) === sabNorm && sabNorm.length > 3) {
+        items = arr;
+        // 이름 기반 매칭 성공 → normOptMap에 기록 (상품명||옵션 형식)
+        const normKey = sabNorm + '||IC';
+        if (!normOptMap[normKey]) {
+          normOptMap[normKey] = arr[0].품목코드 || key;
+          log(`[INFO] 이름매핑 자동기록: "${sabName}" → ${arr[0].품목코드||key}`, 'info');
+        }
+        break;
+      }
     }
-    if (bestKey) { items = icMap[bestKey]; }
+    // 2차: 키워드 교집합 (임계값 완화: 길이 4이상 키워드 1개 일치도 허용)
+    if (!items.length) {
+      const sabKw = nameKeywords(sabName);
+      let bestScore = 0, bestKey = null;
+      for (const [key, arr] of Object.entries(icMap)) {
+        if (!arr.length) continue;
+        const icKw = nameKeywords(arr[0].name);
+        const score = setIntersect(sabKw, icKw);
+        const longMatch = score >= 1 && [...sabKw].some(w => icKw.has(w) && w.length >= 4);
+        if (score > bestScore && (score >= 2 || longMatch)) {
+          bestScore = score; bestKey = key;
+        }
+      }
+      if (bestKey) {
+        items = icMap[bestKey];
+        // 키워드 매칭 성공도 기록
+        const sabNorm2 = normName(sabName);
+        const normKey2 = sabNorm2 + '||IC';
+        if (sabNorm2.length > 3 && !normOptMap[normKey2]) {
+          normOptMap[normKey2] = items[0]?.품목코드 || bestKey;
+          log(`[INFO] 이름매핑(키워드) 자동기록: "${sabName}" → ${bestKey}`, 'info');
+        }
+      }
+    }
   }
   if (!items.length) return null;
 
@@ -1197,6 +1122,11 @@ function getIcountQty(sabData_row) {
 function normName(s) {
   s = String(s||'').toLowerCase()
     .replace(/\[.*?\]/g,'').replace(/\(.*?\)/g,'')
+    // 시즌코드 (25ss, 24fw 등)
+    .replace(/\d{2,4}(ss|fw)\s*/gi,'')
+    // 브랜드 접두어 제거
+    .replace(/^(르뎁트|엔니튜드|제이슨우|막스스튜디오|막스|지이크|파렌하이트|베스띠벨리|m12|mw)\s+/i,'')
+    .replace(/^(여성|남성|공용)\s+/i,'')
     .replace(/\d+종\s*\d*택\d*/g,'').replace(/\d+종/g,'').replace(/\d*택\d+/g,'')
     .replace(/\d+컬러|\d+color/gi,'').replace(/\d{2}[sf][sw]\s*/gi,'');
   const colors = ['블랙','화이트','네이비','그레이','베이지','카키','브라운','크림',
@@ -1225,9 +1155,20 @@ function normOpt(opt) {
 function nameKeywords(s) {
   s = String(s||'').toLowerCase()
     .replace(/\[.*?\]/g,'').replace(/\(.*?\)/g,'')
-    .replace(/[xX×]/g,' ').replace(/\d+종|\d+컬러|\d+ss|\d+fw/g,' ')
+    .replace(/[xX×]/g,' ')
+    // 숫자+SS/FW, 25ss, 24fw 등 시즌코드 제거
+    .replace(/\d{2,4}(ss|fw)\s*/gi,' ')
+    .replace(/\d+종\s*\d*택\d*/g,' ').replace(/\d+종/g,' ').replace(/\d*택\d+/g,' ')
+    .replace(/\d+컬러|\d+color/gi,' ')
     .replace(/[^\w\s가-힣]/g,' ');
-  const stop = new Set(['ss','fw','set','for','the','and','택','종','컬러','르뎁트','엔니튜드','제이슨우','막스','지이크','파렌하이트','베스띠벨리']);
+  const stop = new Set([
+    'ss','fw','set','for','the','and','택','종','컬러',
+    // 브랜드명 (이카운트에 접두어로 붙는 것들)
+    '르뎁트','엔니튜드','제이슨우','막스','막스스튜디오','스튜디오',
+    '지이크','파렌하이트','베스띠벨리','m12','mw','jw','nt','bk','sk','fk',
+    // 시즌·공통
+    '25ss','24fw','25fw','24ss','여성','남성','공용',
+  ]);
   return new Set(s.split(/\s+/).filter(w => w.length >= 2 && !stop.has(w) && !/^\d+$/.test(w)));
 }
 function setIntersect(a, b) { let n=0; for (const v of a) if (b.has(v)) n++; return n; }
@@ -1239,21 +1180,10 @@ function runMatch() {
   }
   log('[INFO] 매칭 시작...', 'info');
   resultRows = []; nomapRows = [];
-  let cM=0, cU=0, cZ=0, cIC=0, cGP=0, cNM=0, cFZ=0;
+  let cM=0, cU=0, cZ=0, cIC=0, cGP=0, cNM=0;
 
   sabData.forEach(sab => {
     const sc = sab.사방넷코드;
-
-    // ★ 강제품절 최우선 체크 (재고/매핑 무관하게 무조건 0)
-    if (forceZeroMap[sc]) {
-      resultRows.push({
-        ...sab, _status:'zero', _qty:0, _src:'강제품절',
-        _물류품번:'—', _modified:false, _nomap:false, _forceZero:true
-      });
-      cZ++; cFZ++;
-      return;
-    }
-
     const icRes  = getIcountQty(sab);
     const gpRes  = getGimpoQty(sc, sab.옵션, sab.상품명);
     const kcfiQty = kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
@@ -1305,10 +1235,7 @@ function runMatch() {
   document.getElementById('nomapTotal').textContent = `총 ${cNM}건`;
   const cKCFI = resultRows.filter(r=>r._src==='KCFI').length;
   if (document.getElementById('srcKCFI')) document.getElementById('srcKCFI').textContent = cKCFI.toLocaleString();
-  const fzBdg = document.getElementById('forceZeroTabBdg');
-  if (fzBdg) { fzBdg.textContent = cFZ; fzBdg.style.display = cFZ>0?'inline-block':'none'; }
   log(`[OK] 매칭: ${cM} / 재고0: ${cZ} / 미매칭: ${cU} / 매핑없음: ${cNM}`, 'ok');
-  if (cFZ > 0) log(`  ⛔ 강제품절 적용: ${cFZ}건 (재고 무관 0 처리)`, 'warn');
   log(`  소스별: 이카운트 ${cIC} / 김포 ${cGP-cKCFI} / KCFI(신원) ${cKCFI}`, 'info');
 
   document.getElementById('vEmpty').style.display = 'none';
@@ -1326,11 +1253,8 @@ function runMatch() {
       <div class="ritem"><div class="rnum" style="color:var(--accent2)">${pct}%</div><div class="rlbl">매칭률</div></div>
       <div class="ritem"><div class="rnum cb">${cIC.toLocaleString()}</div><div class="rlbl">💙 이카운트</div></div>
       <div class="ritem"><div class="rnum ct">${cGP.toLocaleString()}</div><div class="rlbl">🩵 김포</div></div>
-      ${cFZ>0?`<div class="ritem"><div class="rnum" style="color:var(--danger)">${cFZ.toLocaleString()}</div><div class="rlbl">⛔ 강제품절</div></div>`:''}
     </div>
-    ${cFZ>0?`<div class="notice" style="margin-top:11px;margin-bottom:0;background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#fca5a5"><span>⛔</span>
-      <div><b>${cFZ}건</b>이 강제품절 처리됐습니다. 물류재고와 무관하게 가상재고 0으로 내보내집니다.</div></div>`:''}
-    ${cNM>0?`<div class="notice nw" style="margin-top:8px;margin-bottom:0"><span>💡</span>
+    ${cNM>0?`<div class="notice nw" style="margin-top:11px;margin-bottom:0"><span>💡</span>
       <div>"매핑없음" 탭 또는 <b>매핑 마스터</b> 탭에서 물류품번을 직접 수정/추가하세요.</div></div>`:''}
   `;
   switchTab('all');
@@ -1341,19 +1265,17 @@ function runMatch() {
 // ══════════════════════════════════════════════
 function switchTab(tab) {
   currentTab = tab;
-  const tabs = ['all','matched','unmatched','zero','nomap','soldout','forcezero','mapview','log'];
+  const tabs = ['all','matched','unmatched','zero','nomap','soldout','mapview','log'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabs[i]===tab));
   const showMain = ['all','matched','unmatched','zero'].includes(tab);
-  document.getElementById('mainWrap').style.display      = showMain?'block':'none';
-  document.getElementById('fbar').style.display          = showMain?'flex':'none';
-  document.getElementById('nomapWrap').style.display     = tab==='nomap'?'block':'none';
-  document.getElementById('soldoutWrap').style.display   = tab==='soldout'?'block':'none';
-  document.getElementById('forceZeroWrap').style.display = tab==='forcezero'?'block':'none';
-  document.getElementById('mapviewWrap').style.display   = tab==='mapview'?'block':'none';
-  document.getElementById('logWrap').style.display       = tab==='log'?'block':'none';
+  document.getElementById('mainWrap').style.display    = showMain?'block':'none';
+  document.getElementById('fbar').style.display        = showMain?'flex':'none';
+  document.getElementById('nomapWrap').style.display    = tab==='nomap'?'block':'none';
+  document.getElementById('soldoutWrap').style.display  = tab==='soldout'?'block':'none';
+  document.getElementById('mapviewWrap').style.display  = tab==='mapview'?'block':'none';
+  document.getElementById('logWrap').style.display     = tab==='log'?'block':'none';
   if (tab==='nomap') renderNomap();
   else if (tab==='soldout') renderSoldoutTab();
-  else if (tab==='forcezero') renderForceZeroTab();
   else if (tab==='mapview') renderMapview();
   else if (tab!=='log') applyFilter();
 }
@@ -1380,17 +1302,13 @@ function renderMain(rows) {
   const MAX = 600;
   const tbody = document.getElementById('mainBody');
   tbody.innerHTML = rows.slice(0,MAX).map((r,i)=>{
-    const srcHtml = r._src==='강제품절'
-      ? `<span class="bdg b-no">⛔ 강제품절</span>`
-      : r._src==='이카운트'||r._src==='이카운트(합산)'
+    const srcHtml = r._src==='이카운트'||r._src==='이카운트(합산)'
       ? `<span class="bdg b-ic">${r._src}</span>`
       : r._src.startsWith('김포')||r._src==='KCFI'
       ? `<span class="bdg ${r._src==='KCFI'?'b-pp':'b-gp'}">${r._src}</span>`
       : `<span style="color:var(--text3)">—</span>`;
 
-    const stHtml = r._forceZero
-      ? `<span class="bdg b-no">⛔강제품절</span>`
-      : r._status==='matched'
+    const stHtml = r._status==='matched'
       ? `<span class="bdg b-ok">매칭</span>`
       : r._status==='zero'
       ? `<span class="bdg b-z">재고0</span>`
@@ -1496,163 +1414,6 @@ function renderSoldoutTab() {
       </td>
     </tr>`;
   }).join('');
-}
-
-// ══════════════════════════════════════════════
-// 강제품절 관리
-// ══════════════════════════════════════════════
-function addForceZero(sc, reason) {
-  if (!sc) return;
-  forceZeroMap[sc] = { reason: reason || '', date: new Date().toLocaleDateString('ko-KR') };
-  saveExtra();
-  updateForceZeroCnt();
-  syncForceZeroToSheets();
-  log(`[OK] 강제품절 등록: ${sc}`, 'warn');
-}
-
-function removeForceZero(sc) {
-  delete forceZeroMap[sc];
-  saveExtra();
-  updateForceZeroCnt();
-  syncForceZeroToSheets();
-  log(`[OK] 강제품절 해제: ${sc}`, 'ok');
-}
-
-function syncForceZeroToSheets() {
-  const url = localStorage.getItem(SHEETS_URL_KEY);
-  if (!url) return;
-  fetch(url, {
-    method: 'POST',
-    body: JSON.stringify({ forcezero: forceZeroMap }),
-    headers: { 'Content-Type': 'text/plain' }
-  }).then(r => r.json()).then(d => {
-    if (d.ok) log(`[OK] 강제품절 Sheets 자동 반영: ${Object.keys(forceZeroMap).length}건`, 'ok');
-  }).catch(() => log(`[WARN] 강제품절 Sheets 반영 실패 (수동 저장 필요)`, 'warn'));
-}
-
-async function syncForceZeroFromSheets() {
-  const url = localStorage.getItem(SHEETS_URL_KEY);
-  if (!url) { alert('Sheets URL이 설정되지 않았습니다.'); return; }
-  const st = document.getElementById('sheetsStatus');
-  st.textContent = '강제품절 동기화 중...'; st.style.color = 'var(--accent2)';
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || '서버 오류');
-    forceZeroMap = { ...(data.forcezero || {}) };
-    try { localStorage.setItem('aspro_forcezero_v1', JSON.stringify(forceZeroMap)); } catch(e2) {}
-    updateForceZeroCnt();
-    if (currentTab === 'forcezero') renderForceZeroTab();
-    const fzCnt = Object.keys(forceZeroMap).length;
-    st.textContent = `✅ 강제품절 동기화 완료 — ${fzCnt}건`;
-    st.style.color = 'var(--success)';
-    log(`[OK] 강제품절 Sheets → 앱 동기화: ${fzCnt}건`, 'ok');
-  } catch(e) {
-    st.textContent = `❌ 오류: ${e.message}`;
-    st.style.color = 'var(--danger)';
-    log(`[ERR] 강제품절 동기화 실패: ${e.message}`, 'err');
-  }
-}
-
-function renderForceZeroTab() {
-  const tbody = document.getElementById('forceZeroBody');
-  if (!tbody) return;
-  const q = (document.getElementById('fzSearch')?.value || '').toLowerCase();
-  const entries = Object.entries(forceZeroMap);
-  const sabMap = {};
-  sabData.forEach(s => { sabMap[s.사방넷코드] = s; });
-
-  const filtered = entries.filter(([sc]) => {
-    if (!q) return true;
-    const s = sabMap[sc];
-    return sc.toLowerCase().includes(q) || (s && (s.상품명.toLowerCase().includes(q) || s.자체코드.toLowerCase().includes(q)));
-  });
-
-  document.getElementById('fzTotal').textContent = `총 ${filtered.length}건`;
-
-  if (!filtered.length) {
-    tbody.innerHTML = `<tr class="erow"><td colspan="8">${q ? '검색 결과 없음' : '강제품절 목록이 비어 있습니다'}</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = filtered.map(([sc, info], i) => {
-    const s = sabMap[sc];
-    const nm  = s ? s.상품명   : '(사방넷 파일 없음)';
-    const ja  = s ? s.자체코드 : '—';
-    const opt = s ? s.옵션     : '—';
-    const gpCode = extraMap[sc] || matchMap[sc] || '';
-    const gpQty  = gpCode ? (gpMap[gpCode] ?? '—') : '—';
-    const icRes  = s ? getIcountQty(s) : null;
-    const realQty = icRes ? icRes.qty : (gpQty !== '—' ? gpQty : '—');
-    const reason = typeof info === 'object' ? (info.reason || '') : '';
-    const date   = typeof info === 'object' ? (info.date || '—') : '—';
-    return `<tr>
-      <td style="color:var(--text3);font-size:10px">${i+1}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--danger)">${sc}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--text3)">${ja}</td>
-      <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis">${nm}</td>
-      <td style="font-size:10px;color:var(--text3)">${opt}</td>
-      <td style="font-size:11px;text-align:center;color:${realQty>0?'var(--success)':'var(--text3)'}">${realQty}</td>
-      <td style="font-size:10px;color:var(--text3)">${reason || '—'}</td>
-      <td style="font-size:10px;color:var(--text3)">${date}</td>
-      <td style="text-align:center">
-        <button class="btn" style="font-size:10px;padding:2px 10px;color:var(--success);border-color:var(--success)"
-          onclick="removeForceZero('${sc}');renderForceZeroTab()">⬆ 판매재개</button>
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-function quickAddForceZero() {
-  const raw = document.getElementById('fzQuickInput').value.trim();
-  if (!raw) { alert('사방넷코드를 입력하세요.'); return; }
-  const reason = document.getElementById('fzQuickReason').value.trim();
-  const codes = raw.split(/[\n,\s]+/).map(s=>s.trim()).filter(Boolean);
-  let added = 0;
-  codes.forEach(sc => {
-    if (sc) { forceZeroMap[sc] = { reason, date: new Date().toLocaleDateString('ko-KR') }; added++; }
-  });
-  saveExtra();
-  updateForceZeroCnt();
-  document.getElementById('fzQuickInput').value = '';
-  document.getElementById('fzQuickReason').value = '';
-  const st = document.getElementById('fzSideStatus');
-  if (st) { st.textContent = `✅ ${added}건 등록됨`; st.style.color = 'var(--success)'; }
-  syncForceZeroToSheets();
-  log(`[OK] 강제품절 등록: ${added}건 (${codes.slice(0,3).join(', ')}${codes.length>3?'…':''})`, 'warn');
-  // 탭 배지 업데이트
-  const bdg = document.getElementById('forceZeroTabBdg');
-  if (bdg) { bdg.textContent = Object.keys(forceZeroMap).length; bdg.style.display = 'inline-block'; }
-}
-
-function bulkAddForceZero() {
-  const raw = document.getElementById('fzBulkInput').value.trim();
-  if (!raw) { alert('사방넷코드를 입력하세요.'); return; }
-  const reason = document.getElementById('fzBulkReason').value.trim();
-  const codes = raw.split(/[\n,\s]+/).map(s=>s.trim()).filter(Boolean);
-  let added = 0;
-  codes.forEach(sc => {
-    if (sc) { forceZeroMap[sc] = { reason, date: new Date().toLocaleDateString('ko-KR') }; added++; }
-  });
-  saveExtra();
-  updateForceZeroCnt();
-  document.getElementById('fzBulkInput').value = '';
-  document.getElementById('fzBulkReason').value = '';
-  document.getElementById('fzAddResult').textContent = `✅ ${added}건 등록 완료`;
-  document.getElementById('fzAddResult').style.color = 'var(--success)';
-  syncForceZeroToSheets();
-  renderForceZeroTab();
-  log(`[OK] 강제품절 일괄등록: ${added}건`, 'warn');
-}
-
-function clearAllForceZero() {
-  if (!confirm(`강제품절 목록 전체(${Object.keys(forceZeroMap).length}건)를 초기화하시겠습니까?`)) return;
-  forceZeroMap = {};
-  saveExtra();
-  updateForceZeroCnt();
-  syncForceZeroToSheets();
-  renderForceZeroTab();
-  log('[OK] 강제품절 전체 초기화', 'ok');
 }
 
 function setSoldout(sc, idx) {
@@ -1968,6 +1729,22 @@ function exportMapExcel(){
 }
 
 // ── Google Sheets 연동 ──
+const SHEETS_URL_KEY = 'aspro_sheets_url';
+const INVALID_GP_VALUES = new Set([
+  'KCFI 코드없음','슈컴퍼니','슈컴퍼니-김포이관','확인요망','#N/A',
+  '김포재고O상품코드X','삭제요청','삭제요청위에중복','품절',
+  '수량은 있는데 코드가 없음','공통색상코드없음','0',''
+]);
+function isValidGp(v) {
+  if (!v) return false;
+  const s = String(v).trim();
+  if (!s || s === '0') return false;
+  if (INVALID_GP_VALUES.has(s)) return false;
+  if (s.startsWith('김포재고O')) return false;
+  if (s.includes('???') || s.includes('중복') || s.includes('위에')) return false;
+  return true;
+}
+const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
 
 function showSheetsModal() {
   const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
@@ -2001,20 +1778,21 @@ async function loadFromSheets() {
     const imported = data.map || {};
     const importedSoldout = data.soldout || {};
     const importedKcfi = data.kcfi || {};
-    const importedFZ = data.forcezero || {};
+    const importedNormname = data.normname || {};
     const filteredImport = {};
     Object.entries(imported).forEach(([k,v]) => { if(isValidGp(v)) filteredImport[k]=v; });
     matchMap = filteredImport;
     soldoutMap = { ...importedSoldout };
+    // normname 매핑 병합 (이름→물류품번)
+    if (Object.keys(importedNormname).length > 0) {
+      normOptMap = { ...normOptMap, ...importedNormname };
+      try { localStorage.setItem('aspro_normoptmap_v1', JSON.stringify(normOptMap)); } catch(e2) {}
+      log(`[OK] 이름매핑(normname) 불러오기: ${Object.keys(importedNormname).length}건`, 'ok');
+    }
     if (Object.keys(importedKcfi).length > 0) {
       kcfiMap = { ...importedKcfi };
       try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
       updateKCFICnt();
-    }
-    if (Object.keys(importedFZ).length > 0 || data.forcezero !== undefined) {
-      forceZeroMap = { ...importedFZ };
-      try { localStorage.setItem('aspro_forcezero_v1', JSON.stringify(forceZeroMap)); } catch(e2) {}
-      updateForceZeroCnt();
     }
     try {
       localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap));
@@ -2026,12 +1804,11 @@ async function loadFromSheets() {
     const cnt = Object.keys(matchMap).length;
     const soCnt = Object.keys(soldoutMap).length;
     const kcfiCnt = Object.keys(kcfiMap).length;
-    const fzCnt = Object.keys(forceZeroMap).length;
-    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건 + 강제품절 ${fzCnt}건`;
+    const nnCnt = Object.keys(importedNormname).length;
+    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건${nnCnt>0?' + 이름매핑 '+nnCnt+'건':''}`;
     st.style.color = 'var(--success)';
-    log(`[OK] Google Sheets 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건 / 강제품절 ${fzCnt}건`, 'ok');
+    log(`[OK] Google Sheets 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
     if (currentTab === 'mapview') renderMapview();
-    if (currentTab === 'forcezero') renderForceZeroTab();
   } catch(e) {
     st.textContent = `❌ 오류: ${e.message}`;
     st.style.color = 'var(--danger)';
@@ -2046,19 +1823,18 @@ async function saveToSheets() {
   const allMap = { ...matchMap, ...extraMap };
   const total = Object.keys(allMap).length;
   if (total === 0) { alert('저장할 매핑 데이터가 없습니다.'); return; }
-  const fzCnt = Object.keys(forceZeroMap).length;
-  st.textContent = `저장 중... (매핑 ${total.toLocaleString()}건 + 강제품절 ${fzCnt}건)`; st.style.color = 'var(--accent2)';
+  st.textContent = `저장 중... (${total.toLocaleString()}건)`; st.style.color = 'var(--accent2)';
   try {
     const res = await fetch(url, {
       method: 'POST',
-      body: JSON.stringify({ map: allMap, soldout: soldoutMap, kcfi: kcfiMap, forcezero: forceZeroMap }),
+      body: JSON.stringify({ map: allMap, soldout: soldoutMap, kcfi: kcfiMap, normname: normOptMap }),
       headers: { 'Content-Type': 'text/plain' }
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || '서버 오류');
-    st.textContent = `✅ 저장 완료 — 매핑 ${data.saved.toLocaleString()}건 + 강제품절 ${fzCnt}건`;
+    st.textContent = `✅ 저장 완료 — ${data.saved.toLocaleString()}건`;
     st.style.color = 'var(--success)';
-    log(`[OK] Google Sheets 저장: 매핑 ${data.saved}건 / 강제품절 ${fzCnt}건`, 'ok');
+    log(`[OK] Google Sheets 저장: ${data.saved}건`, 'ok');
   } catch(e) {
     st.textContent = `❌ 오류: ${e.message}`;
     st.style.color = 'var(--danger)';
@@ -2100,11 +1876,6 @@ async function autoLoadFromSheets() {
         const list = document.getElementById('kcfiList');
         if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 신원재고</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
       }
-      if (data.forcezero !== undefined) {
-        forceZeroMap = { ...(data.forcezero || {}) };
-        try { localStorage.setItem('aspro_forcezero_v1', JSON.stringify(forceZeroMap)); } catch(e2) {}
-        updateForceZeroCnt();
-      }
       try {
         localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap));
         localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap));
@@ -2112,8 +1883,7 @@ async function autoLoadFromSheets() {
       updateSavedMapCnt();
       updateSoldoutCnt();
       const cnt = Object.keys(matchMap).length;
-      const fzCnt = Object.keys(forceZeroMap).length;
-      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건 / 강제품절 ${fzCnt}건`, 'ok');
+      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건`, 'ok');
       const btn = document.getElementById('sheetBtn');
       if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.textContent='☁ Google Sheets 연동'; }
     }
@@ -2275,7 +2045,7 @@ function log(msg, type='info'){
 }
 
 function resetAll(){
-  if(!confirm('초기화하시겠습니까? (매핑·신원재고·강제품절 목록은 유지됩니다)')) return;
+  if(!confirm('초기화하시겠습니까? (매핑·신원재고는 유지)')) return;
   icMap={}; gpMap={}; sabData=[]; sabRaw=[]; resultRows=[]; filteredRows=[]; nomapRows=[]; normOptMap={}; soldoutMap={};
   ['icList','gpList','sabList'].forEach(id=>document.getElementById(id).innerHTML='');
   ['icIn','gpIn','sabIn'].forEach(id=>document.getElementById(id).value='');
@@ -2289,8 +2059,7 @@ function resetAll(){
   document.getElementById('progPct').textContent='0%';
   document.getElementById('logArea').innerHTML='';
   document.getElementById('lastUp').textContent='대기중';
-  const fzCnt = Object.keys(forceZeroMap).length;
-  log(`[INFO] 초기화 완료 (매핑·강제품절(${fzCnt}건) 데이터 유지)`, 'info');
+  log('[INFO] 초기화 완료 (매핑·매칭파일 데이터 유지)', 'info');
 }
 
 // 드래그앤드롭
