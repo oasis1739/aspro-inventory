@@ -223,7 +223,8 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
   <!-- 일괄 업로드 -->
   <div class="sec">
     <div class="sec-ttl">📦 일괄 업로드</div>
-    <div id="batchZone" style="border:2px dashed var(--text3);border-radius:8px;padding:10px;text-align:center;cursor:pointer;position:relative;transition:border-color .2s" onclick="triggerBatchUpload()">
+    <div id="batchZone" style="border:2px dashed var(--text3);border-radius:8px;padding:10px;text-align:center;cursor:pointer;position:relative;transition:border-color .2s" onclick="document.getElementById('batchFileIn').click()">
+      <input type="file" id="batchFileIn" accept=".xlsx" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="loadBatch(this.files);this.value=''">
       <div style="font-size:18px">📂</div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px">여러 파일 한번에 선택</div>
       <div style="font-size:9px;color:var(--text3);margin-top:2px">파일명으로 자동 분류됩니다</div>
@@ -1009,10 +1010,7 @@ async function loadKCFI(e) {
 }
 
 function triggerBatchUpload() {
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = '.xlsx'; inp.multiple = true; inp.style.display = 'none';
-  inp.onchange = () => { loadBatch(inp.files); document.body.removeChild(inp); };
-  document.body.appendChild(inp); inp.click();
+  document.getElementById('batchFileIn')?.click();
 }
 
 async function loadBatch(files) {
