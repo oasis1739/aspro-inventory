@@ -223,7 +223,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
   <!-- 일괄 업로드 -->
   <div class="sec">
     <div class="sec-ttl">📦 일괄 업로드</div>
-    <div id="batchZone" style="border:2px dashed var(--text3);border-radius:8px;padding:10px;text-align:center;cursor:pointer;position:relative;transition:border-color .2s" onclick="document.getElementById('batchFileIn').click()">
+    <div id="batchZone" style="border:2px dashed var(--text3);border-radius:8px;padding:10px;text-align:center;cursor:pointer;position:relative;transition:border-color .2s">
       <input type="file" id="batchFileIn" accept=".xlsx" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="loadBatch(this.files);this.value=''">
       <div style="font-size:18px">📂</div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px">여러 파일 한번에 선택</div>
@@ -1036,10 +1036,36 @@ async function loadBatch(files) {
 // ══════════════════════════════════════════════
 // MATCH LOGIC
 // ══════════════════════════════════════════════
+// 김포 세트 상품용 색상 오버라이드 (상품별로 김포 색상코드가 다를 때)
+const GP_SET_COLOR_OVERRIDE = {
+  'MS25S': { '플럼':'BU', '차콜':'GR', '그레이':'GR', '베이지':'BE', '블랙':'BK' },
+};
+
 function getGimpoQty(sabCode, opt, sabName) {
   let 물류 = extraMap[sabCode] || matchMap[sabCode] || EXTRA_STATIC_MAP[sabCode];
   // __DELETED__ 처리: extraMap에서 명시적으로 삭제된 항목
   if (물류 === '__DELETED__') return null;
+
+  // ── 세트 옵션 처리 (예: 플럼+차콜:55) ──
+  if (!물류 && opt && opt.includes('+') && opt.includes(':')) {
+    const sabRow = sabData.find(s => s.사방넷코드 === sabCode);
+    const jache = sabRow?.자체코드 || '';
+    const prefix = jache.split('-')[0];
+    const colorOvr = GP_SET_COLOR_OVERRIDE[prefix];
+    if (colorOvr) {
+      const sz = opt.split(':').pop().trim();
+      const colorPart = opt.slice(0, opt.lastIndexOf(':'));
+      const colors = colorPart.split('+').map(c => colorOvr[c.trim()] || c.trim().slice(0,2).toUpperCase());
+      const qtys = colors.map(c => {
+        const gpKey = Object.keys(gpMap).find(k => k === `${prefix}-${c}-${sz}`);
+        return gpKey !== undefined ? (gpMap[gpKey] ?? 0) : null;
+      });
+      if (qtys.some(q => q === null)) return null;
+      const setQty = Math.min(...qtys);
+      const gpCodes = colors.map(c => `${prefix}-${c}-${sz}`);
+      return { qty: setQty, src: '김포(세트)', 물류품번: gpCodes.join('+') };
+    }
+  }
 
   if (!물류 && sabName && opt) {
     const key = normName(sabName) + '||' + normOpt(opt);
