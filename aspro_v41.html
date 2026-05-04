@@ -1037,8 +1037,9 @@ async function loadBatch(files) {
 // MATCH LOGIC
 // ══════════════════════════════════════════════
 // 김포 세트 상품용 색상 오버라이드 (상품별로 김포 색상코드가 다를 때)
+// key: 자체코드 prefix, value: { gpPrefix: 김포품번prefix, colorMap: 색상변환 }
 const GP_SET_COLOR_OVERRIDE = {
-  'MS25S': { '플럼':'BU', '차콜':'GR', '그레이':'GR', '베이지':'BE', '블랙':'BK' },
+  'MS25S': { gpPrefix: '252MX05', colorMap: { '플럼':'BU', '차콜':'GR', '그레이':'GR', '베이지':'BE', '블랙':'BK' } },
 };
 
 function getGimpoQty(sabCode, opt, sabName) {
@@ -1053,16 +1054,18 @@ function getGimpoQty(sabCode, opt, sabName) {
     const prefix = jache.split('-')[0];
     const colorOvr = GP_SET_COLOR_OVERRIDE[prefix];
     if (colorOvr) {
+      const gpPrefix = colorOvr.gpPrefix;
+      const colorMap = colorOvr.colorMap;
       const sz = opt.split(':').pop().trim();
       const colorPart = opt.slice(0, opt.lastIndexOf(':'));
-      const colors = colorPart.split('+').map(c => colorOvr[c.trim()] || c.trim().slice(0,2).toUpperCase());
+      const colors = colorPart.split('+').map(c => colorMap[c.trim()] || c.trim().slice(0,2).toUpperCase());
       const qtys = colors.map(c => {
-        const gpKey = Object.keys(gpMap).find(k => k === `${prefix}-${c}-${sz}`);
-        return gpKey !== undefined ? (gpMap[gpKey] ?? 0) : null;
+        const gpKey = `${gpPrefix}-${c}-${sz}`;
+        return gpMap[gpKey] !== undefined ? gpMap[gpKey] : null;
       });
       if (qtys.some(q => q === null)) return null;
       const setQty = Math.min(...qtys);
-      const gpCodes = colors.map(c => `${prefix}-${c}-${sz}`);
+      const gpCodes = colors.map(c => `${gpPrefix}-${c}-${sz}`);
       return { qty: setQty, src: '김포(세트)', 물류품번: gpCodes.join('+') };
     }
   }
