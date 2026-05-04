@@ -293,6 +293,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
       <button class="tab" onclick="switchTab('soldout')" id="tabSoldout">품절관리 <span class="tbdg" id="soldoutCnt">0</span></button>
       <button class="tab" onclick="switchTab('mapview')">매핑 마스터</button>
       <button class="tab" onclick="switchTab('log')">로그</button>
+      <button class="tab" onclick="switchTab('debug')" style="color:var(--warn)">🔍 디버그</button>
     </div>
 
     <div class="fbar" id="fbar">
@@ -390,6 +391,19 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
           <tbody id="mapviewBody"></tbody>
         </table>
       </div></div>
+    </div>
+
+    <!-- 디버그 패널 -->
+    <div id="debugWrap" style="display:none;margin-top:10px">
+      <div class="notice nw"><span>🔍</span>
+        <div>이카운트 데이터 구조 및 특정 상품 매칭 과정을 실시간으로 확인합니다.</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap;align-items:center">
+        <input class="fi" id="debugSearch" placeholder="사방넷 상품명 또는 이카운트 상품명 검색..." style="width:320px">
+        <button class="btn btn-w" onclick="runDebug()">🔍 분석</button>
+        <button class="btn btn-n" onclick="showIcMapSample()">📋 이카운트 샘플 보기</button>
+      </div>
+      <div id="debugOut" class="log" style="max-height:500px;font-size:11px;line-height:1.8"></div>
     </div>
 
     <!-- 로그 -->
@@ -1063,8 +1077,9 @@ function getFallbackPrefix(jache) {
 }
 
 function getIcountQty(sabData_row) {
-  const 자체 = sabData_row.자체코드;
-  const 옵션 = sabData_row.옵션;
+  const 자체   = sabData_row.자체코드;
+  const 옵션   = sabData_row.옵션;
+  const sc     = sabData_row.사방넷코드;
   const sabName = sabData_row.상품명 || '';
   const parsedOpt = parseOpt(옵션);
   let { cc, sz, isSet, setColors } = parsedOpt;
@@ -1074,49 +1089,48 @@ function getIcountQty(sabData_row) {
     if (m) cc = COLOR_MAP[m[1]] || m[1];
   }
 
-  // ── icCodeMap 직접 매핑 우선 처리 ──
-  // 사방넷코드의 상품ID 부분(앞 숫자) 또는 전체 코드로 icCodeMap 조회
-  const sabBase = 자체.split('-')[0]; // 자체코드에서 앞부분
-  const scBase  = sabData_row.사방넷코드.split('-')[0];
-  const icDirect = icCodeMap[자체] || icCodeMap[sabData_row.사방넷코드]
-                || icCodeMap[sabBase] || icCodeMap[scBase];
-
+  // ── 1순위: icCodeMap 직접 매핑 ──
+  const icDirect = icCodeMap[sc] || icCodeMap[자체]
+                || icCodeMap[sc.split('-')[0]] || icCodeMap[자체.split('-')[0]];
   if (icDirect) {
-    // icDirect는 이카운트 품목코드 prefix (예: "MW262C004", "N1012")
-    // icMap에서 해당 prefix로 시작하는 항목 그룹 찾기
-    let items = icMap[icDirect] || [];
-    if (!items.length) {
-      // prefix 부분 매칭으로 검색
+    let directItems = icMap[icDirect] || [];
+    if (!directItems.length) {
       for (const [key, arr] of Object.entries(icMap)) {
-        if (key.startsWith(icDirect) || icDirect.startsWith(key.split('-')[0])) {
-          items = arr; break;
+        if (arr.length && (key === icDirect || key.startsWith(icDirect + '-') || icDirect.startsWith(key))) {
+          directItems = arr; break;
         }
       }
     }
-    if (items.length) {
-      log(`[INFO] 이카운트 직접매핑: ${sabData_row.사방넷코드} → ${icDirect}`, 'info');
-      // 세트/단품 처리는 아래 공통 로직으로 — items를 바로 사용
-      return resolveIcItems(items, cc, sz, isSet, setColors, 옵션, sabName, true);
+    if (directItems.length) {
+      log(`[INFO] 이카운트 직접매핑: ${sc} → ${icDirect} (${directItems.length}개 SKU)`, 'info');
+      return resolveIcItems(directItems, cc, sz, isSet, setColors, 옵션, sabName, true);
+    } else {
+      log(`[WARN] 직접매핑 icCode "${icDirect}" → icMap에서 찾지 못함`, 'warn');
     }
   }
 
+  // ── 2순위: 자체코드/prefix 직접 조회 ──
   const pfx = 자체.split('-')[0];
   const fb  = getFallbackPrefix(자체);
   const overrideKey = SAB_IC_OVERRIDE[자체];
   if (overrideKey && SAB_COLOR_OVERRIDE[자체] && cc) {
-    const colorOvr = SAB_COLOR_OVERRIDE[자체];
-    cc = colorOvr[cc] || cc;
+    cc = SAB_COLOR_OVERRIDE[자체][cc] || cc;
   }
-  let items = icMap[자체] || (overrideKey ? icMap[overrideKey] : null) || icMap[pfx] || (fb ? icMap[fb] : null) || [];
+  let foundItems = icMap[자체]
+    || (overrideKey ? icMap[overrideKey] : null)
+    || icMap[pfx]
+    || (fb ? icMap[fb] : null)
+    || [];
 
-  // ── 이름 기반 매칭 ──
-  let nameMatchedGroup = null;
-  if (!items.length && sabName) {
+  // ── 3순위: 이름 기반 매칭 ──
+  let isNameMatch = false;
+  if (!foundItems.length && sabName) {
     const sabNorm = normName(sabName);
+    // 3-1: normName 완전일치
     for (const [key, arr] of Object.entries(icMap)) {
       if (!arr.length) continue;
       if (normName(arr[0].name) === sabNorm && sabNorm.length > 3) {
-        items = arr; nameMatchedGroup = arr;
+        foundItems = arr; isNameMatch = true;
         const normKey = sabNorm + '||IC';
         if (!normOptMap[normKey]) {
           normOptMap[normKey] = arr[0].품목코드 || key;
@@ -1125,7 +1139,8 @@ function getIcountQty(sabData_row) {
         break;
       }
     }
-    if (!items.length) {
+    // 3-2: 키워드 교집합
+    if (!foundItems.length) {
       const sabKw = nameKeywords(sabName);
       let bestScore = 0, bestKey = null;
       for (const [key, arr] of Object.entries(icMap)) {
@@ -1138,19 +1153,19 @@ function getIcountQty(sabData_row) {
         }
       }
       if (bestKey) {
-        items = icMap[bestKey]; nameMatchedGroup = icMap[bestKey];
+        foundItems = icMap[bestKey]; isNameMatch = true;
         const sabNorm2 = normName(sabName);
         const normKey2 = sabNorm2 + '||IC';
         if (sabNorm2.length > 3 && !normOptMap[normKey2]) {
-          normOptMap[normKey2] = items[0]?.품목코드 || bestKey;
+          normOptMap[normKey2] = foundItems[0]?.품목코드 || bestKey;
           log(`[INFO] 이름매핑(키워드) 자동기록: "${sabName}" → ${bestKey}`, 'info');
         }
       }
     }
   }
 
-  if (!items.length) return null;
-  return resolveIcItems(items, cc, sz, isSet, setColors, 옵션, sabName, !!nameMatchedGroup);
+  if (!foundItems.length) return null;
+  return resolveIcItems(foundItems, cc, sz, isSet, setColors, 옵션, sabName, isNameMatch);
 }
 
 // ── 이카운트 items → 재고 반환 공통 로직 ──
@@ -1358,7 +1373,7 @@ function runMatch() {
 // ══════════════════════════════════════════════
 function switchTab(tab) {
   currentTab = tab;
-  const tabs = ['all','matched','unmatched','zero','nomap','soldout','mapview','log'];
+  const tabs = ['all','matched','unmatched','zero','nomap','soldout','mapview','log','debug'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabs[i]===tab));
   const showMain = ['all','matched','unmatched','zero'].includes(tab);
   document.getElementById('mainWrap').style.display    = showMain?'block':'none';
@@ -1366,10 +1381,12 @@ function switchTab(tab) {
   document.getElementById('nomapWrap').style.display    = tab==='nomap'?'block':'none';
   document.getElementById('soldoutWrap').style.display  = tab==='soldout'?'block':'none';
   document.getElementById('mapviewWrap').style.display  = tab==='mapview'?'block':'none';
-  document.getElementById('logWrap').style.display     = tab==='log'?'block':'none';
+  document.getElementById('logWrap').style.display      = tab==='log'?'block':'none';
+  document.getElementById('debugWrap').style.display    = tab==='debug'?'block':'none';
   if (tab==='nomap') renderNomap();
   else if (tab==='soldout') renderSoldoutTab();
   else if (tab==='mapview') renderMapview();
+  else if (tab==='debug') showIcMapSample();
   else if (tab!=='log') applyFilter();
 }
 
@@ -2075,8 +2092,122 @@ async function importMapFile(e) {
 }
 
 // ══════════════════════════════════════════════
-// UTIL
+// 디버그
 // ══════════════════════════════════════════════
+function showIcMapSample() {
+  const out = document.getElementById('debugOut');
+  if (!out) return;
+  const keys = Object.keys(icMap);
+  if (!keys.length) {
+    out.innerHTML = '<span class="lwarn">이카운트 파일이 로드되지 않았습니다.</span>';
+    return;
+  }
+  let html = `<span class="lok">▶ 이카운트 icMap 키 총 ${keys.length}개 (처음 30개)</span>\n\n`;
+  keys.slice(0, 30).forEach(key => {
+    const arr = icMap[key];
+    html += `<span class="linfo">KEY: "${key}"</span> → ${arr.length}개 SKU\n`;
+    arr.slice(0, 3).forEach(ic => {
+      const cs = extractIcCS(ic.name);
+      html += `  품목코드: <span class="lok">${ic.품목코드}</span>  상품명: <span style="color:var(--text2)">${ic.name}</span>  → 파싱결과: 색상=<span class="lwarn">${cs.c||'null'}</span> 사이즈=<span class="lwarn">${cs.s||'null'}</span>  재고: <span style="color:${ic.qty>0?'var(--success)':'var(--danger)'}">${ic.qty}</span>\n`;
+    });
+    if (arr.length > 3) html += `  ... 외 ${arr.length-3}개\n`;
+    html += '\n';
+  });
+  out.innerHTML = html;
+}
+
+function runDebug() {
+  const q = document.getElementById('debugSearch').value.trim().toLowerCase();
+  const out = document.getElementById('debugOut');
+  if (!q) { showIcMapSample(); return; }
+
+  let html = `<span class="lok">▶ 검색어: "${q}"</span>\n\n`;
+
+  // 1. 사방넷 데이터에서 검색
+  const sabMatches = sabData.filter(s =>
+    s.상품명.toLowerCase().includes(q) || s.사방넷코드.includes(q) || s.자체코드.toLowerCase().includes(q)
+  ).slice(0, 5);
+
+  if (sabMatches.length) {
+    html += `<span class="linfo">── 사방넷 매칭 (${sabMatches.length}건) ──</span>\n`;
+    sabMatches.forEach(sab => {
+      const parsedOpt = parseOpt(sab.옵션);
+      html += `\n사방넷코드: <span class="lok">${sab.사방넷코드}</span>  자체코드: ${sab.자체코드}\n`;
+      html += `상품명: <span style="color:var(--text2)">${sab.상품명}</span>\n`;
+      html += `옵션: ${sab.옵션}  → 파싱: cc=<span class="lwarn">${parsedOpt.cc||'null'}</span> sz=<span class="lwarn">${parsedOpt.sz||'null'}</span> isSet=<span class="lwarn">${parsedOpt.isSet}</span>${parsedOpt.isSet?' colors=['+parsedOpt.setColors?.join(',')+']':''}\n`;
+      html += `normName: <span class="linfo">"${normName(sab.상품명)}"</span>\n`;
+      html += `keywords: <span class="linfo">[${[...nameKeywords(sab.상품명)].join(', ')}]</span>\n`;
+
+      // icCodeMap 확인
+      const scBase = sab.사방넷코드.split('-')[0];
+      const icDirect = icCodeMap[sab.사방넷코드] || icCodeMap[sab.자체코드] || icCodeMap[scBase];
+      if (icDirect) {
+        html += `icCodeMap: <span class="lok">직접매핑 → "${icDirect}"</span>\n`;
+      }
+
+      // 이카운트 매칭 시도
+      const icRes = getIcountQty(sab);
+      if (icRes) {
+        html += `결과: <span class="lok">✅ qty=${icRes.qty} src=${icRes.src} 품목코드=${icRes.품목코드}</span>\n`;
+      } else {
+        html += `결과: <span class="lerr">❌ 매칭 실패</span>\n`;
+        // 왜 실패했는지 — icMap에서 가장 유사한 키 찾기
+        const sabNorm = normName(sab.상품명);
+        const sabKw = nameKeywords(sab.상품명);
+        let topMatches = [];
+        for (const [key, arr] of Object.entries(icMap)) {
+          if (!arr.length) continue;
+          const icNorm = normName(arr[0].name);
+          const icKw = nameKeywords(arr[0].name);
+          const score = setIntersect(sabKw, icKw);
+          const normMatch = icNorm === sabNorm;
+          if (score > 0 || normMatch) {
+            topMatches.push({ key, name: arr[0].name, score, normMatch, icNorm });
+          }
+        }
+        topMatches.sort((a,b) => (b.normMatch?100:0)+b.score - (a.normMatch?100:0)-a.score);
+        if (topMatches.length) {
+          html += `유사 이카운트 항목 (상위 5개):\n`;
+          topMatches.slice(0, 5).forEach(m => {
+            html += `  key=<span class="linfo">${m.key}</span> 상품명=<span style="color:var(--text2)">${m.name}</span>\n`;
+            html += `    normName=<span class="linfo">"${m.icNorm}"</span> 키워드교집합=${m.score}${m.normMatch?' <span class="lok">normMatch!</span>':''}\n`;
+          });
+        } else {
+          html += `  <span class="lwarn">이카운트에서 유사 항목 없음</span>\n`;
+        }
+      }
+      html += '\n';
+    });
+  }
+
+  // 2. 이카운트 데이터에서 검색
+  const icMatches = [];
+  for (const [key, arr] of Object.entries(icMap)) {
+    if (!arr.length) continue;
+    if (key.toLowerCase().includes(q) || arr[0].name.toLowerCase().includes(q)) {
+      icMatches.push({ key, arr });
+    }
+  }
+  if (icMatches.length) {
+    html += `\n<span class="linfo">── 이카운트 매칭 (${icMatches.length}건) ──</span>\n`;
+    icMatches.slice(0, 5).forEach(({ key, arr }) => {
+      html += `\nKEY: <span class="lok">${key}</span>  (${arr.length}개 SKU)\n`;
+      arr.slice(0, 5).forEach(ic => {
+        const cs = extractIcCS(ic.name);
+        html += `  <span class="lok">${ic.품목코드}</span>  ${ic.name}\n`;
+        html += `    → 색상=<span class="lwarn">${cs.c||'null'}</span> 사이즈=<span class="lwarn">${cs.s||'null'}</span>  재고=<span style="color:${ic.qty>0?'var(--success)':'var(--danger)'}">${ic.qty}</span>\n`;
+      });
+    });
+  }
+
+  if (!sabMatches.length && !icMatches.length) {
+    html += `<span class="lwarn">검색 결과 없음</span>\n`;
+  }
+
+  out.innerHTML = html;
+}
+
+
 function patchZipDataDescriptor(buf) {
   const u8 = new Uint8Array(buf);
   const dv = new DataView(buf);
