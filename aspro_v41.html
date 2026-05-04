@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ASPRO 가상재고 v4.4</title>
+<title>ASPRO 가상재고 v4.5</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -142,7 +142,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
 <div class="hdr">
   <div class="logo">ASPRO<em> / 가상재고</em></div>
   <div class="hd"></div>
-  <div class="ver">v4.4</div>
+  <div class="ver">v4.5</div>
   <div class="hright">
     <span id="lastUp" style="font-size:10px;color:var(--text3);font-family:var(--mono)">대기중</span>
     <button class="hbtn" id="sheetBtn" onclick="showSheetsModal()">☁ Google Sheets 연동</button>
@@ -527,8 +527,8 @@ function doPost(e) {
       const now = new Date().toLocaleDateString('ko-KR');
       Object.entries(payload.map).forEach(([k,v]) => { sh.appendRow([k, v, '', now]); });
     }
-    // aspro_soldout 저장
-    if (payload.soldout) {
+    // aspro_soldout 저장 (빈 데이터로 덮어쓰기 방지)
+    if (payload.soldout && Object.keys(payload.soldout).length > 0) {
       let so = ss.getSheetByName('aspro_soldout');
       if (!so) { so = ss.insertSheet('aspro_soldout'); }
       so.clearContents();
@@ -1103,7 +1103,7 @@ function getIcountQty(sabData_row) {
     }
     if (directItems.length) {
       log(`[INFO] 이카운트 직접매핑: ${sc} → ${icDirect} (${directItems.length}개 SKU)`, 'info');
-      return resolveIcItems(directItems, cc, sz, isSet, setColors, 옵션, sabName, true);
+      return resolveIcItems(directItems, cc, sz, isSet, setColors, 옵션, sabName, true, false);
     } else {
       log(`[WARN] 직접매핑 icCode "${icDirect}" → icMap에서 찾지 못함`, 'warn');
     }
@@ -1165,14 +1165,15 @@ function getIcountQty(sabData_row) {
   }
 
   if (!foundItems.length) return null;
-  return resolveIcItems(foundItems, cc, sz, isSet, setColors, 옵션, sabName, isNameMatch);
+  return resolveIcItems(foundItems, cc, sz, isSet, setColors, 옵션, sabName, false, isNameMatch);
 }
 
 // ── 이카운트 items → 재고 반환 공통 로직 ──
-function resolveIcItems(items, cc, sz, isSet, setColors, 옵션, sabName, isNameMatch) {
-  const nameMatchedGroup = isNameMatch ? items : null;
+// isDirect: icCodeMap 직접매핑으로 찾은 경우 (자동품절 적용)
+// isNameMatch: 이름/키워드 매칭으로 찾은 경우 (자동품절 미적용 — 오매칭 위험)
+function resolveIcItems(items, cc, sz, isSet, setColors, 옵션, sabName, isDirect, isNameMatch) {
 
-  // 세트 처리
+  // 세트 처리 (직접매핑 또는 이름매칭 모두 적용)
   if (isSet && setColors && setColors.length > 1 && sz) {
     const qtys = setColors.map(col => {
       for (const ic of items) {
@@ -1183,8 +1184,11 @@ function resolveIcItems(items, cc, sz, isSet, setColors, 옵션, sabName, isName
     });
     const anyNull = qtys.some(q => q === null);
     if (anyNull) {
-      log(`[WARN] 세트자동품절: "${sabName}" [${옵션}] — 구성단품 미존재`, 'warn');
-      return { qty: 0, src: '이카운트(세트품절)', 품목코드: items[0]?.품목코드||'—' };
+      if (isDirect) {
+        log(`[WARN] 세트자동품절: "${sabName}" [${옵션}] — 구성단품 미존재`, 'warn');
+        return { qty: 0, src: '이카운트(세트품절)', 품목코드: items[0]?.품목코드||'—' };
+      }
+      return null; // 이름매칭은 오매칭 가능성 → null로 매핑없음 처리
     }
     const setQty = Math.min(...qtys);
     log(`[INFO] 세트재고: [${옵션}] → 구성재고[${qtys.join(', ')}] → min=${setQty}`, 'info');
@@ -1197,7 +1201,9 @@ function resolveIcItems(items, cc, sz, isSet, setColors, 옵션, sabName, isName
       const { c, s } = extractIcCS(ic.name);
       if (c === cc && s === sz) return { qty: ic.qty, src: '이카운트', 품목코드: ic.품목코드 };
     }
-    if (nameMatchedGroup) {
+    // 색상+사이즈 매칭 실패
+    if (isDirect) {
+      // 직접매핑: 이카운트 코드가 확실하므로 자동품절 적용
       const hasSameSize = items.some(ic => extractIcCS(ic.name).s === sz);
       if (!hasSameSize) {
         log(`[WARN] 자동품절(사이즈없음): "${sabName}" [${옵션}]`, 'warn');
@@ -1206,16 +1212,18 @@ function resolveIcItems(items, cc, sz, isSet, setColors, 옵션, sabName, isName
       log(`[WARN] 컬러불일치: "${sabName}" [${옵션}] cc=${cc}`, 'warn');
       return { qty: 0, src: '이카운트(컬러불일치)', 품목코드: items[0]?.품목코드||'—' };
     }
+    // 이름매칭: 오매칭 가능성 → null 반환 (매핑없음으로)
     if (items.length > 1) return null;
   }
   if (sz && !cc) {
     const szMatch = items.filter(ic => extractIcCS(ic.name).s === sz);
     if (szMatch.length === 1) return { qty: szMatch[0].qty, src: '이카운트', 품목코드: szMatch[0].품목코드 };
     if (szMatch.length > 1)   return { qty: szMatch.reduce((s,ic) => s+ic.qty, 0), src: '이카운트(합산)', 품목코드: szMatch[0].품목코드 };
-    if (nameMatchedGroup) {
+    if (isDirect) {
       log(`[WARN] 자동품절(사이즈없음): "${sabName}" [${옵션}]`, 'warn');
       return { qty: 0, src: '이카운트(자동품절)', 품목코드: items[0]?.품목코드||'—' };
     }
+    return null; // 이름매칭은 null
   }
   if (items.length === 1) return { qty: items[0].qty, src: '이카운트', 품목코드: items[0].품목코드 };
   return null;
