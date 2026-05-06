@@ -1382,17 +1382,22 @@ function runMatch() {
     const kcfiQty = kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
     let finalQty = null, src = '—', 물류품번 = '—';
 
-    // KCFI 우선: aspro_kcfi에 해당 사방넷코드가 있고 재고 > 0 이면 최우선
+    // 우선순위: KCFI(재고>0) > 김포(재고>0) > 이카운트 > 김포(재고0) > KCFI(재고0)
+    // 김포에 재고가 있으면 이카운트보다 우선 (실물 위치 기준)
     if (kcfiQty !== null && kcfiQty > 0) {
       finalQty = kcfiQty; src = 'KCFI';
       물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
+    } else if (gpRes !== null && gpRes.qty > 0) {
+      // 김포 재고 있으면 이카운트보다 우선
+      finalQty = gpRes.qty; src = gpRes.src; 물류품번 = gpRes.물류품번 || '—'; cGP++;
     } else if (icRes !== null) {
-      // 이카운트 재고가 있으면 사용 (KCFI가 0이거나 없는 경우)
+      // 이카운트 (김포 재고 없거나 매핑 없을 때)
       finalQty = icRes.qty; src = icRes.src; 물류품번 = icRes.품목코드 || '—'; cIC++;
     } else if (gpRes !== null) {
+      // 김포 재고 = 0 인 경우
       finalQty = gpRes.qty; src = gpRes.src; 물류품번 = gpRes.물류품번 || '—'; cGP++;
     } else if (kcfiQty !== null) {
-      // KCFI 재고 = 0 인 경우 (재고0으로 표시)
+      // KCFI 재고 = 0 인 경우
       finalQty = kcfiQty; src = 'KCFI';
       물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
     }
