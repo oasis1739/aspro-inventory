@@ -1172,9 +1172,10 @@ function getIcountQty(sabData_row) {
     if (m) cc = COLOR_MAP[m[1]] || m[1];
   }
 
-  // ── 1순위: icCodeMap 직접 매핑 ──
+  // ── 1순위: icCodeMap 직접 매핑 (IC_STATIC_MAP 포함) ──
   const icDirect = icCodeMap[sc] || icCodeMap[자체]
-                || icCodeMap[sc.split('-')[0]] || icCodeMap[자체.split('-')[0]];
+                || icCodeMap[sc.split('-')[0]] || icCodeMap[자체.split('-')[0]]
+;
   if (icDirect) {
     let directItems = icMap[icDirect] || [];
     if (!directItems.length) {
