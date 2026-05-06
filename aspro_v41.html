@@ -807,15 +807,32 @@ async function loadGimpo(e) {
   document.getElementById('gpList').innerHTML = '';
   addFI('gpList', file.name, 'pending');
   try {
-    const rows = (await readXLSX(file))[0];
+    const allSheets = await readXLSXWithNames(file);
+    // '김포창고 재고현황' 시트 우선, 없으면 첫 번째 시트
+    const TARGET_SHEET = '김포창고 재고현황';
+    const sheetIdx = allSheets.names.indexOf(TARGET_SHEET);
+    const rows = sheetIdx >= 0 ? allSheets.data[sheetIdx] : allSheets.data[0];
+    const usedSheet = sheetIdx >= 0 ? TARGET_SHEET : allSheets.names[0];
+    log(`[INFO] 김포 시트: "${usedSheet}"${sheetIdx < 0 ? ' (김포창고 재고현황 없음, 첫번째 시트 사용)' : ''}`, 'info');
+
+    // 시트별 컬럼 구조 판별
+    // 김포창고 재고현황: col[0]=품번, col[8]=총수량, 헤더=Row3, 데이터=Row4~
+    // 반품창고 입출고: col[2]=ERP CODE, col[28]=재고, 헤더=Row4, 데이터=Row5~
+    let codeCol, qtyCol, startRow;
+    if (usedSheet === TARGET_SHEET) {
+      codeCol = 0; qtyCol = 8; startRow = 3; // Row4 = index 3
+    } else {
+      codeCol = 2; qtyCol = 28; startRow = 4; // Row5 = index 4
+    }
+
     gpMap = {};
     let n = 0;
-    for (let i = 3; i < rows.length; i++) {
+    for (let i = startRow; i < rows.length; i++) {
       const r = rows[i];
       if (!r) continue;
-      const code = String(r[2]||'').trim();  // ERP CODE = col[2]
-      const qty  = parseInt(r[28]) || 0;     // 재고 = col[28]
-      if (!code || code === 'null') continue;
+      const code = String(r[codeCol]||'').trim();
+      const qty  = parseInt(r[qtyCol]) || 0;
+      if (!code || code === 'null' || code === '품목코드') continue;
       gpMap[code] = (gpMap[code]||0) + qty;
       n++;
     }
@@ -1038,6 +1055,14 @@ async function loadBatch(files) {
 // ══════════════════════════════════════════════
 // 김포 세트 상품용 색상 오버라이드 (상품별로 김포 색상코드가 다를 때)
 // key: 자체코드 prefix, value: { gpPrefix: 김포품번prefix, colorMap: 색상변환 }
+// 이카운트 직접매핑 (자체코드 → 이카운트 품번prefix, 매칭파일에 없는 경우용)
+const IC_STATIC_MAP = {
+  'JW25SS01BK': '252JW07',   // 마리본 썸머카라니트[블랙] → 이카운트 252JW07
+  'JW25SS01IV': '252JW07',   // 마리본 썸머카라니트[아이보리]
+  'JW25SS01PM': '252JW07',   // 마리본 썸머카라니트[플림]
+  'JW25SS01_AL': '252JW07',  // 마리본 썸머카라니트 3종택1
+};
+
 const GP_SET_COLOR_OVERRIDE = {
   'MS25S': { gpPrefix: '252MX05', colorMap: { '플럼':'BU', '차콜':'GR', '그레이':'GR', '베이지':'BE', '블랙':'BK' } },
 };
@@ -1175,7 +1200,7 @@ function getIcountQty(sabData_row) {
   // ── 1순위: icCodeMap 직접 매핑 (IC_STATIC_MAP 포함) ──
   const icDirect = icCodeMap[sc] || icCodeMap[자체]
                 || icCodeMap[sc.split('-')[0]] || icCodeMap[자체.split('-')[0]]
-;
+                || IC_STATIC_MAP[자체] || IC_STATIC_MAP[자체.split('-')[0]];
   if (icDirect) {
     let directItems = icMap[icDirect] || [];
     if (!directItems.length) {
@@ -2442,6 +2467,26 @@ function patchZipDataDescriptor(buf) {
     }
   }
   return patchCount > 0 ? patched.buffer : buf;
+}
+
+// 시트 이름과 데이터를 함께 반환
+function readXLSXWithNames(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=ev=>{
+      try{
+        const rawBuf   = ev.target.result;
+        const fixedBuf = patchZipDataDescriptor(rawBuf);
+        const wb = XLSX.read(fixedBuf, {type:'array'});
+        res({
+          names: wb.SheetNames,
+          data: wb.SheetNames.map(n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null,raw:false}))
+        });
+      }catch(e){rej(e);}
+    };
+    r.onerror=rej;
+    r.readAsArrayBuffer(file);
+  });
 }
 
 function readXLSX(file){
