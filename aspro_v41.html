@@ -813,8 +813,8 @@ async function loadGimpo(e) {
     for (let i = 3; i < rows.length; i++) {
       const r = rows[i];
       if (!r) continue;
-      const code = String(r[0]||'').trim();
-      const qty  = parseInt(r[8]) || 0;
+      const code = String(r[2]||'').trim();  // ERP CODE = col[2]
+      const qty  = parseInt(r[28]) || 0;     // 재고 = col[28]
       if (!code || code === 'null') continue;
       gpMap[code] = (gpMap[code]||0) + qty;
       n++;
@@ -1076,7 +1076,21 @@ function getGimpoQty(sabCode, opt, sabName) {
   }
   if (!물류) return null;
 
-  const gpQty = gpMap[물류] !== undefined ? gpMap[물류] : 0;
+  // 물류품번 순서 변환 fallback: 구패턴(사이즈-색상) → 신패턴(색상-사이즈)
+  // 예: 253JW02-55-BK → 253JW02-BK-55
+  let 물류resolved = 물류;
+  if (gpMap[물류] === undefined) {
+    const m = 물류.match(/^(.+?)-(\d{2,3})-([A-Z]{2,3})(-.*)?$/);
+    if (m) {
+      const converted = m[4] ? `${m[1]}-${m[3]}-${m[2]}${m[4]}` : `${m[1]}-${m[3]}-${m[2]}`;
+      if (gpMap[converted] !== undefined) {
+        물류resolved = converted;
+        log(`[INFO] 품번순서 자동변환: ${물류} → ${converted}`, 'info');
+      }
+    }
+  }
+  const gpQty = gpMap[물류resolved] !== undefined ? gpMap[물류resolved] : 0;
+  물류 = 물류resolved;
   const { sz } = parseOpt(opt || '');
   let sameCount = 0;
   const allMaps = { ...matchMap, ...extraMap };
