@@ -511,7 +511,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName('aspro_match');
-  if (!sh) { sh = ss.insertSheet('aspro_match'); sh.appendRow(['사방넷코드','김포물류품번','메모','등록일']); }
+  if (!sh) { sh = ss.insertSheet('aspro_match'); sh.appendRow(['사방넷코드','김포물류품번','상품명','메모','등록일']); }
   const data = sh.getDataRange().getValues();
   const map = {};
   data.slice(1).forEach(r => { if (r[0]) map[String(r[0]).trim()] = String(r[1]).trim(); });
@@ -567,8 +567,9 @@ function doPost(e) {
       let sh = ss.getSheetByName('aspro_match');
       if (!sh) { sh = ss.insertSheet('aspro_match'); }
       sh.clearContents();
-      sh.appendRow(['사방넷코드','김포물류품번','메모','등록일']);
-      Object.entries(payload.map).forEach(([k,v]) => { sh.appendRow([k, v, '', now]); });
+      sh.appendRow(['사방넷코드','김포물류품번','상품명','메모','등록일']);
+      const nmMap = payload.nameMap || {};
+      Object.entries(payload.map).forEach(([k,v]) => { sh.appendRow([k, v, nmMap[k]||'', '', now]); });
     }
 
     // soldout: 빈 데이터로 덮어쓰기 방지
@@ -618,6 +619,7 @@ function doPost(e) {
       <button class="btn btn-p" onclick="saveSheetsUrlBtn()">💾 URL 저장</button>
       <button class="btn btn-p" onclick="loadFromSheets()">⬇ 불러오기</button>
       <button class="btn btn-s" onclick="saveToSheets()">⬆ Sheets에 저장</button>
+        <button class="btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="autoLoadFromSheets();document.getElementById('sheetsModal').classList.remove('show')">🔄 지금 불러오기</button>
       <button class="btn btn-n" onclick="copyAppsScript()">📋 코드 복사</button>
     </div>
     <div style="font-size:11px;margin-top:8px" id="sheetsStatus"></div>
@@ -2061,7 +2063,7 @@ function saveNomapEntries() {
       const allMap = { ...matchMap, ...extraMap };
       fetch(sheetsUrl, {
         method: 'POST',
-        body: JSON.stringify({ map: allMap, soldout: soldoutMap }),
+        body: JSON.stringify({ map: allMap, soldout: soldoutMap, nameMap: buildNameMap(allMap) }),
         headers: { 'Content-Type': 'text/plain' }
       }).then(r => r.json()).then(d => {
         if (d.ok) {
@@ -2360,7 +2362,26 @@ function isValidGp(v) {
   if (INVALID_GP_VALUES.has(s)) return false;
   if (s.startsWith('김포재고O')) return false;
   if (s.includes('???') || s.includes('중복') || s.includes('위에')) return false;
+  // 숫자만으로 이루어진 5자리 코드 (00878 등 슈컴퍼니식) 필터
+  if (/^\d{5}$/.test(s)) return false;
   return true;
+}
+
+// 구글시트에서 불러온 matchMap 중 유효하지 않은 항목 정리
+// - 사방넷 단품에 없는 사방넷코드 제거
+// - 물류품번이 유효하지 않은 항목 제거
+function cleanMatchMap(map) {
+  const sabSet = new Set(sabData.map(s => s.사방넷코드));
+  const cleaned = {};
+  let removed = 0;
+  Object.entries(map).forEach(([sc, gp]) => {
+    if (!isValidGp(gp)) { removed++; return; }
+    // 사방넷 단품에 없는 코드 제거 (sabData 로드된 경우에만)
+    if (sabData.length > 0 && !sabSet.has(sc)) { removed++; return; }
+    cleaned[sc] = gp;
+  });
+  if (removed > 0) log(`[INFO] 유효하지 않은 매핑 ${removed}건 제거됨`, 'info');
+  return cleaned;
 }
 const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
 
@@ -2445,6 +2466,17 @@ async function loadFromSheets() {
   }
 }
 
+// 사방넷코드 → 상품명 맵 생성
+function buildNameMap(mapObj) {
+  const nm = {};
+  const sabMap = {};
+  sabData.forEach(s => { sabMap[s.사방넷코드] = s.상품명; });
+  Object.keys(mapObj).forEach(sc => {
+    if (sabMap[sc]) nm[sc] = sabMap[sc];
+  });
+  return nm;
+}
+
 async function saveToSheets() {
   const url = document.getElementById('sheetsUrl').value.trim();
   if (!url) { alert('Apps Script URL을 먼저 입력하세요.'); return; }
@@ -2456,7 +2488,7 @@ async function saveToSheets() {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      body: JSON.stringify({ map: allMap, soldout: soldoutMap, kcfi: kcfiMap, normname: normOptMap, iccodemap: icCodeMap }),
+      body: JSON.stringify({ map: allMap, soldout: soldoutMap, kcfi: kcfiMap, normname: normOptMap, iccodemap: icCodeMap, nameMap: buildNameMap(allMap) }),
       headers: { 'Content-Type': 'text/plain' }
     });
     const data = await res.json();
@@ -2520,7 +2552,7 @@ async function autoLoadFromSheets() {
     if (data.ok && data.map) {
       const filteredMap = {};
       Object.entries(data.map).forEach(([k,v]) => { if(isValidGp(v)) filteredMap[k]=v; });
-      matchMap = filteredMap;
+      matchMap = cleanMatchMap(filteredMap);
 
       // soldout: Sheets 데이터가 있으면 우선, 없으면 localStorage 유지
       const sheetsSoldout = data.soldout || {};
