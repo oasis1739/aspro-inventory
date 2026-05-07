@@ -1876,6 +1876,22 @@ function autoMapAll() {
   if (!nomapRows.length) return;
   let mapped = 0, failed = 0;
 
+  // 이카운트 품목명에서 [컬러/사이즈] 파싱 헬퍼
+  function parseIcColor(name) {
+    const m = String(name||'').match(/\[([^/\]]+)\/([^\]]+)\]/);
+    return m ? { color: m[1].trim(), size: m[2].trim() } : null;
+  }
+
+  // 옵션에서 컬러+사이즈 파싱 (예: "밀크카키+딥퍼플:55" → colors:['밀크카키','딥퍼플'], size:'55')
+  function parseOpt(opt) {
+    const str = String(opt || '');
+    const parts = str.split(':');
+    const size = parts.length > 1 ? parts[parts.length-1].trim() : '';
+    const colorPart = parts[0].trim();
+    const colors = colorPart.split('+').map(c => c.trim()).filter(Boolean);
+    return { colors, size };
+  }
+
   nomapRows.forEach((r, i) => {
     // 이미 매핑된 것 스킵
     if (extraMap[r.사방넷코드] || matchMap[r.사방넷코드]) return;
@@ -1885,25 +1901,65 @@ function autoMapAll() {
 
     let found = null;
 
-    // 1순위: 이카운트 품번 매칭
+    // 1순위: 이카운트 - 옵션 컬러+사이즈로 정확 매칭
     for (const key of Object.keys(icMap)) {
       if (key === base || key.startsWith(base) || base.startsWith(key)) {
         const items = icMap[key] || [];
-        if (items.length > 0) {
-          // 재고 있는 것 우선, 없으면 첫번째
+        if (!items.length) continue;
+
+        const { colors, size } = parseOpt(r.옵션);
+
+        // 컬러+사이즈로 정확 매칭 시도
+        if (colors.length > 0 && size) {
+          // SET: 첫번째 컬러 기준으로 매칭
+          let bestItem = null;
+          for (const color of colors) {
+            bestItem = items.find(ic => {
+              const parsed = parseIcColor(ic.name);
+              if (!parsed) return false;
+              return parsed.color === color && parsed.size === size;
+            });
+            if (bestItem) break;
+          }
+          // 사이즈만 매칭
+          if (!bestItem) {
+            bestItem = items.find(ic => {
+              const parsed = parseIcColor(ic.name);
+              return parsed && parsed.size === size;
+            });
+          }
+          // 재고있는 것 fallback
+          if (!bestItem) bestItem = items.find(ic => ic.qty > 0) || items[0];
+          found = { gp: bestItem.품목코드, src: '이카운트' };
+        } else {
+          // 옵션 파싱 안되면 재고있는 것 우선
           const best = items.find(ic => ic.qty > 0) || items[0];
           found = { gp: best.품목코드, src: '이카운트' };
-          break;
         }
+        break;
       }
     }
 
     // 2순위: 김포 품목코드 매칭
     if (!found) {
+      const { colors, size } = parseOpt(r.옵션);
       for (const gpCode of Object.keys(gpMap)) {
         if (gpCode === base || gpCode.startsWith(base) || gpCode.includes(base)) {
-          found = { gp: gpCode, src: '김포' };
-          break;
+          // 컬러+사이즈 포함 여부 확인
+          if (colors.length > 0 && size) {
+            const matched = colors.some(c => gpCode.includes(c) || gpCode.includes(size));
+            if (matched) { found = { gp: gpCode, src: '김포' }; break; }
+          } else {
+            found = { gp: gpCode, src: '김포' }; break;
+          }
+        }
+      }
+      // 김포 fallback - 조건 없이 base 포함
+      if (!found) {
+        for (const gpCode of Object.keys(gpMap)) {
+          if (gpCode.startsWith(base) || gpCode.includes(base)) {
+            found = { gp: gpCode, src: '김포' }; break;
+          }
         }
       }
     }
