@@ -1882,6 +1882,16 @@ function autoMapAll() {
     return m ? { color: m[1].trim(), size: m[2].trim() } : null;
   }
 
+  // 컬러 매칭 - 완전일치 → 부분포함 순으로 시도
+  // 예: '밀크카키' → 이카운트 '카키' 매칭 (밀크카키.includes('카키'))
+  function colorMatch(sabColor, icColor) {
+    if (!sabColor || !icColor) return false;
+    const s = sabColor.trim(), ic = icColor.trim();
+    if (s === ic) return true;                          // 완전일치
+    if (s.includes(ic) || ic.includes(s)) return true; // 부분포함
+    return false;
+  }
+
   // 옵션에서 컬러+사이즈 파싱 (예: "밀크카키+딥퍼플:55" → colors:['밀크카키','딥퍼플'], size:'55')
   function parseOpt(opt) {
     const str = String(opt || '');
@@ -1909,26 +1919,26 @@ function autoMapAll() {
 
         const { colors, size } = parseOpt(r.옵션);
 
-        // 컬러+사이즈로 정확 매칭 시도
+        // 컬러+사이즈로 매칭 (완전일치 → 부분포함 → 사이즈만 → fallback)
         if (colors.length > 0 && size) {
-          // SET: 첫번째 컬러 기준으로 매칭
           let bestItem = null;
+          // 1) 컬러 부분포함 + 사이즈 일치
           for (const color of colors) {
             bestItem = items.find(ic => {
               const parsed = parseIcColor(ic.name);
               if (!parsed) return false;
-              return parsed.color === color && parsed.size === size;
+              return colorMatch(color, parsed.color) && parsed.size === size;
             });
             if (bestItem) break;
           }
-          // 사이즈만 매칭
+          // 2) 사이즈만 매칭
           if (!bestItem) {
             bestItem = items.find(ic => {
               const parsed = parseIcColor(ic.name);
               return parsed && parsed.size === size;
             });
           }
-          // 재고있는 것 fallback
+          // 3) 재고있는 것 fallback
           if (!bestItem) bestItem = items.find(ic => ic.qty > 0) || items[0];
           found = { gp: bestItem.품목코드, src: '이카운트' };
         } else {
