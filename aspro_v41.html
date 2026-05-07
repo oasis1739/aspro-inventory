@@ -338,7 +338,9 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
       </div>
       <div style="display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-pp" onclick="saveNomapEntries()">💾 입력된 매핑 저장</button>
+        <button class="btn" style="background:var(--success);color:#fff;border-color:var(--success)" onclick="autoMapAll()">⚡ 자체코드 자동매핑</button>
         <span style="font-size:10px;color:var(--text3)" id="nomapTotal"></span>
+        <span style="font-size:10px;color:var(--success);font-weight:600" id="autoMapResult"></span>
       </div>
       <div class="twrap"><div class="tscroll">
         <table>
@@ -1867,6 +1869,70 @@ function cancelSoldout(sc) {
     }).then(r => r.json()).then(d => {
       if (d.ok) log(`[OK] 품절해제 Sheets 자동 반영: ${sc}`, 'ok');
     }).catch(() => {});
+  }
+}
+
+function autoMapAll() {
+  if (!nomapRows.length) return;
+  let mapped = 0, failed = 0;
+
+  nomapRows.forEach((r, i) => {
+    // 이미 매핑된 것 스킵
+    if (extraMap[r.사방넷코드] || matchMap[r.사방넷코드]) return;
+
+    const base = String(r.자체코드 || '').replace(/_SET$/i, '').replace(/-SET$/i, '').trim();
+    if (base.length < 3) { failed++; return; }
+
+    let found = null;
+
+    // 1순위: 이카운트 품번 매칭
+    for (const key of Object.keys(icMap)) {
+      if (key === base || key.startsWith(base) || base.startsWith(key)) {
+        const items = icMap[key] || [];
+        if (items.length > 0) {
+          // 재고 있는 것 우선, 없으면 첫번째
+          const best = items.find(ic => ic.qty > 0) || items[0];
+          found = { gp: best.품목코드, src: '이카운트' };
+          break;
+        }
+      }
+    }
+
+    // 2순위: 김포 품목코드 매칭
+    if (!found) {
+      for (const gpCode of Object.keys(gpMap)) {
+        if (gpCode === base || gpCode.startsWith(base) || gpCode.includes(base)) {
+          found = { gp: gpCode, src: '김포' };
+          break;
+        }
+      }
+    }
+
+    if (found) {
+      extraMap[r.사방넷코드] = found.gp;
+      // UI 입력란도 업데이트
+      const el = document.getElementById('ngp_' + i);
+      if (el) el.value = found.gp;
+      const st = document.getElementById('nst_' + i);
+      if (st) st.textContent = '✅';
+      nomapRows[i]._manualGimpo = found.gp;
+      mapped++;
+    } else {
+      failed++;
+    }
+  });
+
+  const msg = `자동매핑 완료: ${mapped}건 성공 / ${failed}건 미발견`;
+  const el = document.getElementById('autoMapResult');
+  if (el) el.textContent = msg;
+  log('[OK] ' + msg, 'ok');
+
+  if (mapped > 0) {
+    // 저장까지 자동으로
+    saveNomapEntries();
+    alert(`⚡ 자동매핑 완료\n\n✅ 성공: ${mapped}건\n❌ 미발견: ${failed}건\n\n매핑 저장됐습니다. 재고 매칭 실행하세요.`);
+  } else {
+    alert(`자동매핑 결과\n\n이카운트/김포에서 매칭 가능한 항목이 없습니다.\n수동으로 입력해주세요.`);
   }
 }
 
