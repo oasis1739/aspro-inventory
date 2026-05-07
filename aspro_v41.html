@@ -1643,11 +1643,16 @@ function renderNomap() {
       <td style="font-family:var(--mono);font-size:10px">${r.자체코드}</td>
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px">${r.상품명}</td>
       <td style="font-size:10px;color:var(--text3)">${r.옵션}</td>
-      <td>
-        <input class="mi nomap-gp" style="width:200px" id="ngp_${i}"
-          value="${extraMap[r.사방넷코드]||''}"
-          placeholder="예: NT243G0001-55-BK"
-          oninput="nomapRows[${i}]._manualGimpo=this.value">
+      <td style="position:relative">
+        <div style="display:flex;gap:4px;align-items:center">
+          <input class="mi nomap-gp" style="width:175px" id="ngp_${i}"
+            value="${extraMap[r.사방넷코드]||''}"
+            placeholder="예: NT243G0001-55-BK"
+            oninput="nomapRows[${i}]._manualGimpo=this.value">
+          <button class="btn" style="font-size:10px;padding:2px 6px;color:var(--accent2);border-color:var(--accent2);white-space:nowrap"
+            onclick="toggleSuggest(${i},'${r.사방넷코드}','${(r.자체코드||'').replace(/'/g,String.fromCharCode(92,39))}','${(r.상품명||'').replace(/'/g,String.fromCharCode(92,39))}')">🔍 추천</button>
+        </div>
+        <div id="ndrop_${i}" style="display:none;position:absolute;left:0;top:100%;z-index:99;background:var(--bg2);border:1px solid var(--border);border-radius:4px;min-width:340px;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.4)"></div>
       </td>
       <td><span style="font-size:10px;color:var(--success)" id="nst_${i}">${extraMap[r.사방넷코드]?'✅':'—'}</span></td>
       <td>${soldoutMap[r.사방넷코드]
@@ -1657,6 +1662,84 @@ function renderNomap() {
     </tr>
   `).join('');
 }
+
+// ── 매핑 자동 추천 ──────────────────────────────────────────
+// 1차: 자체코드에서 _SET 제거한 베이스코드로 matchMap 검색
+// 2차: 상품명 키워드 교집합으로 기존 매핑된 사방넷코드 검색
+function suggestMapping(sc, 자체코드, 상품명) {
+  const results = new Map();
+
+  // 1차: 자체코드 베이스 매칭
+  const base = String(자체코드 || '').replace(/_SET$/i, '').replace(/-SET$/i, '').trim();
+  if (base.length >= 4) {
+    const sabMap = {};
+    sabData.forEach(s => { sabMap[s.사방넷코드] = s; });
+    Object.entries(matchMap).forEach(([msc, gp]) => {
+      const mJa = String(sabMap[msc]?.자체코드 || '');
+      if (mJa && (mJa.startsWith(base) || mJa.includes(base))) {
+        if (!results.has(gp)) {
+          results.set(gp, { sc: msc, 자체코드: mJa, 상품명: sabMap[msc]?.상품명 || '', score: 99, src: '자체코드' });
+        }
+      }
+    });
+  }
+
+  // 2차: 상품명 키워드 교집합 (보완)
+  if (results.size < 5) {
+    const targetKw = nameKeywords(상품명);
+    if (targetKw.size >= 2) {
+      const scored = [];
+      const sabMap2 = {};
+      sabData.forEach(s => { sabMap2[s.사방넷코드] = s; });
+      Object.entries(matchMap).forEach(([msc, gp]) => {
+        if (results.has(gp)) return;
+        const s = sabMap2[msc];
+        if (!s) return;
+        const score = setIntersect(targetKw, nameKeywords(s.상품명));
+        if (score >= 2) scored.push({ gp, sc: msc, 자체코드: s.자체코드, 상품명: s.상품명, score, src: '상품명' });
+      });
+      scored.sort((a, b) => b.score - a.score);
+      for (const item of scored) {
+        if (results.size >= 8) break;
+        if (!results.has(item.gp)) results.set(item.gp, item);
+      }
+    }
+  }
+
+  return [...results.entries()].map(([gp, info]) => ({ gp, ...info }));
+}
+
+function applySuggest(i, gp) {
+  const input = document.getElementById('ngp_' + i);
+  if (input) {
+    input.value = gp;
+    nomapRows[i]._manualGimpo = gp;
+    const st = document.getElementById('nst_' + i);
+    if (st) st.textContent = '✅';
+  }
+  const drop = document.getElementById('ndrop_' + i);
+  if (drop) drop.style.display = 'none';
+}
+
+function toggleSuggest(i, sc, 자체코드, 상품명) {
+  const drop = document.getElementById('ndrop_' + i);
+  if (!drop) return;
+  if (drop.style.display !== 'none') { drop.style.display = 'none'; return; }
+  const suggestions = suggestMapping(sc, 자체코드, 상품명);
+  if (!suggestions.length) {
+    drop.innerHTML = '<div style="padding:6px 10px;color:var(--text3);font-size:10px">추천 결과 없음</div>';
+  } else {
+    drop.innerHTML = suggestions.map(function(s) {
+      return '<div class="suggest-item" onclick="applySuggest(' + i + ',\'' + s.gp.replace(/'/g, "\\'") + '\')" style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px">'
+        + '<span style="font-family:var(--mono);font-size:10px;color:var(--accent2)">' + s.gp + '</span>'
+        + '<span style="font-size:9px;color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (s.상품명 || '').slice(0,25) + '</span>'
+        + '<span style="font-size:9px;padding:1px 4px;border-radius:2px;background:' + (s.src==='자체코드'?'var(--success)':'var(--warn)') + ';color:#fff">' + s.src + '</span>'
+        + '</div>';
+    }).join('');
+  }
+  drop.style.display = 'block';
+}
+// ────────────────────────────────────────────────────────────
 
 function updateSoldoutCnt() {
   const cnt = Object.keys(soldoutMap).length;
