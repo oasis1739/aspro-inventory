@@ -2294,7 +2294,7 @@ async function autoLoadFromSheets() {
       updateSavedMapCnt();
       updateSoldoutCnt();
       const cnt = Object.keys(matchMap).length;
-      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건`, 'ok');
+      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건 / 신원재고 ${Object.keys(kcfiMap).length}건`, 'ok');
       if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.textContent='☁ Google Sheets 연동'; }
     }
   } catch(e) {
