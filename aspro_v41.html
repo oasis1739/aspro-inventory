@@ -524,14 +524,20 @@ function doGet(e) {
   });
 
   let kc = ss.getSheetByName('aspro_kcfi');
-  if (!kc) { kc = ss.insertSheet('aspro_kcfi'); kc.appendRow(['사방넷코드','상품명','타입','색상','사이즈','재고','업데이트일','비고']); }
+  if (!kc) { kc = ss.insertSheet('aspro_kcfi'); kc.appendRow(['사방넷코드','재고','업데이트일']); }
   const kcData = kc.getDataRange().getValues();
   const kcfi = {};
-  kcData.slice(1).forEach(r => {
-    const sc = String(r[0] || '').trim();
-    const qty = parseInt(r[5], 10);
-    if (sc && !isNaN(qty)) kcfi[sc] = qty;
-  });
+  if (kcData.length > 1) {
+    // 헤더에서 '재고' 컬럼 인덱스를 동적으로 찾음 (컬럼 구조 변경에 강건)
+    const kcHeader = kcData[0].map(h => String(h).trim());
+    const qtyIdx = kcHeader.indexOf('재고');
+    const useIdx = qtyIdx >= 0 ? qtyIdx : 1; // 못 찾으면 col[1] 기본값
+    kcData.slice(1).forEach(r => {
+      const sc = String(r[0] || '').trim();
+      const qty = parseInt(r[useIdx], 10);
+      if (sc && !isNaN(qty)) kcfi[sc] = qty;
+    });
+  }
 
   let nn = ss.getSheetByName('aspro_normname');
   if (!nn) { nn = ss.insertSheet('aspro_normname'); nn.appendRow(['정규화상품명(normName)','물류품번','원본사방넷상품명','등록일']); }
@@ -576,8 +582,8 @@ function doPost(e) {
       let kc = ss.getSheetByName('aspro_kcfi');
       if (!kc) { kc = ss.insertSheet('aspro_kcfi'); }
       kc.clearContents();
-      kc.appendRow(['사방넷코드','상품명','타입','색상','사이즈','재고','업데이트일','비고']);
-      Object.entries(payload.kcfi).forEach(([k,v]) => { kc.appendRow([k,'','','','',v,now,'']); });
+      kc.appendRow(['사방넷코드','재고','업데이트일']);
+      Object.entries(payload.kcfi).forEach(([k,v]) => { kc.appendRow([k, v, now]); });
     }
 
     if (payload.normname && Object.keys(payload.normname).length > 0) {
