@@ -553,7 +553,23 @@ function doGet(e) {
   const iccodemap = {};
   icData.slice(1).forEach(r => { if (r[0] && r[1]) iccodemap[String(r[0]).trim()] = String(r[1]).trim(); });
 
-  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout, kcfi, normname, iccodemap}))
+  // 이카운트원본 시트 읽기
+  let icRaw = [];
+  let icSh = ss.getSheetByName('이카운트원본');
+  if (icSh) {
+    const icData = icSh.getDataRange().getValues();
+    icRaw = icData; // 전체 raw 데이터 전달
+  }
+
+  // 김포원본 시트 읽기
+  let gpRaw = [];
+  let gpSh = ss.getSheetByName('김포원본');
+  if (gpSh) {
+    const gpData = gpSh.getDataRange().getValues();
+    gpRaw = gpData;
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout, kcfi, normname, iccodemap, icRaw, gpRaw}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -2578,8 +2594,82 @@ async function autoLoadFromSheets() {
       try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
       updateSavedMapCnt();
       updateSoldoutCnt();
+
+      // 이카운트원본 시트 → icMap 세팅
+      let icCnt = 0;
+      if (data.icRaw && data.icRaw.length > 2) {
+        icMap = {};
+        let nSab = 0;
+        for (let i = 2; i < data.icRaw.length; i++) {
+          const r = data.icRaw[i];
+          if (!r || !r[0]) continue;
+          const code = String(r[0]).trim();
+          if (!code || code.includes('계') || code.includes('회사명')) continue;
+          const sabCode = String(r[1]||'').trim();
+          const name    = String(r[4]||'').trim();
+          const qty     = parseFloat(r[5]) || 0;
+          const brand   = String(r[2]||'').trim();
+          const prefix  = code.split('-')[0];
+          if (!icMap[prefix]) icMap[prefix] = [];
+          icMap[prefix].push({ 품목코드: code, qty, name, brand, prefix, sabCode });
+          if (sabCode && sabCode !== prefix) {
+            if (!icMap[sabCode]) icMap[sabCode] = [];
+            icMap[sabCode].push({ 품목코드: code, qty, name, brand, prefix, sabCode });
+          }
+          icCnt++;
+          if (sabCode) nSab++;
+        }
+        document.getElementById('icZone').classList.add('ok');
+        const icList = document.getElementById('icList');
+        if (icList) icList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 이카운트원본</div><div class="fcnt">${icCnt}SKU</div></div>`;
+        document.getElementById('icInfo').style.display = 'block';
+        document.getElementById('icInfo').textContent = `Sheets 이카운트 ${icCnt}SKU (품번: ${nSab})`;
+        log(`[OK] Sheets 이카운트원본 → ${icCnt}SKU`, 'ok');
+      }
+
+      // 김포원본 시트 → gpMap 세팅
+      let gpCnt = 0;
+      if (data.gpRaw && data.gpRaw.length > 3) {
+        gpMap = {};
+        // 헤더: Row0=날짜, Row1=헤더(품목코드,품목명,...), Row2~=데이터
+        // 구조: col[0]=품목코드, col[2~]=각 창고 재고 (총수량 = 합계)
+        const gpHeader = data.gpRaw[1] || [];
+        // 총수량 컬럼 찾기 (없으면 col[2]~끝 합산)
+        const totalIdx = gpHeader.findIndex(h => String(h).includes('총'));
+        for (let i = 2; i < data.gpRaw.length; i++) {
+          const r = data.gpRaw[i];
+          if (!r || !r[0]) continue;
+          const code = String(r[0]).trim();
+          if (!code || code === '품목코드') continue;
+          let qty = 0;
+          if (totalIdx >= 0) {
+            qty = parseInt(r[totalIdx]) || 0;
+          } else {
+            // col[2]부터 숫자인 컬럼 모두 합산
+            for (let j = 2; j < r.length; j++) {
+              qty += parseInt(r[j]) || 0;
+            }
+          }
+          gpMap[code] = (gpMap[code]||0) + qty;
+          gpCnt++;
+        }
+        // 세트 자동계산
+        let setCount = 0;
+        for (const [code, qty] of Object.entries(gpMap)) {
+          if (code.endsWith('-CD')) {
+            const base = code.slice(0,-3);
+            const skQty = gpMap[base+'-SK'];
+            if (skQty !== undefined) { gpMap[base+'-SET'] = Math.min(qty, skQty); setCount++; }
+          }
+        }
+        document.getElementById('gpZone').classList.add('ok');
+        const gpList = document.getElementById('gpList');
+        if (gpList) gpList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 김포원본</div><div class="fcnt">${gpCnt}품목</div></div>`;
+        log(`[OK] Sheets 김포원본 → ${gpCnt}품목${setCount>0?' / 세트: '+setCount+'건':''}`, 'ok');
+      }
+
       const cnt = Object.keys(matchMap).length;
-      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건 / 신원재고 ${Object.keys(kcfiMap).length}건`, 'ok');
+      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건 / 신원재고 ${Object.keys(kcfiMap).length}건 / 이카운트 ${icCnt}SKU / 김포 ${gpCnt}품목`, 'ok');
       if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.textContent='☁ Google Sheets 연동'; }
     }
   } catch(e) {
