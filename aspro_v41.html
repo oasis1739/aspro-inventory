@@ -553,6 +553,13 @@ function doGet(e) {
   const iccodemap = {};
   icData.slice(1).forEach(r => { if (r[0] && r[1]) iccodemap[String(r[0]).trim()] = String(r[1]).trim(); });
 
+  // 사방넷단품원본 시트 읽기
+  let sabRawData = [];
+  let sabSh = ss.getSheetByName('사방넷단품원본');
+  if (sabSh) {
+    sabRawData = sabSh.getDataRange().getValues();
+  }
+
   // 이카운트원본 시트 읽기
   let icRaw = [];
   let icSh = ss.getSheetByName('이카운트원본');
@@ -569,7 +576,7 @@ function doGet(e) {
     gpRaw = gpData;
   }
 
-  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout, kcfi, normname, iccodemap, icRaw, gpRaw}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout, kcfi, normname, iccodemap, icRaw, gpRaw, sabRawData}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -2595,6 +2602,54 @@ async function autoLoadFromSheets() {
       updateSavedMapCnt();
       updateSoldoutCnt();
 
+      // 사방넷단품원본 시트 → sabData 세팅
+      let sabCnt = 0;
+      if (data.sabRawData && data.sabRawData.length > 3) {
+        sabRaw = data.sabRawData;
+        sabData = [];
+        for (let i = 3; i < data.sabRawData.length; i++) {
+          const r = data.sabRawData[i];
+          if (!r || !r[0]) continue;
+          sabData.push({
+            _idx: i,
+            사방넷코드:   String(r[0]).trim(),
+            바코드:       r[1],
+            상품명:       String(r[2]||'').trim(),
+            옵션:         String(r[3]||'').trim(),
+            안전재고:     r[4],
+            가상재고:     r[5],
+            공급상태:     r[6],
+            단품추가금액: r[7],
+            옵션구분:     r[8],
+            연결상품코드: r[9],
+            옵션별칭:     r[10],
+            모델명:       r[11],
+            EA:           r[12],
+            LOCATION:     r[13],
+            재고관리:     r[14],
+            현재고:       r[15],
+            판매가:       r[16],
+            원가:         r[17],
+            TAG가:        r[18],
+            자체코드:     String(r[19]||'').trim(),
+            옵션제목:     r[20],
+            등록일시:     r[21],
+            옵션수정여부: r[22],
+            매입처:       r[23],
+            제조사:       r[24],
+            상품약어:     r[25],
+            모델NO:       r[26],
+            상품상태:     r[27],
+            _raw: [...r]
+          });
+          sabCnt++;
+        }
+        document.getElementById('sabZone').classList.add('ok');
+        const sabList = document.getElementById('sabList');
+        if (sabList) sabList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 사방넷단품원본</div><div class="fcnt">${sabCnt}단품</div></div>`;
+        log(`[OK] Sheets 사방넷단품원본 → ${sabCnt}단품`, 'ok');
+      }
+
       // 이카운트원본 시트 → icMap 세팅
       let icCnt = 0;
       if (data.icRaw && data.icRaw.length > 2) {
@@ -2669,7 +2724,7 @@ async function autoLoadFromSheets() {
       }
 
       const cnt = Object.keys(matchMap).length;
-      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건 / 신원재고 ${Object.keys(kcfiMap).length}건 / 이카운트 ${icCnt}SKU / 김포 ${gpCnt}품목`, 'ok');
+      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건 / 신원재고 ${Object.keys(kcfiMap).length}건 / 이카운트 ${icCnt}SKU / 김포 ${gpCnt}품목 / 사방넷 ${sabCnt}단품`, 'ok');
       if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.textContent='☁ Google Sheets 연동'; }
     }
   } catch(e) {
