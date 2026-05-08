@@ -1416,17 +1416,36 @@ function getGimpoQty(sabCode, opt, sabName) {
 }
 
 const COLOR_MAP = {
+  // 영문 컬러
   'BLACK':'BK','NAVY':'NA','WHITE':'WH','IVORY':'IV','GRAY':'GR','GREY':'GR',
   'DARK GRAY':'DG','DARK GREY':'DG','DARKGRAY':'DG','LIGHT GRAY':'LG','LIGHT GREY':'LG',
   'BLUE':'BL','RED':'RD','GREEN':'GN','PINK':'PK','BEIGE':'BE','KHAKI':'KH',
   'BROWN':'BR','CREAM':'CR','OATMEAL':'OT','PURPLE':'PU','WINE':'WN',
+  'OLIVE':'OL','MINT':'MT','CHARCOAL':'CH','SILVER':'SR','PEACH':'PE',
+  'TEAL BLUE':'TB','TEAL':'TB','MOCHA MOUSSE':'MO','MOCHA':'MO',
+  'LIME':'LM','CORAL':'CO','CAMEL':'CM','LAVENDER':'LV',
+  'BLUE GRAY':'BG','MELANGE GRAY':'MG','DARK NAVY':'DN','DARK YELLOW':'DY',
+  // 한글 컬러 → 이카운트 코드
   '블랙':'BK','네이비':'NA','화이트':'WH','아이보리':'IV','그레이':'GR','차콜':'CH',
   '다크그레이':'DG','라이트그레이':'LG','블루':'BL','레드':'RD','그린':'GN',
   '딥그린':'GN','딥그레이':'DG','핑크':'PK','베이지':'BE','카키':'KH','브라운':'BR','크림':'CR',
   '오트밀':'OT','퍼플':'PU','플럼':'PL','와인':'WN','올리브':'OL','민트':'MT',
   '옐로우':'YE','라벤더':'LV','모카':'MO','오렌지':'OR',
+  // 복합 컬러 (이카운트에 그대로 존재하는 한글 컬러명)
+  '밀크카키':'밀크카키','밀크브라운':'밀크브라운','모카무스':'모카무스','모카베이지':'모카베이지','모카브라운':'모카브라운',
+  '틸블루':'틸블루','스카이블루':'스카이블루','라이트블루':'라이트블루','딥블루':'BL','블루그레이':'블루그레이','그레이블루':'그레이블루',
+  '딥퍼플':'딥퍼플','퍼플브라운':'퍼플브라운','바이올렛':'PU',
+  '카키브라운':'카키브라운','카멜베이지':'카멜베이지','오트베이지':'오트베이지','도브베이지':'도브베이지',
+  '연핑크':'연핑크','마젠타핑크':'마젠타핑크','핑크코랄':'핑크코랄','시에나로즈':'시에나로즈',
+  '세이지그린':'GN','딥네이비':'DN','다크네이비':'DN','블랙네이비':'블랙네이비',
+  '차콜그레이':'차콜그레이','차콜블랙':'차콜블랙','라이트그레이':'LG','애쉬그레이':'GR',
+  '라이트인디고':'인디고','인디고':'인디고',
+  '코코넛밀크':'크림','라떼':'MO','초코브라운':'BR','올리브브라운':'OL',
+  '와인레드':'WN','카멜':'CM','라임':'LM','실버':'SR',
+  // 단축코드
   'LG':'LG','DG':'DG','BG':'BE','SR':'SR','MG':'MG','BW':'BW',
   'CC':'CH','LA':'LV','WI':'WN','PL':'PL','NV':'NA','GY':'GR','YL':'YE',
+  'TB':'TB','MO':'MO','OL':'OL','CM':'CM',
 };
 
 function parseOpt(opt) {
