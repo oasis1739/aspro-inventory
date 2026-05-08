@@ -777,6 +777,24 @@ const NORM_STATIC_MAP = {
   '여성 울블렌디드 니팅 보머 점퍼': 'AFWJP2501',
   // 디엣 세트
   '머플러  풀오버 set': '251DT01',
+  // 엔니튜드 24FW
+  '트위드 니트 베스트 종 택': '243NT09VT',
+  'gfa 엔니튜드 트위드 니트 베스트 종 택': '243NT09VT',
+  '캐시 터틀넥': '244NT43',
+  '후드 니트 패딩 베스트': '244NT51VT',
+  // 엔니튜드 25SS
+  '크로셰 썸머 니트셋업': '252NT25',
+  'set 크로셰 썸머 니트셋업': '252NT25',
+  '린넨 크로셰 카라 니트': '252NT25',
+  '린넨 시스루 썸머 가디건': '252NT41',
+  '린넨 시어 가디건': '252NT41',
+  // 막스스튜디오 25SS
+  '홀가먼트 하프 슬리브 니트 종 택': 'MX25HSKN01',
+  '홀가먼트 하프 슬리브 니트 종 set': 'MX25HSKN01',
+  '썸머 글리터 캡 슬리브리스 종 택': '252MX05',
+  '썸머 글리터 캡 슬리브리스 종 set': '252MX05',
+  // 메탈샤이닝 (이카운트에 FM24FW01 코드로 있어야 함)
+  '메탈 샤이닝 케이블 니트 종': 'FM24FW01',
 };
 let soldoutMap = {};
 let kcfiMap = {};
@@ -1294,10 +1312,39 @@ const IC_STATIC_MAP = {
   '262HJW03': '262HJW03',
   // ── 마리본 케이시 서클컷 가디건 (김포: 26HJW02 → JW261GW01) ──
   '26HJW02': '26HJW02',
+  // ── 엔니튜드 24FW ──────────────────────────────────────────
+  '243NT09VT': '243NT09VT',      // 엔니튜드 트위드 니트 베스트 4종 (기존)
+  'NT243G0009-12VT': '243NT09VT', // 엔니튜드 트위드 니트 베스트 (사방넷 자체코드)
+  'NT242G0046-0048VT': '243NT09VT', // GFA 엔니튜드 트위드 니트 베스트 (신버전)
+  '244NT43-CH': '244NT43',       '244NT43-GR': '244NT43',
+  '244NT43-PU': '244NT43',       '244NT43': '244NT43',  // 캐시 터틀넥
+  '244NT51VT-CH': '244NT51VT',   '244NT51VT': '244NT51VT', // 후드 니트 패딩 베스트
+  // ── 엔니튜드 25SS ──────────────────────────────────────────
+  'NT252G0025SET': '252NT25',    'NT252G0026SET': '252NT25',
+  'NT252G0027SET': '252NT25',    // [SET]크로셰 썸머 니트셋업 각 컬러
+  'NT252G0033-35PO': '252NT25',  // 린넨 크로셰 카라 니트 (3컬러)
+  'NT252G0041CD': '252NT41',     'NT252G0042CD': '252NT41',
+  'NT252G0043CD': '252NT41',     // 린넨 시어 가디건 각 컬러
+  'NT252G0043CD_SET': '252NT41', // [1+1+1]린넨 시스루 썸머 가디건 3종 SET
+  // ── 막스스튜디오 25SS ────────────────────────────────────────
+  'MX25HSKN01_BK': 'MX25HSKN01', 'MX25HSKN01_BE': 'MX25HSKN01',
+  'MX25HSKN01_PK': 'MX25HSKN01', // 홀가먼트 하프 슬리브 니트 단품
+  // MX25HSKN01_AL은 기존에 있음
+  '252MX05': '252MX05',           // 썸머 글리터 캡 슬리브리스 4종 택1
+  'MS25S-GL-CAP-BK': '252MX05',  'MS25S-GL-CAP-BE': '252MX05',
+  'MS25S-GL-CAP-CH': '252MX05',  'MS25S-GL-CAP-PL': '252MX05',
+  'MS25S-GL-CAP_AL': '252MX05',  'MS25S-GL-CAP_2set': '252MX05',
+  'MS25S-GL-CAP_SET': '252MX05', // 썸머 글리터 각종 세트
+  // ── [1+1] 세트 자체코드 ────────────────────────────────────
+  'MX25HSKN01_2set': 'MX25HSKN01', // [1+1]홀가먼트 하프 슬리브 세트 (자체코드 MX25로 시작)
+  'JW25SS01_SET': '252JW07',     // [1+1+1]프렌치 린넨 블렌드 카라니트 3종 SET
+  'N1009_SET': 'N1009',           // [1+1+1]썸머 쿨 하프소매 볼륨 니트 SET
+  // ── 제이슨우 25SS [1+1+1] ────────────────────────────────────
+  'JW25SS02_SET': '252JW19',     // [1+1+1]프렌치 린넨 블렌드 슬리브리스 카라니트 SET (101861계열)
 };
 
 const GP_SET_COLOR_OVERRIDE = {
-  'MS25S': { gpPrefix: '252MX05', colorMap: { '플럼':'BU', '차콜':'GR', '그레이':'GR', '베이지':'BE', '블랙':'BK' } },
+  'MS25S': { gpPrefix: '252MX05', colorMap: { '플럼':'PL', '차콜':'CH', '그레이':'GR', '베이지':'BE', '블랙':'BK' } },
 };
 
 function getGimpoQty(sabCode, opt, sabName) {
@@ -2615,7 +2662,8 @@ async function loadFromSheets() {
     const importedIcCodeMap = data.iccodemap || {};
     const filteredImport = {};
     Object.entries(imported).forEach(([k,v]) => { if(isValidGp(v)) filteredImport[k]=v; });
-    matchMap = filteredImport;
+    // 기존 matchMap과 병합 (Sheets가 우선, 기존 로컬 항목은 Sheets에 없으면 유지)
+    matchMap = { ...matchMap, ...filteredImport };
 
     // soldout: 비어있으면 기존 로컬 유지
     if (Object.keys(importedSoldout).length > 0) {
@@ -2747,7 +2795,8 @@ async function autoLoadFromSheets() {
     if (data.ok && data.map) {
       const filteredMap = {};
       Object.entries(data.map).forEach(([k,v]) => { if(isValidGp(v)) filteredMap[k]=v; });
-      matchMap = cleanMatchMap(filteredMap);
+      // 기존 matchMap과 병합 (Sheets가 우선, 기존 로컬 항목은 Sheets에 없으면 유지)
+      matchMap = cleanMatchMap({ ...matchMap, ...filteredMap });
 
       // soldout: Sheets 데이터가 있으면 우선, 없으면 localStorage 유지
       const sheetsSoldout = data.soldout || {};
