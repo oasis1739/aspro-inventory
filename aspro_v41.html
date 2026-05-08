@@ -1357,6 +1357,11 @@ const GP_SET_COLOR_OVERRIDE = {
 
 function getGimpoQty(sabCode, opt, sabName) {
   let 물류 = EXTRA_STATIC_MAP[sabCode] || extraMap[sabCode] || matchMap[sabCode];
+  // 자체코드 기반 매핑이 없으면 _SET/-SET 제거 후 재시도
+  if (!물류) {
+    const sabBase = sabCode.replace(/[_-]SET$/i, '');
+    물류 = EXTRA_STATIC_MAP[sabBase] || extraMap[sabBase] || matchMap[sabBase];
+  }
   // __DELETED__ 처리: extraMap에서 명시적으로 삭제된 항목
   if (물류 === '__DELETED__') return null;
 
@@ -1541,13 +1546,16 @@ function getIcountQty(sabData_row) {
   }
 
   // ── 2순위: 자체코드/prefix 직접 조회 ──
-  const pfx = 자체.split('-')[0];
-  const fb  = getFallbackPrefix(자체);
-  const overrideKey = SAB_IC_OVERRIDE[자체];
+  // _SET, -SET 접미사 제거 후 기존 품번으로 매핑 (예: 252NT25_SET → 252NT25)
+  const 자체base = 자체.replace(/[_-]SET$/i, '').replace(/[_-]\d+SET$/i, '');
+  const pfx = 자체base.split('-')[0];
+  const fb  = getFallbackPrefix(자체base);
+  const overrideKey = SAB_IC_OVERRIDE[자체] || SAB_IC_OVERRIDE[자체base];
   if (overrideKey && SAB_COLOR_OVERRIDE[자체] && cc) {
     cc = SAB_COLOR_OVERRIDE[자체][cc] || cc;
   }
   let foundItems = icMap[자체]
+    || icMap[자체base]
     || (overrideKey ? icMap[overrideKey] : null)
     || icMap[pfx]
     || (fb ? icMap[fb] : null)
