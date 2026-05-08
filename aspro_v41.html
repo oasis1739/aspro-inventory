@@ -802,6 +802,7 @@ let kcfiMap = {};
 const SKIP_GP = new Set(['nan','','슈컴퍼니-김포이관','확인요망','삭제요망']);
 let extraMap = {};
 let icCodeMap = {}; // 사방넷코드 → 이카운트 품목코드 직접 매핑 (IC: 접두어 없이 저장)
+let forceZeroMap = {}; // 강제 0재고 품목코드 맵
 let resultRows = [], filteredRows = [];
 let nomapRows = [];
 let currentTab = 'all', editMode = false, expMode = 'all';
