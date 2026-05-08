@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ASPRO 가상재고 v4.6</title>
+<title>ASPRO 가상재고 v4.7</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -142,7 +142,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
 <div class="hdr">
   <div class="logo">ASPRO<em> / 가상재고</em></div>
   <div class="hd"></div>
-  <div class="ver">v4.6</div>
+  <div class="ver">v4.7</div>
   <div class="hright">
     <span id="lastUp" style="font-size:10px;color:var(--text3);font-family:var(--mono)">대기중</span>
     <button class="hbtn" id="sheetBtn" onclick="showSheetsModal()">☁ Google Sheets 연동</button>
@@ -346,7 +346,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
         <table>
           <thead><tr>
             <th>#</th><th>사방넷코드</th><th>자체코드</th><th>상품명</th><th>옵션</th>
-            <th>김포 물류품번 직접입력</th><th>저장상태</th><th>품절처리</th>
+            <th>미매핑 이유</th><th>김포 물류품번 직접입력</th><th>저장상태</th><th>품절처리</th>
           </tr></thead>
           <tbody id="nomapBody"></tbody>
         </table>
@@ -634,6 +634,103 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ok:false, error: err.message}))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// ──────────────────────────────────────────────
+// onEdit 트리거: aspro_match 시트에서 A열(사방넷코드) 입력 시
+// C열(상품명)을 사방넷단품원본 시트에서 자동으로 조회하여 채움
+// ──────────────────────────────────────────────
+function onEdit(e) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = e.range.getSheet();
+  if (sheet.getName() !== 'aspro_match') return;
+
+  const editedRow = e.range.getRow();
+  const editedCol = e.range.getColumn();
+  if (editedRow === 1) return; // 헤더행 무시
+
+  // A열 또는 B열 편집 시 상품명 자동완성
+  if (editedCol !== 1 && editedCol !== 2) return;
+
+  const sabCode = sheet.getRange(editedRow, 1).getValue();
+  if (!sabCode || String(sabCode).trim() === '') return;
+
+  // C열이 이미 채워져 있으면 덮어쓰지 않음
+  const existingName = sheet.getRange(editedRow, 3).getValue();
+  if (existingName && String(existingName).trim() !== '') return;
+
+  // 사방넷단품원본 시트에서 상품명 조회
+  const sabSh = ss.getSheetByName('사방넷단품원본');
+  if (!sabSh) return;
+
+  const sabData = sabSh.getDataRange().getValues();
+  if (sabData.length < 2) return;
+
+  const header = sabData[0].map(h => String(h).trim());
+  const codeIdx = header.indexOf('사방넷상품코드') >= 0 ? header.indexOf('사방넷상품코드') : 0;
+  const nameIdx = header.indexOf('상품명') >= 0 ? header.indexOf('상품명') : 2;
+
+  const targetCode = String(sabCode).trim();
+  for (let i = 1; i < sabData.length; i++) {
+    const rowCode = String(sabData[i][codeIdx] || '').trim();
+    if (rowCode === targetCode) {
+      const productName = String(sabData[i][nameIdx] || '').trim();
+      if (productName) {
+        sheet.getRange(editedRow, 3).setValue(productName);
+      }
+      break;
+    }
+  }
+}
+
+// ──────────────────────────────────────────────
+// 일괄 상품명 채우기: aspro_match 시트의 빈 C열을 모두 채움
+// 구글시트에서 직접 실행 가능 (메뉴 → 실행)
+// ──────────────────────────────────────────────
+function fillProductNames() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const matchSh = ss.getSheetByName('aspro_match');
+  if (!matchSh) { SpreadsheetApp.getUi().alert('aspro_match 시트를 찾을 수 없습니다.'); return; }
+
+  const sabSh = ss.getSheetByName('사방넷단품원본');
+  if (!sabSh) { SpreadsheetApp.getUi().alert('사방넷단품원본 시트를 찾을 수 없습니다.'); return; }
+
+  // 사방넷 코드 → 상품명 맵 빌드
+  const sabData = sabSh.getDataRange().getValues();
+  const header = sabData[0].map(h => String(h).trim());
+  const codeIdx = header.indexOf('사방넷상품코드') >= 0 ? header.indexOf('사방넷상품코드') : 0;
+  const nameIdx = header.indexOf('상품명') >= 0 ? header.indexOf('상품명') : 2;
+
+  const sabNameMap = {};
+  for (let i = 1; i < sabData.length; i++) {
+    const c = String(sabData[i][codeIdx] || '').trim();
+    const n = String(sabData[i][nameIdx] || '').trim();
+    if (c && n) sabNameMap[c] = n;
+  }
+
+  // aspro_match 헤더 확인 및 보정
+  const matchData = matchSh.getDataRange().getValues();
+  const mHeader = matchData[0].map(h => String(h).trim());
+
+  // 컬럼 수가 4개 이하면 헤더를 5컬럼으로 재설정
+  if (mHeader.length < 3 || mHeader[2] !== '상품명') {
+    matchSh.getRange(1, 1, 1, 5).setValues([['사방넷코드','김포물류품번','상품명','메모','등록일']]);
+  }
+
+  let filled = 0;
+  for (let i = 1; i < matchData.length; i++) {
+    const sabCode = String(matchData[i][0] || '').trim();
+    if (!sabCode) continue;
+    const existingName = String(matchData[i][2] || '').trim();
+    if (existingName) continue; // 이미 있으면 스킵
+    const name = sabNameMap[sabCode];
+    if (name) {
+      matchSh.getRange(i + 1, 3).setValue(name);
+      filled++;
+    }
+  }
+
+  SpreadsheetApp.getUi().alert(`✅ 상품명 채우기 완료: ${filled}건 업데이트`);
 }</pre>
     </div>
 
@@ -1509,7 +1606,22 @@ function runMatch() {
       finalQty = 0; src = '품절처리'; 물류품번 = '—'; cZ++;
     } else if (finalQty === null) {
       cNM++;
-      nomapRows.push({ ...sab, _manualGimpo: '' });
+      // 미매핑 이유 분류
+      const allMaps2 = { ...matchMap, ...extraMap };
+      const mappedGp2 = allMaps2[sc];
+      let nomapReason = '';
+      if (mappedGp2) {
+        const gpTrim = String(mappedGp2).trim();
+        if (gpTrim === '0') nomapReason = '🚫 품번=0 (미설정)';
+        else if (gpTrim === 'KCFI 코드없음') nomapReason = '🚫 KCFI코드 없음';
+        else if (gpTrim.startsWith('김포재고O')) nomapReason = '🚫 김포코드 없음';
+        else if (gpTrim.includes('???')) nomapReason = '⚠ 코드 불명';
+        else if (gpTrim === '확인요망') nomapReason = '⚠ 확인요망';
+        else nomapReason = '📦 품번: ' + gpTrim + ' → 재고없음';
+      } else {
+        nomapReason = '❌ 매핑 미등록';
+      }
+      nomapRows.push({ ...sab, _manualGimpo: '', _nomapReason: nomapReason });
     }
 
     let status;
@@ -1669,6 +1781,7 @@ function renderNomap() {
       <td style="font-family:var(--mono);font-size:10px">${r.자체코드}</td>
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px">${r.상품명}</td>
       <td style="font-size:10px;color:var(--text3)">${r.옵션}</td>
+      <td style="font-size:10px">${r._nomapReason ? '<span style="color:var(--warn)">' + r._nomapReason + '</span>' : '<span style="color:var(--text3)">—</span>'}</td>
       <td style="position:relative">
         <div style="display:flex;gap:4px;align-items:center">
           <input class="mi nomap-gp" style="width:175px" id="ngp_${i}"
