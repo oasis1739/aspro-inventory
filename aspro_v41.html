@@ -1494,7 +1494,9 @@ function extractIcCS(name) {
   const m = name.match(/\[([^/\]]+)\/([^\]]+)\]/);
   if (m) {
     const c = m[1].trim().toUpperCase();
-    return { c: COLOR_MAP[c] || c, s: m[2].trim() };
+    // 사이즈 '-공통' 접미사 제거 (예: '55-공통' → '55')
+    const s = m[2].trim().replace(/-공통$/, '');
+    return { c: COLOR_MAP[c] || c, s };
   }
   return { c: null, s: null };
 }
