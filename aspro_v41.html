@@ -2624,356 +2624,184 @@ function cleanMatchMap(map) {
   if (removed > 0) log(`[INFO] 유효하지 않은 매핑 ${removed}건 제거됨`, 'info');
   return cleaned;
 }
-const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
+// ── CSV 직접 읽기 설정 ─────────────────────────────────────
+const SHEET_ID = '1cl-uZ9s0_VNF_YwagnujAhPTdREuzfcaPisWRRp7zwY';
+const SHEET_GIDS = {
+  match:     0,
+  soldout:   720644177,
+  kcfi:      1620605389,
+  normname:  277934196,
+  forcezero: 639408328,
+  iccodemap: 1447985208,
+};
 
-function showSheetsModal() {
-  const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
-  document.getElementById('sheetsUrl').value = saved;
-  if (saved) document.getElementById('sheetsUrlStatus').textContent = '✅ URL 설정됨';
-  document.getElementById('sheetsModal').classList.add('show');
+function csvUrl(gid) {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
 }
 
-function saveSheetsUrlBtn() {
-  const url = document.getElementById('sheetsUrl').value.trim();
-  if (!url) { alert('URL을 입력하세요.'); return; }
-  localStorage.setItem(SHEETS_URL_KEY, url);
-  document.getElementById('sheetsUrlStatus').textContent = '✅ URL 저장됨';
-  document.getElementById('sheetsUrlStatus').style.color = 'var(--success)';
+function parseCSV(text) {
+  const rows = [];
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const cells = []; let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQ = !inQ; }
+      else if (c === ',' && !inQ) { cells.push(cur.trim()); cur = ''; }
+      else { cur += c; }
+    }
+    cells.push(cur.trim());
+    rows.push(cells);
+  }
+  return rows;
 }
 
-function saveSheetsUrl() {
-  const url = document.getElementById('sheetsUrl').value.trim();
-  if (url) localStorage.setItem(SHEETS_URL_KEY, url);
+async function fetchCSV(gid, timeout = 10000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const res = await fetch(csvUrl(gid), { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.text();
+  } catch(e) { clearTimeout(timer); throw e; }
 }
 
 async function loadFromSheets() {
-  const url = document.getElementById('sheetsUrl').value.trim();
-  if (!url) { alert('Apps Script URL을 먼저 입력하세요.'); return; }
   const st = document.getElementById('sheetsStatus');
-  st.textContent = '불러오는 중... (최대 20초)'; st.style.color = 'var(--accent2)';
+  st.textContent = '불러오는 중... (CSV)'; st.style.color = 'var(--accent2)';
   try {
-    const res = await fetchWithTimeout(url, 20000);
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || '서버 오류');
-    const imported = data.map || {};
-    const importedSoldout = data.soldout || {};
-    const importedKcfi = data.kcfi || {};
-    const importedNormname = data.normname || {};
-    const importedIcCodeMap = data.iccodemap || {};
-    const filteredImport = {};
-    Object.entries(imported).forEach(([k,v]) => { if(isValidGp(v)) filteredImport[k]=v; });
-    // 기존 matchMap과 병합 (Sheets가 우선, 기존 로컬 항목은 Sheets에 없으면 유지)
-    matchMap = { ...matchMap, ...filteredImport };
+    const [matchCSV, soldoutCSV, kcfiCSV, normnameCSV, forceCSV, iccodeCSV] = await Promise.all([
+      fetchCSV(SHEET_GIDS.match),
+      fetchCSV(SHEET_GIDS.soldout),
+      fetchCSV(SHEET_GIDS.kcfi),
+      fetchCSV(SHEET_GIDS.normname),
+      fetchCSV(SHEET_GIDS.forcezero),
+      fetchCSV(SHEET_GIDS.iccodemap),
+    ]);
 
-    // soldout: 비어있으면 기존 로컬 유지
-    if (Object.keys(importedSoldout).length > 0) {
-      soldoutMap = { ...importedSoldout };
+    // match 파싱
+    const importedMap = {};
+    parseCSV(matchCSV).slice(1).forEach(r => {
+      const sc=r[0]?.trim(), gp=r[1]?.trim();
+      if (sc && gp && isValidGp(gp)) importedMap[sc]=gp;
+    });
+    matchMap = { ...matchMap, ...importedMap };
+
+    // soldout 파싱
+    const soldoutRows = parseCSV(soldoutCSV).slice(1);
+    if (soldoutRows.length > 0) {
+      soldoutMap = {};
+      soldoutRows.forEach(r => { const sc=r[0]?.trim(); if(sc) soldoutMap[sc]=r[1]?.trim()||''; });
       try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
-    } else {
-      st.textContent += ' (soldout 비어있음 → 로컬 유지)';
     }
 
-    if (Object.keys(importedIcCodeMap).length > 0) {
-      icCodeMap = { ...importedIcCodeMap };
-      try { localStorage.setItem('aspro_iccodemap_v1', JSON.stringify(icCodeMap)); } catch(e2) {}
-      log(`[OK] 이카운트 직접매핑 불러오기: ${Object.keys(icCodeMap).length}건`, 'ok');
-    }
-    if (Object.keys(importedNormname).length > 0) {
-      normOptMap = { ...normOptMap, ...importedNormname };
-      try { localStorage.setItem('aspro_normoptmap_v1', JSON.stringify(normOptMap)); } catch(e2) {}
-      log(`[OK] 이름매핑(normname) 불러오기: ${Object.keys(importedNormname).length}건`, 'ok');
-    }
-    if (Object.keys(importedKcfi).length > 0) {
-      kcfiMap = { ...importedKcfi };
+    // kcfi 파싱
+    const kcfiRows = parseCSV(kcfiCSV).slice(1);
+    if (kcfiRows.length > 0) {
+      kcfiMap = {};
+      kcfiRows.forEach(r => { const sc=r[0]?.trim(), qty=parseInt(r[1]); if(sc&&!isNaN(qty)) kcfiMap[sc]=qty; });
       try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
       updateKCFICnt();
     }
+
+    // normname 파싱
+    parseCSV(normnameCSV).slice(1).forEach(r => {
+      const nm=r[0]?.trim(), ic=r[1]?.trim();
+      if (nm && ic) normOptMap[nm]=ic;
+    });
+
+    // forcezero 파싱
+    parseCSV(forceCSV).slice(1).forEach(r => {
+      const c=r[0]?.trim(); if(c) forceZeroMap[c]=true;
+    });
+
+    // iccodemap 파싱
+    const newIcMap = {};
+    parseCSV(iccodeCSV).slice(1).forEach(r => {
+      const sc=r[0]?.trim(), ic=r[1]?.trim(); if(sc&&ic) newIcMap[sc]=ic;
+    });
+    if (Object.keys(newIcMap).length>0) {
+      icCodeMap = newIcMap;
+      try { localStorage.setItem('aspro_iccodemap_v1', JSON.stringify(icCodeMap)); } catch(e2) {}
+    }
+
     try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
-    saveExtra();
-    updateSavedMapCnt();
-    updateSoldoutCnt();
-    const cnt = Object.keys(matchMap).length;
-    const soCnt = Object.keys(soldoutMap).length;
-    const kcfiCnt = Object.keys(kcfiMap).length;
-    const nnCnt = Object.keys(importedNormname).length;
-    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건${nnCnt>0?' + 이름매핑 '+nnCnt+'건':''}`;
+    saveExtra(); updateSavedMapCnt(); updateSoldoutCnt();
+    const cnt=Object.keys(matchMap).length, soCnt=Object.keys(soldoutMap).length, kcfiCnt=Object.keys(kcfiMap).length;
+    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건`;
     st.style.color = 'var(--success)';
-    log(`[OK] Google Sheets 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
+    log(`[OK] CSV 직접 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
     if (currentTab === 'mapview') renderMapview();
   } catch(e) {
     const isTimeout = e.name === 'AbortError';
-    st.textContent = `❌ ${isTimeout ? '타임아웃 (Apps Script 응답 없음)' : '오류: ' + e.message}`;
+    st.textContent = `❌ ${isTimeout ? '타임아웃' : '오류: ' + e.message}`;
     st.style.color = 'var(--danger)';
-    log(`[ERR] Sheets 불러오기: ${e.message}`, 'err');
-  }
-}
-
-// 사방넷코드 → 상품명 맵 생성
-function buildNameMap(mapObj) {
-  const nm = {};
-  const sabMap = {};
-  sabData.forEach(s => { sabMap[s.사방넷코드] = s.상품명; });
-  Object.keys(mapObj).forEach(sc => {
-    if (sabMap[sc]) nm[sc] = sabMap[sc];
-  });
-  return nm;
-}
-
-async function saveToSheets() {
-  const url = document.getElementById('sheetsUrl').value.trim();
-  if (!url) { alert('Apps Script URL을 먼저 입력하세요.'); return; }
-  const st = document.getElementById('sheetsStatus');
-  const allMap = { ...matchMap, ...extraMap };
-  const total = Object.keys(allMap).length;
-  if (total === 0) { alert('저장할 매핑 데이터가 없습니다.'); return; }
-  st.textContent = `저장 중... (${total.toLocaleString()}건)`; st.style.color = 'var(--accent2)';
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      body: JSON.stringify({ map: allMap, soldout: soldoutMap, kcfi: kcfiMap, normname: normOptMap, iccodemap: icCodeMap, nameMap: buildNameMap(allMap) }),
-      headers: { 'Content-Type': 'text/plain' }
-    });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || '서버 오류');
-    st.textContent = `✅ 저장 완료 — ${data.saved.toLocaleString()}건`;
-    st.style.color = 'var(--success)';
-    log(`[OK] Google Sheets 저장: ${data.saved}건`, 'ok');
-  } catch(e) {
-    st.textContent = `❌ 오류: ${e.message}`;
-    st.style.color = 'var(--danger)';
-    log(`[ERR] Sheets 저장: ${e.message}`, 'err');
-  }
-}
-
-function copyAppsScript() {
-  const code = document.getElementById('appsScriptCode').textContent;
-  navigator.clipboard.writeText(code).then(() => {
-    document.getElementById('sheetsStatus').textContent = '✅ 코드 복사됨';
-    document.getElementById('sheetsStatus').style.color = 'var(--success)';
-  });
-}
-
-async function fetchWithTimeout(url, ms = 15000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ms);
-  try {
-    const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(timer);
-    return res;
-  } catch(e) {
-    clearTimeout(timer);
-    throw e;
+    log(`[ERR] CSV 불러오기: ${e.message}`, 'err');
   }
 }
 
 async function autoLoadFromSheets() {
-  const url = localStorage.getItem(SHEETS_URL_KEY);
-  if (!url) {
-    const btn = document.getElementById('sheetBtn');
-    if (btn) {
-      btn.style.background = 'var(--warn)'; btn.style.color = '#000';
-      btn.style.borderColor = 'var(--warn)';
-      btn.textContent = '⚠ Sheets 연동 필요';
-    }
-    return;
-  }
-
-  // Sheets 로드 전 — localStorage soldout 먼저 복원 (Sheets 실패해도 유지)
   const lsSoldout = localStorage.getItem('aspro_soldout_v1');
-  if (lsSoldout) {
-    try {
-      soldoutMap = JSON.parse(lsSoldout);
-      updateSoldoutCnt();
-    } catch(e) {}
-  }
-
+  if (lsSoldout) { try { soldoutMap=JSON.parse(lsSoldout); updateSoldoutCnt(); } catch(e) {} }
   const btn = document.getElementById('sheetBtn');
   try {
-    // 1차 요청: 매핑/품절/kcfi (빠름)
-    const res = await fetchWithTimeout(url, 20000);
-    const data = await res.json();
-    if (data.ok && data.map) {
-      const filteredMap = {};
-      Object.entries(data.map).forEach(([k,v]) => { if(isValidGp(v)) filteredMap[k]=v; });
-      // 기존 matchMap과 병합 (Sheets가 우선, 기존 로컬 항목은 Sheets에 없으면 유지)
-      matchMap = cleanMatchMap({ ...matchMap, ...filteredMap });
+    const [matchCSV, soldoutCSV, kcfiCSV] = await Promise.all([
+      fetchCSV(SHEET_GIDS.match),
+      fetchCSV(SHEET_GIDS.soldout),
+      fetchCSV(SHEET_GIDS.kcfi),
+    ]);
 
-      // soldout: Sheets 데이터가 있으면 우선, 없으면 localStorage 유지
-      const sheetsSoldout = data.soldout || {};
-      if (Object.keys(sheetsSoldout).length > 0) {
-        soldoutMap = { ...sheetsSoldout };
-        try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
-        log(`[OK] Sheets soldout 복원: ${Object.keys(soldoutMap).length}건`, 'ok');
-      } else {
-        log(`[INFO] Sheets soldout 비어있음 → localStorage 유지 (${Object.keys(soldoutMap).length}건)`, 'info');
-      }
+    const importedMap = {};
+    parseCSV(matchCSV).slice(1).forEach(r => {
+      const sc=r[0]?.trim(), gp=r[1]?.trim();
+      if (sc && gp && isValidGp(gp)) importedMap[sc]=gp;
+    });
+    matchMap = cleanMatchMap({ ...matchMap, ...importedMap });
 
-      if (data.kcfi && Object.keys(data.kcfi).length > 0) {
-        kcfiMap = { ...data.kcfi };
-        try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
-        updateKCFICnt();
-        const list = document.getElementById('kcfiList');
-        if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 신원재고</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
-      }
-      if (data.iccodemap && Object.keys(data.iccodemap).length > 0) {
-        icCodeMap = { ...data.iccodemap };
-        try { localStorage.setItem('aspro_iccodemap_v1', JSON.stringify(icCodeMap)); } catch(e2) {}
-      }
-      try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
-      updateSavedMapCnt();
-      updateSoldoutCnt();
-
-      // 김포원본 시트 → gpMap 세팅
-      let gpCnt = 0;
-      if (data.gpRaw && data.gpRaw.length > 3) {
-        gpMap = {};
-        // 헤더: Row0=날짜, Row1=헤더(품목코드,품목명,...), Row2~=데이터
-        // 구조: col[0]=품목코드, col[2~]=각 창고 재고 (총수량 = 합계)
-        const gpHeader = data.gpRaw[1] || [];
-        // 총수량 컬럼 찾기 (없으면 col[2]~끝 합산)
-        const totalIdx = gpHeader.findIndex(h => String(h).includes('총'));
-        for (let i = 2; i < data.gpRaw.length; i++) {
-          const r = data.gpRaw[i];
-          if (!r || !r[0]) continue;
-          const code = String(r[0]).trim();
-          if (!code || code === '품목코드') continue;
-          let qty = 0;
-          if (totalIdx >= 0) {
-            qty = parseInt(r[totalIdx]) || 0;
-          } else {
-            // col[2]부터 숫자인 컬럼 모두 합산
-            for (let j = 2; j < r.length; j++) {
-              qty += parseInt(r[j]) || 0;
-            }
-          }
-          gpMap[code] = (gpMap[code]||0) + qty;
-          gpCnt++;
-        }
-        // 세트 자동계산
-        let setCount = 0;
-        for (const [code, qty] of Object.entries(gpMap)) {
-          if (code.endsWith('-CD')) {
-            const base = code.slice(0,-3);
-            const skQty = gpMap[base+'-SK'];
-            if (skQty !== undefined) { gpMap[base+'-SET'] = Math.min(qty, skQty); setCount++; }
-          }
-        }
-        document.getElementById('gpZone').classList.add('ok');
-        const gpList = document.getElementById('gpList');
-        if (gpList) gpList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 김포원본</div><div class="fcnt">${gpCnt}품목</div></div>`;
-        log(`[OK] Sheets 김포원본 → ${gpCnt}품목${setCount>0?' / 세트: '+setCount+'건':''}`, 'ok');
-      }
-
-      const cnt = Object.keys(matchMap).length;
-      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건 / 신원재고 ${Object.keys(kcfiMap).length}건`, 'ok');
-      if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.textContent='☁ Google Sheets 연동'; }
-
-      // 2차 요청: 원본 데이터 (사방넷/이카운트/김포) — 별도로 로드
-      log('[INFO] 원본 데이터 로드 중... (이카운트/김포/사방넷)', 'info');
-      if (btn) btn.textContent = '☁ 원본 로드 중...';
-      try {
-        const res2 = await fetchWithTimeout(url + '?type=raw', 60000);
-        const data2 = await res2.json();
-        if (data2.ok) {
-          let sabCnt = 0, icCnt = 0, gpCnt = 0;
-
-          // 사방넷단품원본
-          if (data2.sabRawData && data2.sabRawData.length > 3) {
-            sabRaw = data2.sabRawData; sabData = [];
-            for (let i = 3; i < data2.sabRawData.length; i++) {
-              const r = data2.sabRawData[i];
-              if (!r || !r[0]) continue;
-              sabData.push({ _idx:i, 사방넷코드:String(r[0]).trim(), 바코드:r[1], 상품명:String(r[2]||'').trim(), 옵션:String(r[3]||'').trim(), 안전재고:r[4], 가상재고:r[5], 공급상태:r[6], 단품추가금액:r[7], 옵션구분:r[8], 연결상품코드:r[9], 옵션별칭:r[10], 모델명:r[11], EA:r[12], LOCATION:r[13], 재고관리:r[14], 현재고:r[15], 판매가:r[16], 원가:r[17], TAG가:r[18], 자체코드:String(r[19]||'').trim(), 옵션제목:r[20], 등록일시:r[21], 옵션수정여부:r[22], 매입처:r[23], 제조사:r[24], 상품약어:r[25], 모델NO:r[26], 상품상태:r[27], _raw:[...r] });
-              sabCnt++;
-            }
-            document.getElementById('sabZone').classList.add('ok');
-            const sabList = document.getElementById('sabList');
-            if (sabList) sabList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 사방넷단품원본</div><div class="fcnt">${sabCnt}단품</div></div>`;
-          }
-
-          // 이카운트원본
-          if (data2.icRaw && data2.icRaw.length > 2) {
-            icMap = {};
-            let nSab = 0;
-            for (let i = 2; i < data2.icRaw.length; i++) {
-              const r = data2.icRaw[i];
-              if (!r || !r[0]) continue;
-              const code = String(r[0]).trim();
-              if (!code || code.includes('계') || code.includes('회사명')) continue;
-              const sabCode = String(r[1]||'').trim();
-              const name = String(r[4]||'').trim();
-              const qty = parseFloat(r[5]) || 0;
-              const brand = String(r[2]||'').trim();
-              const prefix = code.split('-')[0];
-              if (!icMap[prefix]) icMap[prefix] = [];
-              icMap[prefix].push({ 품목코드:code, qty, name, brand, prefix, sabCode });
-              if (sabCode && sabCode !== prefix) {
-                if (!icMap[sabCode]) icMap[sabCode] = [];
-                icMap[sabCode].push({ 품목코드:code, qty, name, brand, prefix, sabCode });
-              }
-              icCnt++; if (sabCode) nSab++;
-            }
-            document.getElementById('icZone').classList.add('ok');
-            const icList = document.getElementById('icList');
-            if (icList) icList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 이카운트원본</div><div class="fcnt">${icCnt}SKU</div></div>`;
-            document.getElementById('icInfo').style.display='block';
-            document.getElementById('icInfo').textContent=`Sheets 이카운트 ${icCnt}SKU`;
-          }
-
-          // 김포원본
-          if (data2.gpRaw && data2.gpRaw.length > 2) {
-            gpMap = {};
-            const gpHeader = data2.gpRaw[1] || [];
-            const totalIdx = gpHeader.findIndex(h => String(h).includes('총'));
-            for (let i = 2; i < data2.gpRaw.length; i++) {
-              const r = data2.gpRaw[i];
-              if (!r || !r[0]) continue;
-              const code = String(r[0]).trim();
-              if (!code || code === '품목코드') continue;
-              let qty = 0;
-              if (totalIdx >= 0) { qty = parseInt(r[totalIdx]) || 0; }
-              else { for (let j = 2; j < r.length; j++) qty += parseInt(r[j]) || 0; }
-              gpMap[code] = (gpMap[code]||0) + qty;
-              gpCnt++;
-            }
-            let setCount = 0;
-            for (const [code, qty] of Object.entries(gpMap)) {
-              if (code.endsWith('-CD')) { const base=code.slice(0,-3); const skQty=gpMap[base+'-SK']; if (skQty!==undefined){gpMap[base+'-SET']=Math.min(qty,skQty);setCount++;} }
-            }
-            document.getElementById('gpZone').classList.add('ok');
-            const gpList = document.getElementById('gpList');
-            if (gpList) gpList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 김포원본</div><div class="fcnt">${gpCnt}품목</div></div>`;
-          }
-
-          log(`[OK] 원본 로드 완료: 사방넷 ${sabCnt}단품 / 이카운트 ${icCnt}SKU / 김포 ${gpCnt}품목`, 'ok');
-          if (btn) btn.textContent = '☁ Google Sheets 연동';
-        }
-      } catch(e2) {
-        log(`[WARN] 원본 데이터 로드 실패: ${e2.message} — 파일 직접 업로드 사용`, 'warn');
-        if (btn) btn.textContent = '☁ Google Sheets 연동';
-      }
+    const soldoutRows = parseCSV(soldoutCSV).slice(1);
+    if (soldoutRows.length > 0) {
+      soldoutMap = {};
+      soldoutRows.forEach(r => { const sc=r[0]?.trim(); if(sc) soldoutMap[sc]=r[1]?.trim()||''; });
+      try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
     }
-  } catch(e) {
-    const isTimeout = e.name === 'AbortError';
-    log(`[WARN] Sheets 자동 동기화 실패${isTimeout?' (타임아웃)':''}: ${e.message}`, 'warn');
+
+    const kcfiRows = parseCSV(kcfiCSV).slice(1);
+    if (kcfiRows.length > 0) {
+      kcfiMap = {};
+      kcfiRows.forEach(r => { const sc=r[0]?.trim(), qty=parseInt(r[1]); if(sc&&!isNaN(qty)) kcfiMap[sc]=qty; });
+      try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
+      updateKCFICnt();
+    }
+
+    try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
+    updateSavedMapCnt(); updateSoldoutCnt();
+
     if (btn) {
-      btn.style.background = 'var(--warn)'; btn.style.color = '#000';
-      btn.style.borderColor = 'var(--warn)';
-      btn.textContent = '⚠ Sheets 재연결 필요';
+      const cnt = Object.keys(matchMap).length;
+      btn.textContent = `☁ Sheets (${cnt.toLocaleString()}건)`;
+      btn.style.background=''; btn.style.color=''; btn.style.borderColor='';
     }
-    // 5초 후 1회 재시도
-    setTimeout(async () => {
-      try {
-        const url2 = localStorage.getItem(SHEETS_URL_KEY);
-        if (!url2) return;
-        const res2 = await fetchWithTimeout(url2, 20000);
-        const data2 = await res2.json();
-        if (data2.ok) {
-          log('[INFO] Sheets 재시도 성공', 'ok');
-          await autoLoadFromSheets();
-        }
-      } catch(e2) { log(`[INFO] Sheets 재시도 실패: ${e2.message}`, 'info'); }
-    }, 5000);
+
+    // 백그라운드: normname, iccodemap, forcezero
+    Promise.all([fetchCSV(SHEET_GIDS.normname), fetchCSV(SHEET_GIDS.iccodemap), fetchCSV(SHEET_GIDS.forcezero)]).then(([nnCSV, icCSV, fzCSV]) => {
+      parseCSV(nnCSV).slice(1).forEach(r => { const nm=r[0]?.trim(), ic=r[1]?.trim(); if(nm&&ic) normOptMap[nm]=ic; });
+      const newIcMap = {};
+      parseCSV(icCSV).slice(1).forEach(r => { const sc=r[0]?.trim(), ic=r[1]?.trim(); if(sc&&ic) newIcMap[sc]=ic; });
+      if (Object.keys(newIcMap).length>0) { icCodeMap=newIcMap; try{localStorage.setItem('aspro_iccodemap_v1',JSON.stringify(icCodeMap));}catch(e){} }
+      parseCSV(fzCSV).slice(1).forEach(r => { const c=r[0]?.trim(); if(c) forceZeroMap[c]=true; });
+      log('[OK] 백그라운드 로드 완료 (normname/iccodemap/forcezero)', 'ok');
+    }).catch(()=>{});
+
+    log(`[OK] CSV 자동 불러오기: 매핑 ${Object.keys(matchMap).length}건`, 'ok');
+    if (currentTab === 'mapview') renderMapview();
+  } catch(e) {
+    if (btn) { btn.style.background='var(--warn)'; btn.style.color='#000'; btn.textContent='⚠ 불러오기 실패'; }
+    log(`[ERR] CSV 자동 불러오기: ${e.message}`, 'err');
+    // localStorage 폴백
+    const lsMatch = localStorage.getItem('aspro_matchfile_v2');
+    if (lsMatch) { try { matchMap=JSON.parse(lsMatch); updateSavedMapCnt(); log(`[INFO] localStorage 복원: ${Object.keys(matchMap).length}건`,'info'); } catch(e2) {} }
   }
 }
 
