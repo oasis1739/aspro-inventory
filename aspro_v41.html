@@ -810,10 +810,12 @@ let currentTab = 'all', editMode = false, expMode = 'all';
 const SAB_IC_OVERRIDE = {
   '10058754926': 'N1012',
   '10058824019': 'N1009',
+  'FM24FW01': '244FM11',  // 메탈샤이닝 케이블 니트 — 컬러오버라이드 연결
 };
 const SAB_COLOR_OVERRIDE = {
   '10058754926': {'와인':'WN','베이지':'BE','네이비':'NA','크림':'CR'},
   '10058824019': {'라이트그레이':'LG','썸머브라운':'BR','네이비':'NA'},
+  'FM24FW01': {'베이지':'버터옐로우','블랙':'블랙','그레이':'그레이','그린':'그린','바이올렛':'바이올렛'},
 };
 const EXTRA_STATIC_MAP = {
   '100334-0005':'243NT05-88-AP','100334-0006':'243NT05-88-GR','100334-0007':'243NT05-88-BK',
@@ -1285,7 +1287,7 @@ const IC_STATIC_MAP = {
   'AMWCA2501_AL': 'AMWCA2501',
   'AMWNT2504_AL': 'AMWNT2504',
   'MBHK001_AL': 'MBHK001',
-  'MX25HSKN01_AL': 'MX25HSKN01',
+  'MX25HSKN01_AL': '251MX01',
   'MX25SSK01_AL': 'MX25SSK01',
   'N1009_AL': 'N1009',       'N1016_AL': 'N1016',
   // ── 후라밍고 24FW ──────────────────────────────────────
@@ -1326,7 +1328,7 @@ const IC_STATIC_MAP = {
   // ── 엔니튜드 25SS ──────────────────────────────────────────
   'NT252G0025SET': '252NT25',    'NT252G0026SET': '252NT25',
   'NT252G0027SET': '252NT25',    // [SET]크로셰 썸머 니트셋업 각 컬러
-  'NT252G0033-35PO': '252NT25',  // 린넨 크로셰 카라 니트 (3컬러)
+  'NT252G0033-35PO': '252NT33',  // 린넨 크로셰 카라 니트 (3컬러)
   'NT252G0041CD': '252NT41',     'NT252G0042CD': '252NT41',
   'NT252G0043CD': '252NT41',     // 린넨 시어 가디건 각 컬러
   'NT252G0043CD_SET': '252NT41', // [1+1+1]린넨 시스루 썸머 가디건 3종 SET
@@ -1341,14 +1343,16 @@ const IC_STATIC_MAP = {
   'MS25S-GL-CAP_SET': '252MX05', // 썸머 글리터 각종 세트
   // ── [1+1] 세트 자체코드 ────────────────────────────────────
   'MX25HSKN01_2set': 'MX25HSKN01', // [1+1]홀가먼트 하프 슬리브 세트 (자체코드 MX25로 시작)
-  'JW25SS01_SET': '252JW07',     // [1+1+1]프렌치 린넨 블렌드 카라니트 3종 SET
+  'JW25SS01_SET': '252JW19',     // [1+1+1]프렌치 린넨 블렌드 슬리브리스 카라니트 3종 SET
   'N1009_SET': 'N1009',           // [1+1+1]썸머 쿨 하프소매 볼륨 니트 SET
   // ── 제이슨우 25SS [1+1+1] ────────────────────────────────────
   'JW25SS02_SET': '252JW19',     // [1+1+1]프렌치 린넨 블렌드 슬리브리스 카라니트 SET (101861계열)
 };
 
 const GP_SET_COLOR_OVERRIDE = {
-  'MS25S': { gpPrefix: '252MX05', colorMap: { '플럼':'PL', '차콜':'CH', '그레이':'GR', '베이지':'BE', '블랙':'BK' } },
+  'MS25S':       { gpPrefix: '252MX05', colorMap: { '플럼':'PL', '차콜':'CH', '그레이':'GR', '베이지':'BE', '블랙':'BK' } },
+  'JW25SS01':    { gpPrefix: '252JW19', colorMap: { '아이보리':'IV', '스카이블루':'BL', '블랙':'BK', '블루':'BL', '플럼':'BL' } },
+  'NT252G0043CD':{ gpPrefix: '252NT41', colorMap: { '오션블루':'BL', '화이트':'IV', '블랙':'BK', '블루':'BL', '아이보리':'IV' } },
 };
 
 function getGimpoQty(sabCode, opt, sabName) {
@@ -1395,6 +1399,18 @@ function getGimpoQty(sabCode, opt, sabName) {
       if (gpMap[converted] !== undefined) {
         물류resolved = converted;
         log(`[INFO] 품번순서 자동변환: ${물류} → ${converted}`, 'info');
+      }
+    }
+  }
+  // 품번만 있고 gpMap에 없는 경우 → 옵션의 컬러+사이즈 조합해서 재조회
+  // 예: 물류="251MX01", opt="핑크:55" → "251MX01-PK-55"
+  if (gpMap[물류resolved] === undefined && opt) {
+    const { cc, sz } = parseOpt(opt);
+    if (cc && sz) {
+      const candidate = `${물류}-${cc}-${sz}`;
+      if (gpMap[candidate] !== undefined) {
+        물류resolved = candidate;
+        log(`[INFO] 김포 컬러+사이즈 조합: ${물류} + [${cc}/${sz}] → ${candidate}`, 'info');
       }
     }
   }
