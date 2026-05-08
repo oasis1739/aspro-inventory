@@ -2624,6 +2624,75 @@ function cleanMatchMap(map) {
   if (removed > 0) log(`[INFO] 유효하지 않은 매핑 ${removed}건 제거됨`, 'info');
   return cleaned;
 }
+const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
+
+function showSheetsModal() {
+  const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
+  document.getElementById('sheetsUrl').value = saved;
+  if (saved) document.getElementById('sheetsUrlStatus').textContent = '✅ URL 설정됨';
+  document.getElementById('sheetsModal').classList.add('show');
+}
+
+function saveSheetsUrlBtn() {
+  const url = document.getElementById('sheetsUrl').value.trim();
+  if (!url) { alert('URL을 입력하세요.'); return; }
+  localStorage.setItem(SHEETS_URL_KEY, url);
+  document.getElementById('sheetsUrlStatus').textContent = '✅ URL 저장됨';
+  document.getElementById('sheetsUrlStatus').style.color = 'var(--success)';
+}
+
+function saveSheetsUrl() {
+  const url = document.getElementById('sheetsUrl').value.trim();
+  if (url) localStorage.setItem(SHEETS_URL_KEY, url);
+}
+
+function copyAppsScript() {
+  const code = document.getElementById('appsScriptCode')?.textContent || '';
+  navigator.clipboard.writeText(code).then(() => {
+    document.getElementById('sheetsStatus').textContent = '✅ 코드 복사됨';
+    document.getElementById('sheetsStatus').style.color = 'var(--success)';
+  });
+}
+
+async function saveToSheets() {
+  const url = document.getElementById('sheetsUrl').value.trim();
+  if (!url) { alert('Apps Script URL을 먼저 입력하세요.'); return; }
+  const st = document.getElementById('sheetsStatus');
+  const allMap = { ...matchMap, ...extraMap };
+  const total = Object.keys(allMap).length;
+  if (total === 0) { alert('저장할 매핑 데이터가 없습니다.'); return; }
+  st.textContent = `저장 중... (${total.toLocaleString()}건)`; st.style.color = 'var(--accent2)';
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      body: JSON.stringify({ map: allMap, soldout: soldoutMap, kcfi: kcfiMap, normname: normOptMap, iccodemap: icCodeMap }),
+      headers: { 'Content-Type': 'text/plain' }
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || '서버 오류');
+    st.textContent = `✅ 저장 완료 — ${data.saved.toLocaleString()}건`;
+    st.style.color = 'var(--success)';
+    log(`[OK] Google Sheets 저장: ${data.saved}건`, 'ok');
+  } catch(e) {
+    st.textContent = `❌ 오류: ${e.message}`;
+    st.style.color = 'var(--danger)';
+    log(`[ERR] Sheets 저장: ${e.message}`, 'err');
+  }
+}
+
+async function fetchWithTimeout(url, ms = 15000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    return res;
+  } catch(e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
 // ── CSV 직접 읽기 설정 ─────────────────────────────────────
 const SHEET_ID = '1cl-uZ9s0_VNF_YwagnujAhPTdREuzfcaPisWRRp7zwY';
 const SHEET_GIDS = {
