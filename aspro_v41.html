@@ -1166,7 +1166,10 @@ function tryLoadSavedMatchFile() {
     if (raw) {
       const rawParsed = JSON.parse(raw);
       const filteredRaw = {};
-      Object.entries(rawParsed).forEach(([k,v]) => { if(isValidGp(v)) filteredRaw[k]=v; });
+      Object.entries(rawParsed).forEach(([k,v]) => {
+        const vNorm = normalizeGpCode(v);
+        if(isValidGp(vNorm)) filteredRaw[k]=vNorm;
+      });
       matchMap = filteredRaw;
       const n = Object.keys(matchMap).length;
       try {
@@ -2631,16 +2634,28 @@ function isValidGp(v) {
 // 구글시트에서 불러온 matchMap 중 유효하지 않은 항목 정리
 // - 사방넷 단품에 없는 사방넷코드 제거
 // - 물류품번이 유효하지 않은 항목 제거
+// 이카운트 SKU코드(품번-숫자3~4자리)를 품번으로 변환
+// 예: L24W401-001 → L24W401
+const RE_IC_SKU = /^([A-Za-z][A-Za-z0-9]+)-(\d{3,4})$/;
+function normalizeGpCode(gp) {
+  const m = String(gp||'').trim().match(RE_IC_SKU);
+  return m ? m[1] : gp;
+}
+
 function cleanMatchMap(map) {
   const sabSet = new Set(sabData.map(s => s.사방넷코드));
   const cleaned = {};
-  let removed = 0;
+  let removed = 0, normalized = 0;
   Object.entries(map).forEach(([sc, gp]) => {
-    if (!isValidGp(gp)) { removed++; return; }
+    // SKU코드 → 품번 자동 변환
+    const gpNorm = normalizeGpCode(gp);
+    if (gpNorm !== gp) normalized++;
+    if (!isValidGp(gpNorm)) { removed++; return; }
     // 사방넷 단품에 없는 코드 제거 (sabData 로드된 경우에만)
     if (sabData.length > 0 && !sabSet.has(sc)) { removed++; return; }
-    cleaned[sc] = gp;
+    cleaned[sc] = gpNorm;
   });
+  if (normalized > 0) log(`[INFO] SKU코드→품번 자동변환: ${normalized}건`, 'info');
   if (removed > 0) log(`[INFO] 유효하지 않은 매핑 ${removed}건 제거됨`, 'info');
   return cleaned;
 }
