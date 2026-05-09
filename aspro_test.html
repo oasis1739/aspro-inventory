@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASPRO 가상재고 TEST</title>
+<style>
+  body{margin:0;background:#0a0d13;color:#dde4f0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:grid;place-items:center;min-height:100vh}
+  .box{max-width:560px;padding:24px;border:1px solid #252e45;border-radius:8px;background:#111520;line-height:1.7}
+  .ttl{font-size:18px;font-weight:700;color:#4f8ef7;margin-bottom:8px}
+  .muted{color:#8b9abf;font-size:13px}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="ttl">ASPRO 테스트판 로딩 중...</div>
+  <div class="muted">기존 aspro_v41.html을 불러온 뒤 테스트 수정사항을 적용합니다. 구글시트는 기존 시트를 그대로 사용합니다.</div>
+</div>
+<script>
+(async function(){
+  const response = await fetch('./aspro_v41.html?v=' + Date.now(), { cache: 'no-store' });
+  let html = await response.text();
+
+  const patches = [
+    ['<title>ASPRO 가상재고 v4.7</title>', '<title>ASPRO 가상재고 TEST v4.8</title>'],
+    ['<div class="ver">v4.7</div>', '<div class="ver">v4.8-test</div>'],
+    ['<div class="logo">ASPRO<em> / 가상재고</em></div>', '<div class="logo">ASPRO<em> / 가상재고 TEST</em></div>'],
+    ["if (!r || !r[0]) continue;\n      sabData.push({", "if (!r || !r[0]) continue;\n      const maker = String(r[24]||'').trim();\n      if (maker.includes('신원')) continue; // TEST: 신원 제조사는 별도 재고라 제외\n      sabData.push({"],
+    ["log(`[OK] 사방넷 → ${sabData.length}단품`, 'ok');", "log(`[OK] 사방넷 → ${sabData.length}단품 (신원 제조사 제외)`, 'ok');"],
+    ["'10058824019': {'라이트그레이':'LG','썸머브라운':'BR','네이비':'NA'},", "'10058824019': {'라이트그레이':'LG','LG':'LG','썸머브라운':'BW','BW':'BW','네이비':'NA','NA':'NA'},\n  'H1014': {'라벤더':'LV','LV':'LV','딥그린':'GN','GN':'GN','차콜':'CC','CH':'CC','CC':'CC','와인':'WN','WN':'WN'},\n  'H1014_AL': {'라벤더':'LV','LV':'LV','딥그린':'GN','GN':'GN','차콜':'CC','CH':'CC','CC':'CC','와인':'WN','WN':'WN'},"],
+    ["'LG':'LG','DG':'DG','BG':'BE','SR':'SR','MG':'MG','BW':'BW',\n  'CC':'CH','LA':'LV','WI':'WN','PL':'PL','NV':'NA','GY':'GR','YL':'YE',", "'LG':'LG','DG':'DG','BG':'BE','SR':'SR','MG':'MG','BW':'BW',\n  '썸머브라운':'BW','라벤더':'LV','와인':'WN',\n  'CC':'CC','LA':'LV','WI':'WN','PL':'PL','NV':'NA','GY':'GR','YL':'YE',"],
+    ["if (overrideKey && SAB_COLOR_OVERRIDE[자체] && cc) {\n    cc = SAB_COLOR_OVERRIDE[자체][cc] || cc;\n  }", "const colorOverride = SAB_COLOR_OVERRIDE[자체] || SAB_COLOR_OVERRIDE[자체base];\n  if (overrideKey && colorOverride && cc) {\n    cc = colorOverride[cc] || cc;\n  }"],
+    ["loadExtra();\n  await autoLoadFromSheets();", "log('[INFO] TEST판: 기존 구글시트 사용, 신원 제조사 제외, 컬러 보정 일부 적용', 'info');\n  loadExtra();\n  await autoLoadFromSheets();"]
+  ];
+
+  const failed = [];
+  for (const [from, to] of patches) {
+    if (!html.includes(from)) failed.push(from.slice(0, 80));
+    html = html.replace(from, to);
+  }
+
+  html = html.replace('</body>', '<script>window.ASPRO_TEST_PATCHES_FAILED = ' + JSON.stringify(failed) + '; console.log("ASPRO TEST patches failed", window.ASPRO_TEST_PATCHES_FAILED);<\/script></body>');
+
+  document.open();
+  document.write(html);
+  document.close();
+})();
+</script>
+</body>
+</html>
