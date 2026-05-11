@@ -3032,10 +3032,11 @@ async function autoLoadFromSheets() {
   if (lsSoldout) { try { soldoutMap=JSON.parse(lsSoldout); updateSoldoutCnt(); } catch(e) {} }
   const btn = document.getElementById('sheetBtn');
   try {
-    const [matchCSV, soldoutCSV, kcfiCSV] = await Promise.all([
+    const [matchCSV, soldoutCSV, kcfiCSV, fzCSVauto] = await Promise.all([
       fetchCSV(SHEET_GIDS.match),
       fetchCSV(SHEET_GIDS.soldout),
       fetchCSV(SHEET_GIDS.kcfi),
+      fetchCSV(SHEET_GIDS.forcezero),
     ]);
 
     const importedMap = {};
@@ -3075,14 +3076,19 @@ async function autoLoadFromSheets() {
       btn.style.background=''; btn.style.color=''; btn.style.borderColor='';
     }
 
-    // 백그라운드: normname, iccodemap, forcezero
-    Promise.all([fetchCSV(SHEET_GIDS.normname), fetchCSV(SHEET_GIDS.iccodemap), fetchCSV(SHEET_GIDS.forcezero)]).then(([nnCSV, icCSV, fzCSV]) => {
+    // forcezero 메인 로드 (매칭 전 준비)
+    forceZeroMap = {};
+    parseCSV(fzCSVauto).slice(1).forEach(r => { const c=r[0]?.trim(); if(c) forceZeroMap[c]=true; });
+    const fzCnt = Object.keys(forceZeroMap).length;
+    if (fzCnt > 0) log(`[OK] 강제품절 ${fzCnt}건 로드`, 'ok');
+
+    // 백그라운드: normname, iccodemap
+    Promise.all([fetchCSV(SHEET_GIDS.normname), fetchCSV(SHEET_GIDS.iccodemap)]).then(([nnCSV, icCSV]) => {
       parseCSV(nnCSV).slice(1).forEach(r => { const nm=r[0]?.trim(), ic=r[1]?.trim(); if(nm&&ic) normOptMap[nm]=ic; });
       const newIcMap = {};
       parseCSV(icCSV).slice(1).forEach(r => { const sc=r[0]?.trim(), ic=r[1]?.trim(); if(sc&&ic) newIcMap[sc]=ic; });
       if (Object.keys(newIcMap).length>0) { icCodeMap=newIcMap; try{localStorage.setItem('aspro_iccodemap_v1',JSON.stringify(icCodeMap));}catch(e){} }
-      parseCSV(fzCSV).slice(1).forEach(r => { const c=r[0]?.trim(); if(c) forceZeroMap[c]=true; });
-      log('[OK] 백그라운드 로드 완료 (normname/iccodemap/forcezero)', 'ok');
+      log('[OK] 백그라운드 로드 완료 (normname/iccodemap)', 'ok');
     }).catch(()=>{});
 
     log(`[OK] CSV 자동 불러오기: 매핑 ${Object.keys(matchMap).length}건`, 'ok');
