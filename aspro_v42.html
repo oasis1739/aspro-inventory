@@ -1024,6 +1024,17 @@ async function loadIC(e) {
         if (!icMap[sabCode]) icMap[sabCode] = [];
         icMap[sabCode].push({ 품목코드: code, qty, name, brand, prefix, sabCode });
       }
+      // H열(r[7]): 예전 자체상품코드 — 추가 인덱싱으로 신규상품 이카운트 매칭 강화
+      const hCode = (r[7] != null && String(r[7]).trim() !== '' && String(r[7]).trim() !== 'null') ? String(r[7]).trim() : '';
+      if (hCode && hCode !== prefix && hCode !== sabCode) {
+        if (!icMap[hCode]) icMap[hCode] = [];
+        icMap[hCode].push({ 품목코드: code, qty, name, brand, prefix, sabCode });
+        const hPfx = hCode.replace(/[-_].*$/, '');
+        if (hPfx !== prefix && hPfx.length >= 5) {
+          if (!icMap[hPfx]) icMap[hPfx] = [];
+          icMap[hPfx].push({ 품목코드: code, qty, name, brand, prefix, sabCode });
+        }
+      }
       n++;
       if (sabCode) nSab++;
     }
@@ -1409,9 +1420,9 @@ const GP_SET_COLOR_OVERRIDE = {
   'NT252G0043CD':{ gpPrefix: '252NT41', colorMap: { '오션블루':'BL', '화이트':'IV', '블랙':'BK', '블루':'BL', '아이보리':'IV' } },
 };
 
-function getGimpoQty(sabCode, opt, sabName) {
+function getGimpoQty(sabCode, opt, sabName, jache = '') {
   let 물류 = EXTRA_STATIC_MAP[sabCode] || extraMap[sabCode] || matchMap[sabCode];
-  // 자체코드 기반 매핑이 없으면 _SET/-SET 제거 후 재시도
+  // _SET/-SET 제거 후 재시도
   if (!물류) {
     const sabBase = sabCode.replace(/[_-]SET$/i, '');
     물류 = EXTRA_STATIC_MAP[sabBase] || extraMap[sabBase] || matchMap[sabBase];
@@ -1421,9 +1432,7 @@ function getGimpoQty(sabCode, opt, sabName) {
 
   // ── 세트 옵션 처리 (예: 플럼+차콜:55) ──
   if (!물류 && opt && opt.includes('+') && opt.includes(':')) {
-    const sabRow = sabData.find(s => s.사방넷코드 === sabCode);
-    const jache = sabRow?.자체코드 || '';
-    const prefix = jache.split('-')[0];
+    const prefix = (jache || '').split('-')[0];
     const colorOvr = GP_SET_COLOR_OVERRIDE[prefix];
     if (colorOvr) {
       const gpPrefix = colorOvr.gpPrefix;
@@ -1446,6 +1455,29 @@ function getGimpoQty(sabCode, opt, sabName) {
     const key = normName(sabName) + '||' + normOpt(opt);
     물류 = normOptMap[key] || null;
   }
+
+  // ── 자체코드 → 김포 직접 fallback (신규상품 대응) ──
+  // 케이스1: 자체코드 자체가 물류품번 (예: 253NT14-NA-095)
+  // 케이스2: 자체코드 prefix + 옵션 색상/사이즈 조합 (예: 253NT19L_AL → 253NT19L-MO-55)
+  if (!물류 && jache) {
+    if (gpMap[jache] !== undefined) {
+      물류 = jache;
+    }
+    if (!물류) {
+      const jBase = jache.replace(/[_-]AL$/i, '').split(/[-_]/)[0];
+      if (jBase && jBase.length >= 5) {
+        const { cc: jcc, sz: jsz } = parseOpt(opt || '');
+        if (jcc && jsz) {
+          const c1 = `${jBase}-${jcc}-${jsz}`;
+          const c2 = `${jBase}-${jsz}-${jcc}`;
+          if (gpMap[c1] !== undefined) 물류 = c1;
+          else if (gpMap[c2] !== undefined) 물류 = c2;
+        }
+      }
+    }
+    if (물류) log(`[자체→김포] ${sabCode}(${jache}) → ${물류}`, 'info');
+  }
+
   if (!물류) return null;
 
   // 물류품번 순서 변환 fallback: 구패턴(사이즈-색상) → 신패턴(색상-사이즈)
@@ -1837,7 +1869,7 @@ function runMatch() {
   sabData.forEach(sab => {
     const sc = sab.사방넷코드;
     const icRes  = getIcountQty(sab);
-    const gpRes  = getGimpoQty(sc, sab.옵션, sab.상품명);
+    const gpRes  = getGimpoQty(sc, sab.옵션, sab.상품명, sab.자체코드 || '');
     const kcfiQty = kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
     let finalQty = null, src = '—', 물류품번 = '—';
 
