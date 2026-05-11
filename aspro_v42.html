@@ -1444,6 +1444,7 @@ const IC_STATIC_MAP = {
   'MX25HSKN01_AL': '251MX01',
   'MX25SSK01_AL': 'MX25SSK01',
   'N1009_AL': 'N1009',       'N1016_AL': 'N1016',
+  '102597': 'N1009',         // 썸머 쿨 하프소매 볼륨 니트 브라운 옵션 (사방넷코드 prefix → 이카운트 N1009)
   // ── 후라밍고 24FW ──────────────────────────────────────
   'FM24FW02': 'FM24FW02',    // 울 밍크 블렌디드 니트 1종
   'FM24FW01': '244FM11',    // 메탈 샤이닝 케이블 니트 1종
@@ -1614,7 +1615,7 @@ function getGimpoQty(sabCode, opt, sabName, jache = '') {
   // ── _SET 상품 전용: 사이즈 기반으로 gpMap 전체 색상 min 반환 ──
   // 처리 우선순위: ① opt에 명시된 색상목록(+) ② gpMap prefix-CC-size 패턴 전체 검색
   // 이렇게 하면 사이즈 전용 옵션("55"), 색상코드 불일치(BR vs BW) 등도 모두 처리
-  if (gpMap[물류resolved] === undefined && /[_-](SET|2set|4set)$/i.test(sabCode)) {
+  if (/[_-](SET|2set|4set)$/i.test(sabCode)) {
     const { sz: szP } = parseOpt(opt || '');
     const sz = szP || (/^\d{2,3}$/.test((opt||'').trim()) ? opt.trim() : null);
     if (sz) {
@@ -1812,6 +1813,7 @@ function getIcountQty(sabData_row) {
   // ── 1순위: icCodeMap 직접 매핑 (IC_STATIC_MAP 포함) ──
   const icDirect = icCodeMap[sc] || icCodeMap[자체]
                 || icCodeMap[sc.split('-')[0]] || icCodeMap[자체.split('-')[0]]
+                || IC_STATIC_MAP[sc] || IC_STATIC_MAP[sc.split('-')[0]]
                 || IC_STATIC_MAP[자체] || IC_STATIC_MAP[자체.split('-')[0]];
   if (icDirect) {
     let directItems = icMap[icDirect] || [];
