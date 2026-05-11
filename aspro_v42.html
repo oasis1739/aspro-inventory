@@ -614,46 +614,47 @@ function doPost(e) {
     const payload = JSON.parse(e.postData.contents);
     const now = new Date().toLocaleDateString('ko-KR');
 
+    function batchWrite(sh, header, rows) {
+      sh.clearContents();
+      sh.getRange(1, 1, 1, header.length).setValues([header]);
+      if (rows.length > 0) sh.getRange(2, 1, rows.length, header.length).setValues(rows);
+    }
+
     if (payload.map) {
       let sh = ss.getSheetByName('aspro_match');
       if (!sh) { sh = ss.insertSheet('aspro_match'); }
-      sh.clearContents();
-      sh.appendRow(['사방넷코드','김포물류품번','상품명','메모','등록일']);
       const nmMap = payload.nameMap || {};
-      Object.entries(payload.map).forEach(([k,v]) => { sh.appendRow([k, v, nmMap[k]||'', '', now]); });
+      const rows = Object.entries(payload.map).map(([k,v]) => [k, v, nmMap[k]||'', '', now]);
+      batchWrite(sh, ['사방넷코드','김포물류품번','상품명','메모','등록일'], rows);
     }
 
     // soldout: 빈 데이터로 덮어쓰기 방지
     if (payload.soldout && Object.keys(payload.soldout).length > 0) {
       let so = ss.getSheetByName('aspro_soldout');
       if (!so) { so = ss.insertSheet('aspro_soldout'); }
-      so.clearContents();
-      so.appendRow(['사방넷코드','등록일']);
-      Object.entries(payload.soldout).forEach(([k,v]) => { so.appendRow([k, v === true ? now : String(v)]); });
+      const rows = Object.entries(payload.soldout).map(([k,v]) => [k, v === true ? now : String(v)]);
+      batchWrite(so, ['사방넷코드','등록일'], rows);
     }
 
     if (payload.kcfi && Object.keys(payload.kcfi).length > 0) {
       let kc = ss.getSheetByName('aspro_kcfi');
       if (!kc) { kc = ss.insertSheet('aspro_kcfi'); }
-      kc.clearContents();
-      kc.appendRow(['사방넷코드','재고','업데이트일']);
-      Object.entries(payload.kcfi).forEach(([k,v]) => { kc.appendRow([k, v, now]); });
+      const rows = Object.entries(payload.kcfi).map(([k,v]) => [k, v, now]);
+      batchWrite(kc, ['사방넷코드','재고','업데이트일'], rows);
     }
 
     if (payload.normname && Object.keys(payload.normname).length > 0) {
       let nn = ss.getSheetByName('aspro_normname');
       if (!nn) { nn = ss.insertSheet('aspro_normname'); }
-      nn.clearContents();
-      nn.appendRow(['정규화상품명(normName)','물류품번','원본사방넷상품명','등록일']);
-      Object.entries(payload.normname).forEach(([k,v]) => { nn.appendRow([k, v, '', now]); });
+      const rows = Object.entries(payload.normname).map(([k,v]) => [k, v, '', now]);
+      batchWrite(nn, ['정규화상품명(normName)','물류품번','원본사방넷상품명','등록일'], rows);
     }
 
     if (payload.iccodemap && Object.keys(payload.iccodemap).length > 0) {
       let ic = ss.getSheetByName('aspro_iccodemap');
       if (!ic) { ic = ss.insertSheet('aspro_iccodemap'); }
-      ic.clearContents();
-      ic.appendRow(['사방넷코드','이카운트품목코드','등록일']);
-      Object.entries(payload.iccodemap).forEach(([k,v]) => { ic.appendRow([k, v, now]); });
+      const rows = Object.entries(payload.iccodemap).map(([k,v]) => [k, v, now]);
+      batchWrite(ic, ['사방넷코드','이카운트품목코드','등록일'], rows);
     }
 
     const saved = payload.map ? Object.keys(payload.map).length : 0;
