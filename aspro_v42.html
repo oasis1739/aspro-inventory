@@ -315,6 +315,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
         </div>
         <span>수량수정</span>
       </div>
+      <button class="btn btn-pp" id="colorCheckBtn" style="display:none" onclick="runColorSimilarCheck()">🎨 유사컬러 검증</button>
       <span style="color:var(--text3);font-size:10px;margin-left:auto;font-family:var(--mono)" id="rowCnt"></span>
     </div>
 
@@ -1526,6 +1527,49 @@ const COLOR_MAP = {
   'TB':'TB','MO':'MO','OL':'OL','CM':'CM',
 };
 
+// 유사컬러 그룹 — 같은 배열 안 코드는 서로 대체 가능으로 판단
+const COLOR_SIMILAR_GROUPS = [
+  ['WH','IV','CR','OT'],          // 화이트≈아이보리≈크림≈오트밀
+  ['BK','NA','DN'],               // 블랙≈네이비≈다크네이비
+  ['GR','CH','DG','MG','LG'],     // 그레이≈챠콜≈다크그레이≈멜란지≈라이트그레이
+  ['BE','CM','YE'],               // 베이지≈카멜≈버터옐로우
+  ['OL','KH'],                    // 올리브≈카키
+  ['BR','MO'],                    // 브라운≈모카
+  ['PK','PE','CO'],               // 핑크≈피치≈코랄
+  ['BL','NA'],                    // 블루≈네이비
+];
+const _SIMILAR_FLAT = new Set(COLOR_SIMILAR_GROUPS.flat());
+const CC_KR = {
+  'WH':'화이트','IV':'아이보리','CR':'크림','OT':'오트밀',
+  'BK':'블랙','NA':'네이비','DN':'다크네이비',
+  'GR':'그레이','CH':'챠콜','DG':'다크그레이','MG':'멜란지','LG':'라이트그레이',
+  'BE':'베이지','CM':'카멜','YE':'버터옐로우',
+  'OL':'올리브','KH':'카키','BR':'브라운','MO':'모카',
+  'PK':'핑크','PE':'피치','CO':'코랄','BL':'블루',
+};
+function getSimilarColors(cc) {
+  for (const g of COLOR_SIMILAR_GROUPS) {
+    if (g.includes(cc)) return g.filter(c => c !== cc);
+  }
+  return [];
+}
+function extractColorFromGp(gp) {
+  // PREFIX-COLOR-SIZE (신패턴)
+  let m = gp.match(/^(.+?)-([A-Z]{2,3})-(\d{2,3}(?:~\d{2,3})?)(-.*)?$/);
+  if (m && _SIMILAR_FLAT.has(m[2]))
+    return { prefix:m[1], color:m[2], size:m[3], suffix:m[4]||'', pat:'cs' };
+  // PREFIX-SIZE-COLOR (구패턴)
+  m = gp.match(/^(.+?)-(\d{2,3}(?:~\d{2,3})?)-([A-Z]{2,3})(-.*)?$/);
+  if (m && _SIMILAR_FLAT.has(m[3]))
+    return { prefix:m[1], color:m[3], size:m[2], suffix:m[4]||'', pat:'sc' };
+  return null;
+}
+function buildAltGp(p, altColor) {
+  return p.pat === 'cs'
+    ? `${p.prefix}-${altColor}-${p.size}${p.suffix}`
+    : `${p.prefix}-${p.size}-${altColor}${p.suffix}`;
+}
+
 function parseOpt(opt) {
   opt = String(opt||'').replace(/\(.*?\)/g,'').trim();
   // 세트 감지: "블랙+플럼:55" — + 있고 : 도 있으면 세트
@@ -1916,6 +1960,8 @@ function switchTab(tab) {
   document.getElementById('mapviewWrap').style.display  = tab==='mapview'?'block':'none';
   document.getElementById('logWrap').style.display      = tab==='log'?'block':'none';
   document.getElementById('debugWrap').style.display    = tab==='debug'?'block':'none';
+  const ccBtn = document.getElementById('colorCheckBtn');
+  if (ccBtn) ccBtn.style.display = tab === 'zero' ? 'inline-flex' : 'none';
   if (tab==='nomap') renderNomap();
   else if (tab==='soldout') renderSoldoutTab();
   else if (tab==='mapview') renderMapview();
@@ -3490,8 +3536,135 @@ function applyZeroRemap() {
   closeZeroRemap();
   if (sabData.length && Object.keys(icMap).length && Object.keys(gpMap).length) processAll();
 }
+// ── 유사컬러 매핑 검증 ─────────────────────────────────────────
+let _colorCandidates = [];
+
+function runColorSimilarCheck() {
+  const zeroRows = resultRows.filter(r => r._status === 'zero' && !extraMap[r.사방넷코드]);
+  _colorCandidates = [];
+
+  for (const r of zeroRows) {
+    const sc = r.사방넷코드;
+    const gp = (r._물류품번 || '').split('+')[0].trim(); // 세트면 첫 번째만
+    if (!gp) continue;
+    const parsed = extractColorFromGp(gp);
+    if (!parsed) continue;
+    const similars = getSimilarColors(parsed.color);
+    if (!similars.length) continue;
+
+    for (const altColor of similars) {
+      const altGp = buildAltGp(parsed, altColor);
+      const altQty = gpMap[altGp];
+      if (altQty !== undefined && altQty > 0) {
+        _colorCandidates.push({
+          sc, gp, altGp, altQty, altColor,
+          origColor: parsed.color,
+          상품명: r.상품명, 옵션: r.옵션, 자체코드: r.자체코드,
+          confirmed: false, skipped: false,
+        });
+        break;
+      }
+    }
+  }
+
+  if (!_colorCandidates.length) {
+    alert('유사컬러 대안 매핑을 찾지 못했습니다.');
+    return;
+  }
+  renderColorModal();
+  document.getElementById('colorSimilarModal').style.display = 'flex';
+}
+
+function renderColorModal() {
+  const total = _colorCandidates.length;
+  const pending = _colorCandidates.filter(c => !c.confirmed && !c.skipped).length;
+  document.getElementById('cmHeader').textContent =
+    `🎨 유사컬러 매핑 검증 — ${total}건 발견 (미처리: ${pending}건)`;
+
+  const list = document.getElementById('cmList');
+  list.innerHTML = _colorCandidates.map((c, i) => {
+    const dimmed = c.confirmed || c.skipped;
+    const origKr = CC_KR[c.origColor] || c.origColor;
+    const altKr  = CC_KR[c.altColor]  || c.altColor;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;
+        border-bottom:1px solid var(--border);opacity:${dimmed?0.4:1}">
+      <div style="min-width:120px;font-family:var(--mono);font-size:10px;color:var(--accent)">${c.sc}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.상품명}">${c.상품명}</div>
+        <div style="font-size:10px;color:var(--text3)">${c.옵션}</div>
+      </div>
+      <div style="font-size:10px;font-family:var(--mono);white-space:nowrap">
+        <span style="color:var(--warn)">${c.gp}</span>
+        <span style="color:var(--text3)"> (재고0)</span>
+        <span style="color:var(--text3);margin:0 4px">→</span>
+        <span style="color:var(--success)">${c.altGp}</span>
+        <span style="color:var(--success);margin-left:3px">(${altKr}, ${c.altQty}개)</span>
+      </div>
+      ${c.confirmed
+        ? `<span style="font-size:10px;color:var(--success);white-space:nowrap">✓ 확정</span>`
+        : c.skipped
+        ? `<span style="font-size:10px;color:var(--text3);white-space:nowrap">건너뜀</span>`
+        : `<button class="btn" style="font-size:10px;padding:3px 7px;background:var(--accent);color:#fff;border-color:var(--accent);white-space:nowrap" onclick="cmConfirm(${i})">확정</button>
+           <button class="btn" style="font-size:10px;padding:3px 7px;white-space:nowrap" onclick="cmSkip(${i})">건너뜀</button>`
+      }
+    </div>`;
+  }).join('');
+}
+
+function cmConfirm(i) {
+  const c = _colorCandidates[i];
+  if (!c) return;
+  c.confirmed = true;
+  extraMap[c.sc] = c.altGp;
+  saveExtra();
+  log(`[유사컬러] 확정: ${c.sc} → ${c.altGp} (${CC_KR[c.altColor]||c.altColor}, ${c.altQty}개)`, 'ok');
+  renderColorModal();
+}
+
+function cmSkip(i) {
+  if (_colorCandidates[i]) { _colorCandidates[i].skipped = true; renderColorModal(); }
+}
+
+function cmConfirmAll() {
+  _colorCandidates.filter(c => !c.confirmed && !c.skipped).forEach((c, _, arr) => {
+    c.confirmed = true;
+    extraMap[c.sc] = c.altGp;
+    log(`[유사컬러] 확정: ${c.sc} → ${c.altGp} (${CC_KR[c.altColor]||c.altColor}, ${c.altQty}개)`, 'ok');
+  });
+  saveExtra();
+  renderColorModal();
+}
+
+function closeColorModal() {
+  document.getElementById('colorSimilarModal').style.display = 'none';
+  const confirmed = _colorCandidates.filter(c => c.confirmed).length;
+  if (confirmed > 0 && sabData.length) {
+    // 재매핑 반영
+    const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
+    if (sheetsUrl) {
+      const allMap = { ...matchMap, ...extraMap };
+      fetch(sheetsUrl, { method:'POST', mode:'no-cors', body:JSON.stringify({ map: allMap }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
+    }
+    processAll();
+  }
+}
 // ────────────────────────────────────────────────────────────
 </script>
+
+<!-- 유사컬러 검증 모달 -->
+<div id="colorSimilarModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center" onclick="if(event.target===this)closeColorModal()">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:860px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+      <span id="cmHeader" style="font-size:13px;font-weight:600;flex:1"></span>
+      <button class="btn btn-s" style="font-size:11px" onclick="cmConfirmAll()">✓ 모두 확정</button>
+      <button class="btn" style="font-size:11px" onclick="closeColorModal()">닫기 / 재매칭</button>
+    </div>
+    <div style="padding:8px 14px;background:var(--bg3);font-size:10px;color:var(--text3);border-bottom:1px solid var(--border)">
+      재고0 항목 중 물류품번 컬러만 바꾸면 재고가 있는 경우를 자동 검출합니다. 확정 시 extraMap에 저장되고 닫기 버튼을 누르면 재매칭이 실행됩니다.
+    </div>
+    <div id="cmList" style="overflow-y:auto;flex:1"></div>
+  </div>
+</div>
 
 <!-- 재고0 재매핑 모달 -->
 <div id="zeroRemapModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);align-items:center;justify-content:center" onclick="if(event.target===this)closeZeroRemap()">
