@@ -2875,16 +2875,15 @@ async function saveToSheets() {
   if (total === 0) { alert('저장할 매핑 데이터가 없습니다.'); return; }
   st.textContent = `저장 중... (${total.toLocaleString()}건)`; st.style.color = 'var(--accent2)';
   try {
-    const res = await fetch(url, {
+    await fetch(url, {
       method: 'POST',
+      mode: 'no-cors',  // Apps Script /exec 리다이렉트 CORS 헤더 유실 우회
       body: JSON.stringify({ map: allMap, soldout: soldoutMap, kcfi: kcfiMap, normname: normOptMap, iccodemap: icCodeMap }),
       headers: { 'Content-Type': 'text/plain' }
     });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || '서버 오류');
-    st.textContent = `✅ 저장 완료 — ${data.saved.toLocaleString()}건`;
+    st.textContent = `✅ 저장 요청 완료 (${total.toLocaleString()}건) — 시트에서 확인하세요`;
     st.style.color = 'var(--success)';
-    log(`[OK] Google Sheets 저장: ${data.saved}건`, 'ok');
+    log(`[OK] Google Sheets 저장 요청: ${total}건`, 'ok');
   } catch(e) {
     st.textContent = `❌ 오류: ${e.message}`;
     st.style.color = 'var(--danger)';
