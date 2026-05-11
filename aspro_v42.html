@@ -2163,7 +2163,7 @@ function renderNomap() {
           <input class="mi nomap-gp" style="width:175px" id="ngp_${i}"
             value="${extraMap[r.사방넷코드]||''}"
             placeholder="예: NT243G0001-55-BK"
-            oninput="nomapRows[${i}]._manualGimpo=this.value">
+            oninput="nomapSearch(${i},this.value)">
           <button class="btn" style="font-size:10px;padding:2px 6px;color:var(--accent2);border-color:var(--accent2);white-space:nowrap"
             onclick="toggleSuggest(${i},'${r.사방넷코드}','${(r.자체코드||'').replace(/'/g,String.fromCharCode(92,39))}','${(r.상품명||'').replace(/'/g,String.fromCharCode(92,39))}')">🔍 추천</button>
         </div>
@@ -2269,6 +2269,34 @@ function applySuggest(i, gp) {
   }
   const drop = document.getElementById('ndrop_' + i);
   if (drop) drop.style.display = 'none';
+}
+
+function nomapSearch(i, val) {
+  nomapRows[i]._manualGimpo = val;
+  const drop = document.getElementById('ndrop_' + i);
+  if (!drop) return;
+  if (!val || val.length < 2) { drop.style.display = 'none'; return; }
+  const qU = val.toUpperCase();
+  const matches = Object.entries(gpMap)
+    .filter(([k]) => k.toUpperCase().includes(qU))
+    .sort((a, b) => {
+      const aS = a[0].toUpperCase().startsWith(qU) ? 0 : 1;
+      const bS = b[0].toUpperCase().startsWith(qU) ? 0 : 1;
+      return aS - bS || a[0].localeCompare(b[0]);
+    })
+    .slice(0, 15);
+  if (!matches.length) {
+    drop.innerHTML = '<div style="padding:6px 10px;color:var(--text3);font-size:10px">검색 결과 없음</div>';
+  } else {
+    drop.innerHTML = matches.map(([gp, qty]) =>
+      '<div onclick="applySuggest(' + i + ',\'' + gp.replace(/'/g,"\\'") + '\')" style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">'
+      + '<span style="font-family:var(--mono);font-size:10px;flex:1">' + gp + '</span>'
+      + '<span style="font-size:9px;color:' + (qty>0?'var(--success)':'var(--text3)') + '">' + qty + '</span>'
+      + '<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--accent2);color:#fff">김포</span>'
+      + '</div>'
+    ).join('');
+  }
+  drop.style.display = 'block';
 }
 
 function toggleSuggest(i, sc, 자체코드, 상품명) {
