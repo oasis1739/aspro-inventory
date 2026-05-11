@@ -2973,7 +2973,7 @@ async function loadFromSheets() {
     // soldout 파싱 — 로컬 미반영 품절 보존
     const soldoutRows = parseCSV(soldoutCSV).slice(1);
     const sheetSoldoutL = {};
-    soldoutRows.forEach(r => { const sc=r[0]?.trim(); if(sc) sheetSoldoutL[sc]=r[1]?.trim()||''; });
+    soldoutRows.forEach(r => { const sc=r[0]?.trim(); if(sc){ const dt=r[1]?.trim()||''; sheetSoldoutL[sc]=(dt==='TRUE'||dt==='true')?'':dt; } });
     const localOnlySoL = Object.keys(soldoutMap).filter(sc => !(sc in sheetSoldoutL));
     soldoutMap = { ...sheetSoldoutL, ...Object.fromEntries(localOnlySoL.map(sc => [sc, soldoutMap[sc]])) };
     try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
@@ -3048,7 +3048,7 @@ async function autoLoadFromSheets() {
 
     const soldoutRows = parseCSV(soldoutCSV).slice(1);
     const sheetSoldout = {};
-    soldoutRows.forEach(r => { const sc=r[0]?.trim(); if(sc) sheetSoldout[sc]=r[1]?.trim()||''; });
+    soldoutRows.forEach(r => { const sc=r[0]?.trim(); if(sc){ const dt=r[1]?.trim()||''; sheetSoldout[sc]=(dt==='TRUE'||dt==='true')?'':dt; } });
     // 로컬에만 있는 품절(시트 POST 실패 잔여물) 보존 후 재전송
     const localOnlySo = Object.keys(soldoutMap).filter(sc => !(sc in sheetSoldout));
     soldoutMap = { ...sheetSoldout, ...Object.fromEntries(localOnlySo.map(sc => [sc, soldoutMap[sc]])) };
