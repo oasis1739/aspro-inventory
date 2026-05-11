@@ -2597,8 +2597,12 @@ function saveNomapEntries() {
   if (saveExtra()) {
     log(`[OK] 매핑 저장: 총 extraMap ${Object.keys(extraMap).length}건`, 'ok');
     updateSavedMapCnt();
+    showToast(`💾 로컬 저장 완료 (${saved}건)`, 'ok', 3000);
+    if (currentTab === 'nomap') renderNomap();
+    else if (currentTab === 'mapview') renderMapview();
     const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
     if (sheetsUrl) {
+      showToast('🔄 구글시트 동기화 중...', 'warn', 5000);
       const allMap = { ...matchMap, ...extraMap };
       fetch(sheetsUrl, {
         method: 'POST',
@@ -2607,18 +2611,18 @@ function saveNomapEntries() {
       }).then(r => r.json()).then(d => {
         if (d.ok) {
           log(`[OK] 구글시트 자동 반영: ${d.saved}건`, 'ok');
-          alert(`✅ 저장 완료\n구글시트에도 자동 반영됐습니다.`);
+          showToast(`✅ 구글시트 반영 완료 (${d.saved}건)`, 'ok');
+        } else {
+          log(`[WARN] 구글시트 반영 거부: ${JSON.stringify(d)}`, 'warn');
+          showToast('⚠ 구글시트 반영 실패 — 로컬만 저장됨', 'err');
         }
-      }).catch(() => {
-        log(`[WARN] 구글시트 반영 실패`, 'warn');
-        alert(`✅ 로컬 저장 완료\n⚠ 구글시트 반영 실패 (Sheets 연동에서 수동 저장하세요)`);
+      }).catch(e => {
+        log(`[WARN] 구글시트 반영 실패: ${e}`, 'warn');
+        showToast('⚠ 구글시트 연결 오류 — 로컬만 저장됨', 'err');
       });
-    } else {
-      alert(`✅ 저장 완료 (extraMap ${Object.keys(extraMap).length}건)`);
     }
-    if (currentTab==='mapview') renderMapview();
   } else {
-    alert('저장 실패');
+    showToast('❌ 저장 실패', 'err');
   }
 }
 
