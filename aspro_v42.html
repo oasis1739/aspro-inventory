@@ -1171,11 +1171,30 @@ async function loadMatchFile(e) {
       fileMap[sc] = 물류;
       n++;
     }
+    // 시트에 없는 신규 항목만 추출 → 시트에 자동 업로드
+    const newEntries = {};
+    for (const [sc, gp] of Object.entries(fileMap)) {
+      if (!matchMap[sc]) newEntries[sc] = gp;
+    }
     matchMap = { ...matchMap, ...fileMap };
     document.getElementById('matchZone').classList.add('ok');
     updFI('matchList', file.name, 'ok', n+'매핑');
     updateSavedMapCnt();
     log(`[OK] 매칭파일 → ${n}건`, 'ok');
+    // 신규 항목 시트에 반영 (이후 파일 없이도 동일 결과)
+    const newCount = Object.keys(newEntries).length;
+    if (newCount > 0) {
+      const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
+      if (sheetsUrl) {
+        log(`[SYNC] 매칭파일 신규 ${newCount}건 → 시트 업로드 중...`, 'info');
+        fetch(sheetsUrl, {
+          method: 'POST',
+          body: JSON.stringify({ map: newEntries }),
+          headers: { 'Content-Type': 'text/plain' }
+        }).then(() => log(`[SYNC] 시트 업로드 완료 (${newCount}건)`, 'ok'))
+          .catch(err => log(`[WARN] 시트 업로드 실패: ${err.message}`, 'warn'));
+      }
+    }
 
     normOptMap = {};
     for (let i = 3; i < rows.length; i++) {
