@@ -610,58 +610,87 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const payload = JSON.parse(e.postData.contents);
-    const now = new Date().toLocaleDateString('ko-KR');
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var data = JSON.parse(e.postData.contents);
+    var savedCount = 0;
 
-    function batchWrite(sh, header, rows) {
-      sh.clearContents();
-      sh.getRange(1, 1, 1, header.length).setValues([header]);
-      if (rows.length > 0) sh.getRange(2, 1, rows.length, header.length).setValues(rows);
+    // ── aspro_match: UPSERT (신규 삽입 + 기존값 업데이트) ──
+    if (data.map && Object.keys(data.map).length > 0) {
+      var matchSh = ss.getSheetByName('aspro_match') || ss.insertSheet('aspro_match');
+      var lastRow = matchSh.getLastRow();
+      var lastCol = Math.max(matchSh.getLastColumn(), 2);
+      var allRows = lastRow > 0 ? matchSh.getRange(1, 1, lastRow, lastCol).getValues() : [];
+      var rowIdx = {};
+      for (var i = 1; i < allRows.length; i++) {
+        var c = String(allRows[i][0]).trim();
+        if (c) rowIdx[c] = i;
+      }
+      var toAdd = [];
+      for (var sc in data.map) {
+        if (!sc) continue;
+        var gp = String(data.map[sc]);
+        if (rowIdx[sc] !== undefined) { allRows[rowIdx[sc]][1] = gp; }
+        else { toAdd.push([sc, gp]); }
+        savedCount++;
+      }
+      if (allRows.length > 0) {
+        matchSh.clearContents();
+        matchSh.getRange(1, 1, allRows.length, allRows[0].length).setValues(allRows);
+      }
+      if (toAdd.length > 0) {
+        matchSh.getRange(matchSh.getLastRow() + 1, 1, toAdd.length, 2).setValues(toAdd);
+      }
     }
 
-    if (payload.map) {
-      let sh = ss.getSheetByName('aspro_match');
-      if (!sh) { sh = ss.insertSheet('aspro_match'); }
-      const nmMap = payload.nameMap || {};
-      const rows = Object.entries(payload.map).map(([k,v]) => [k, v, nmMap[k]||'', '', now]);
-      batchWrite(sh, ['사방넷코드','김포물류품번','상품명','메모','등록일'], rows);
+    // ── aspro_soldout: 전체 덮어쓰기 (빈 데이터면 스킵) ──
+    if (data.soldout && Object.keys(data.soldout).length > 0) {
+      var soldoutSh = ss.getSheetByName('aspro_soldout') || ss.insertSheet('aspro_soldout');
+      soldoutSh.clearContents();
+      var rows = [];
+      for (var sc in data.soldout) { if (sc) rows.push([sc, data.soldout[sc] || '']); }
+      if (rows.length > 0) soldoutSh.getRange(1, 1, rows.length, 2).setValues(rows);
     }
 
-    // soldout: 빈 데이터로 덮어쓰기 방지
-    if (payload.soldout && Object.keys(payload.soldout).length > 0) {
-      let so = ss.getSheetByName('aspro_soldout');
-      if (!so) { so = ss.insertSheet('aspro_soldout'); }
-      const rows = Object.entries(payload.soldout).map(([k,v]) => [k, v === true ? now : String(v)]);
-      batchWrite(so, ['사방넷코드','등록일'], rows);
+    // ── aspro_kcfi ──
+    if (data.kcfi && Object.keys(data.kcfi).length > 0) {
+      var kcfiSh = ss.getSheetByName('aspro_kcfi') || ss.insertSheet('aspro_kcfi');
+      kcfiSh.clearContents();
+      var rows = [];
+      for (var sc in data.kcfi) { if (sc) rows.push([sc, data.kcfi[sc]]); }
+      if (rows.length > 0) kcfiSh.getRange(1, 1, rows.length, 2).setValues(rows);
     }
 
-    if (payload.kcfi && Object.keys(payload.kcfi).length > 0) {
-      let kc = ss.getSheetByName('aspro_kcfi');
-      if (!kc) { kc = ss.insertSheet('aspro_kcfi'); }
-      const rows = Object.entries(payload.kcfi).map(([k,v]) => [k, v, now]);
-      batchWrite(kc, ['사방넷코드','재고','업데이트일'], rows);
+    // ── aspro_normname ──
+    if (data.normname && Object.keys(data.normname).length > 0) {
+      var nnSh = ss.getSheetByName('aspro_normname') || ss.insertSheet('aspro_normname');
+      nnSh.clearContents();
+      var rows = [];
+      for (var k in data.normname) { if (k) rows.push([k, data.normname[k]]); }
+      if (rows.length > 0) nnSh.getRange(1, 1, rows.length, 2).setValues(rows);
     }
 
-    if (payload.normname && Object.keys(payload.normname).length > 0) {
-      let nn = ss.getSheetByName('aspro_normname');
-      if (!nn) { nn = ss.insertSheet('aspro_normname'); }
-      const rows = Object.entries(payload.normname).map(([k,v]) => [k, v, '', now]);
-      batchWrite(nn, ['정규화상품명(normName)','물류품번','원본사방넷상품명','등록일'], rows);
+    // ── aspro_forcezero ──
+    if (data.forcezero && Object.keys(data.forcezero).length > 0) {
+      var fzSh = ss.getSheetByName('aspro_forcezero') || ss.insertSheet('aspro_forcezero');
+      fzSh.clearContents();
+      var rows = [];
+      for (var c in data.forcezero) { if (c) rows.push([c]); }
+      if (rows.length > 0) fzSh.getRange(1, 1, rows.length, 1).setValues(rows);
     }
 
-    if (payload.iccodemap && Object.keys(payload.iccodemap).length > 0) {
-      let ic = ss.getSheetByName('aspro_iccodemap');
-      if (!ic) { ic = ss.insertSheet('aspro_iccodemap'); }
-      const rows = Object.entries(payload.iccodemap).map(([k,v]) => [k, v, now]);
-      batchWrite(ic, ['사방넷코드','이카운트품목코드','등록일'], rows);
+    // ── aspro_iccodemap ──
+    if (data.iccodemap && Object.keys(data.iccodemap).length > 0) {
+      var icSh = ss.getSheetByName('aspro_iccodemap') || ss.insertSheet('aspro_iccodemap');
+      icSh.clearContents();
+      var rows = [];
+      for (var sc in data.iccodemap) { if (sc) rows.push([sc, data.iccodemap[sc]]); }
+      if (rows.length > 0) icSh.getRange(1, 1, rows.length, 2).setValues(rows);
     }
 
-    const saved = payload.map ? Object.keys(payload.map).length : 0;
-    return ContentService.createTextOutput(JSON.stringify({ok:true, saved}))
+    return ContentService.createTextOutput(JSON.stringify({ok: true, saved: savedCount}))
       .setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({ok:false, error: err.message}))
+    return ContentService.createTextOutput(JSON.stringify({ok: false, error: err.message}))
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
@@ -2604,10 +2633,9 @@ function saveNomapEntries() {
     const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
     if (sheetsUrl) {
       showToast('🔄 구글시트 동기화 중...', 'warn', 5000);
-      const allMap = { ...matchMap, ...extraMap };
       fetch(sheetsUrl, {
         method: 'POST',
-        body: JSON.stringify({ map: allMap, soldout: soldoutMap, nameMap: buildNameMap(allMap) }),
+        body: JSON.stringify({ map: extraMap, soldout: soldoutMap }),
         headers: { 'Content-Type': 'text/plain' }
       }).then(r => r.json()).then(d => {
         if (d.ok) {
@@ -3065,7 +3093,7 @@ async function saveToSheets() {
     await fetch(url, {
       method: 'POST',
       mode: 'no-cors',  // Apps Script /exec 리다이렉트 CORS 헤더 유실 우회
-      body: JSON.stringify({ map: allMap, soldout: soldoutMap, kcfi: kcfiMap, normname: normOptMap, iccodemap: icCodeMap }),
+      body: JSON.stringify({ map: extraMap, soldout: soldoutMap, kcfi: kcfiMap, normname: normOptMap, iccodemap: icCodeMap }),
       headers: { 'Content-Type': 'text/plain' }
     });
     st.textContent = `✅ 저장 요청 완료 (${total.toLocaleString()}건) — 시트에서 확인하세요`;
@@ -3727,8 +3755,7 @@ function applyZeroRemap() {
   saveExtra();
   const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
   if (sheetsUrl) {
-    const allMap = { ...matchMap, ...extraMap };
-    fetch(sheetsUrl, { method:'POST', body: JSON.stringify({ map: allMap, soldout: soldoutMap, nameMap: buildNameMap(allMap) }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
+    fetch(sheetsUrl, { method:'POST', body: JSON.stringify({ map: extraMap, soldout: soldoutMap }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
   }
   log(`[OK] 재매핑: ${r.사방넷코드} → ${newGp}`, 'ok');
   closeZeroRemap();
@@ -3840,8 +3867,7 @@ function closeColorModal() {
     // 재매핑 반영
     const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
     if (sheetsUrl) {
-      const allMap = { ...matchMap, ...extraMap };
-      fetch(sheetsUrl, { method:'POST', mode:'no-cors', body:JSON.stringify({ map: allMap }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
+      fetch(sheetsUrl, { method:'POST', mode:'no-cors', body:JSON.stringify({ map: extraMap }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
     }
     processAll();
   }
