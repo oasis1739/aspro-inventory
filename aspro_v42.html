@@ -1611,6 +1611,39 @@ function getGimpoQty(sabCode, opt, sabName, jache = '') {
       }
     }
   }
+  // ── _SET 상품 전용: 사이즈 기반으로 gpMap 전체 색상 min 반환 ──
+  // 처리 우선순위: ① opt에 명시된 색상목록(+) ② gpMap prefix-CC-size 패턴 전체 검색
+  // 이렇게 하면 사이즈 전용 옵션("55"), 색상코드 불일치(BR vs BW) 등도 모두 처리
+  if (gpMap[물류resolved] === undefined && /[_-](SET|2set|4set)$/i.test(sabCode)) {
+    const { sz: szP } = parseOpt(opt || '');
+    const sz = szP || (/^\d{2,3}$/.test((opt||'').trim()) ? opt.trim() : null);
+    if (sz) {
+      let candidates = [];
+      // ① opt에 '+' 포함 시 명시된 색상 조합
+      if (opt && opt.includes('+') && opt.includes(':')) {
+        const parsed = parseOpt(opt);
+        if (parsed.isSet && parsed.setColors) {
+          const sabPfx = sabCode.replace(/[_-](SET|2set|4set)$/i,'').split(/[-_]/)[0];
+          const colorOvr = GP_SET_COLOR_OVERRIDE[sabPfx];
+          const gpPfx = colorOvr ? colorOvr.gpPrefix : 물류;
+          candidates = parsed.setColors.map(c => {
+            const code = colorOvr ? (colorOvr.colorMap[c] || c) : c;
+            return `${gpPfx}-${code}-${sz}`;
+          });
+        }
+      }
+      // ② 명시된 색상 없으면 gpMap에서 prefix-CC-size 패턴 전체 검색 (색상코드 불일치 대응)
+      if (!candidates.length) {
+        const re = new RegExp(`^${물류.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}-[A-Z]{2,3}-${sz}$`);
+        candidates = Object.keys(gpMap).filter(k => re.test(k));
+      }
+      const valid = candidates.map(k => [k, gpMap[k]]).filter(([,q]) => q != null);
+      if (valid.length) {
+        log(`[INFO] SET 전체색상 min: ${valid.map(([k])=>k).join('+')}`, 'info');
+        return { qty: Math.min(...valid.map(([,q])=>q)), src: '김포(SET)', 물류품번: valid.map(([k])=>k).join('+') };
+      }
+    }
+  }
   // 품번만 있고 gpMap에 없는 경우 → 옵션의 컬러+사이즈 조합해서 재조회
   // 예: 물류="251MX01", opt="핑크:55" → "251MX01-PK-55"
   if (gpMap[물류resolved] === undefined && opt) {
@@ -1620,31 +1653,6 @@ function getGimpoQty(sabCode, opt, sabName, jache = '') {
       if (gpMap[candidate] !== undefined) {
         물류resolved = candidate;
         log(`[INFO] 김포 컬러+사이즈 조합: ${물류} + [${cc}/${sz}] → ${candidate}`, 'info');
-      }
-    }
-  }
-  // ── SET 멀티컬러 (+옵션): setColors 전체로 min 재고 계산 ──
-  // 예: JW25SS02_SET opt="아이보리+스카이블루+블랙:55" → 252JW19-IV-55, 252JW19-BL-55, 252JW19-BK-55 min
-  if (gpMap[물류resolved] === undefined && opt && opt.includes('+') && opt.includes(':')) {
-    const parsed = parseOpt(opt);
-    if (parsed.isSet && parsed.setColors && parsed.sz) {
-      // sabCode prefix로 GP_SET_COLOR_OVERRIDE 확인 (브랜드 전용 색상 코드)
-      const sabPfx = sabCode.replace(/[_-](SET|2set|4set)$/i,'').split(/[-_]/)[0];
-      const colorOvr = GP_SET_COLOR_OVERRIDE[sabPfx];
-      const gpPfx = colorOvr ? colorOvr.gpPrefix : 물류;
-      const gpKeys = parsed.setColors.map(c => {
-        const code = colorOvr ? (colorOvr.colorMap[c] || c) : c;
-        return `${gpPfx}-${code}-${parsed.sz}`;
-      });
-      const qtys = gpKeys.map(k => gpMap[k] !== undefined ? gpMap[k] : null);
-      const validPairs = gpKeys.map((k,i) => ({k, q: qtys[i]})).filter(p => p.q !== null);
-      if (validPairs.length > 0) {
-        log(`[INFO] SET 멀티컬러 min: ${gpKeys.join('+')}`, 'info');
-        return {
-          qty: Math.min(...validPairs.map(p => p.q)),
-          src: '김포(SET)',
-          물류품번: validPairs.map(p => p.k).join('+')
-        };
       }
     }
   }
