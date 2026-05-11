@@ -1815,12 +1815,14 @@ function runMatch() {
     if (sc in soldoutMap) {
       finalQty = 0; src = '품절처리';
     }
-    // forceZero 강제 적용 — 물류품번 prefix 기반, 재고 있어도 0
+    // forceZero 강제 적용 — 자체코드 OR 물류품번 prefix 기반, 재고 있어도 0
     if (finalQty !== null) {
+      const 자체코드 = sab.자체코드 || '';
       const 매핑gp = (extraMap[sc] || matchMap[sc] || '').trim();
-      if (매핑gp && Object.keys(forceZeroMap).some(pfx => 매핑gp.startsWith(pfx))) {
-        finalQty = 0; src = '강제0';
-      }
+      const isForceZero =
+        (자체코드 && forceZeroMap[자체코드]) ||
+        (매핑gp && Object.keys(forceZeroMap).some(pfx => 매핑gp.startsWith(pfx)));
+      if (isForceZero) { finalQty = 0; src = '강제0'; }
     }
 
     if (finalQty === null) {
