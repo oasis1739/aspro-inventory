@@ -3414,8 +3414,8 @@ if (batchZoneEl) {
 document.getElementById('expAll').style.border='2px solid var(--accent)';
 (async () => {
   loadExtra();
-  await autoLoadFromSheets();
-  if (Object.keys(matchMap).length === 0) tryLoadSavedMatchFile();
+  tryLoadSavedMatchFile();   // localStorage 먼저 (파일 업로드 누적분 포함)
+  await autoLoadFromSheets(); // 시트 데이터 머지 (공통 키는 시트 우선, 파일 전용 키는 보존)
 })();
 
 // ── 재고0 재매핑 ─────────────────────────────────────────────
