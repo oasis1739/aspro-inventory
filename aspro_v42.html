@@ -1167,7 +1167,7 @@ async function loadMatchFile(e) {
       if (!r || !r[0]) continue;
       const sc   = String(r[0]).trim();
       const 물류 = String(r[7]||'').trim();
-      if (!sc || SKIP_GP.has(물류) || 물류 === 'nan') continue;
+      if (!sc || !물류 || SKIP_GP.has(물류) || 물류 === 'nan') continue;
       fileMap[sc] = 물류;
       n++;
     }
