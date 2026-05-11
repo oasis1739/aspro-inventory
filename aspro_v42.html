@@ -1024,17 +1024,6 @@ async function loadIC(e) {
         if (!icMap[sabCode]) icMap[sabCode] = [];
         icMap[sabCode].push({ 품목코드: code, qty, name, brand, prefix, sabCode });
       }
-      // H열(r[7]): 예전 자체상품코드 — 추가 인덱싱으로 신규상품 이카운트 매칭 강화
-      const hCode = (r[7] != null && String(r[7]).trim() !== '' && String(r[7]).trim() !== 'null') ? String(r[7]).trim() : '';
-      if (hCode && hCode !== prefix && hCode !== sabCode) {
-        if (!icMap[hCode]) icMap[hCode] = [];
-        icMap[hCode].push({ 품목코드: code, qty, name, brand, prefix, sabCode });
-        const hPfx = hCode.replace(/[-_].*$/, '');
-        if (hPfx !== prefix && hPfx.length >= 5) {
-          if (!icMap[hPfx]) icMap[hPfx] = [];
-          icMap[hPfx].push({ 품목코드: code, qty, name, brand, prefix, sabCode });
-        }
-      }
       n++;
       if (sabCode) nSab++;
     }
@@ -1543,7 +1532,7 @@ const COLOR_MAP = {
   '오트밀':'OT','퍼플':'PU','플럼':'PL','와인':'WN','올리브':'OL','민트':'MT',
   '옐로우':'YE','라벤더':'LV','모카':'MO','오렌지':'OR',
   // 복합 컬러 (이카운트에 그대로 존재하는 한글 컬러명)
-  '밀크카키':'밀크카키','밀크브라운':'밀크브라운','모카무스':'모카무스','모카베이지':'모카베이지','모카브라운':'모카브라운',
+  '밀크카키':'KH','밀크브라운':'BR','모카무스':'MO','모카베이지':'BE','모카브라운':'MO',
   '틸블루':'틸블루','스카이블루':'스카이블루','라이트블루':'라이트블루','딥블루':'BL','블루그레이':'블루그레이','그레이블루':'그레이블루',
   '딥퍼플':'딥퍼플','퍼플브라운':'퍼플브라운','바이올렛':'PU',
   '카키브라운':'카키브라운','카멜베이지':'카멜베이지','오트베이지':'오트베이지','도브베이지':'도브베이지',
