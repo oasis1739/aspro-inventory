@@ -264,6 +264,23 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
     </div>
   </div>
 
+  <!-- SET 빠른등록 -->
+  <div class="sec">
+    <div class="sec-ttl" style="cursor:pointer" onclick="toggleSetPanel()">
+      🔖 SET 상품 등록 <span class="stag sec2" id="setRegCntTag">0건</span>
+      <span id="setArrow" style="margin-left:auto;font-size:10px;color:var(--text3)">▼</span>
+    </div>
+    <div id="setRegPanel" style="display:none">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:5px">사방넷코드 → 김포품번 빠른등록<br><span style="color:var(--accent2)">extraMap 저장 — 고정매핑 덮어쓰기 가능</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <input class="fi" id="setRegSab" placeholder="사방넷코드 (예: 252JW10_SET)" style="width:100%;font-size:11px">
+        <input class="fi" id="setRegGp" placeholder="김포품번 (예: 252JW10)" style="width:100%;font-size:11px">
+        <button class="btn btn-p btnf" onclick="quickRegSet()">💾 등록</button>
+      </div>
+      <div id="setRegList" style="margin-top:7px"></div>
+    </div>
+  </div>
+
   <!-- 버튼 -->
   <div class="sec">
     <div class="bgrp">
@@ -1484,6 +1501,7 @@ const IC_STATIC_MAP = {
   'N1009_SET': 'N1009',           // [1+1+1]썸머 쿨 하프소매 볼륨 니트 SET
   // ── 제이슨우 25SS [1+1+1] ────────────────────────────────────
   'JW25SS02_SET': '252JW19',     // [1+1+1]프렌치 린넨 블렌드 슬리브리스 카라니트 SET (101861계열)
+  '252JW10_SET': '252JW10',      // [1+1+1]마리본 스트라이프니트 SET
 };
 
 const GP_SET_COLOR_OVERRIDE = {
@@ -1498,11 +1516,12 @@ const GP_MULTI_TYPE_SET = {
 };
 
 function getGimpoQty(sabCode, opt, sabName, jache = '') {
-  let 물류 = EXTRA_STATIC_MAP[sabCode] || extraMap[sabCode] || matchMap[sabCode];
+  // extraMap 우선: 사용자가 추가/수정한 매핑이 고정 매핑보다 우선 적용됨
+  let 물류 = extraMap[sabCode] || EXTRA_STATIC_MAP[sabCode] || matchMap[sabCode];
   // _SET/-SET 제거 후 재시도
   if (!물류) {
     const sabBase = sabCode.replace(/[_-]SET$/i, '');
-    물류 = EXTRA_STATIC_MAP[sabBase] || extraMap[sabBase] || matchMap[sabBase];
+    물류 = extraMap[sabBase] || EXTRA_STATIC_MAP[sabBase] || matchMap[sabBase];
   }
   // __DELETED__ 처리: extraMap에서 명시적으로 삭제된 항목
   if (물류 === '__DELETED__') return null;
@@ -1604,6 +1623,31 @@ function getGimpoQty(sabCode, opt, sabName, jache = '') {
       }
     }
   }
+  // ── SET 멀티컬러 (+옵션): setColors 전체로 min 재고 계산 ──
+  // 예: JW25SS02_SET opt="아이보리+스카이블루+블랙:55" → 252JW19-IV-55, 252JW19-BL-55, 252JW19-BK-55 min
+  if (gpMap[물류resolved] === undefined && opt && opt.includes('+') && opt.includes(':')) {
+    const parsed = parseOpt(opt);
+    if (parsed.isSet && parsed.setColors && parsed.sz) {
+      // sabCode prefix로 GP_SET_COLOR_OVERRIDE 확인 (브랜드 전용 색상 코드)
+      const sabPfx = sabCode.replace(/[_-](SET|2set|4set)$/i,'').split(/[-_]/)[0];
+      const colorOvr = GP_SET_COLOR_OVERRIDE[sabPfx];
+      const gpPfx = colorOvr ? colorOvr.gpPrefix : 물류;
+      const gpKeys = parsed.setColors.map(c => {
+        const code = colorOvr ? (colorOvr.colorMap[c] || c) : c;
+        return `${gpPfx}-${code}-${parsed.sz}`;
+      });
+      const qtys = gpKeys.map(k => gpMap[k] !== undefined ? gpMap[k] : null);
+      const validPairs = gpKeys.map((k,i) => ({k, q: qtys[i]})).filter(p => p.q !== null);
+      if (validPairs.length > 0) {
+        log(`[INFO] SET 멀티컬러 min: ${gpKeys.join('+')}`, 'info');
+        return {
+          qty: Math.min(...validPairs.map(p => p.q)),
+          src: '김포(SET)',
+          물류품번: validPairs.map(p => p.k).join('+')
+        };
+      }
+    }
+  }
   const gpQty = gpMap[물류resolved] !== undefined ? gpMap[물류resolved] : 0;
   물류 = 물류resolved;
   const { sz } = parseOpt(opt || '');
@@ -1643,7 +1687,7 @@ const COLOR_MAP = {
   '옐로우':'YE','라벤더':'LV','라벤더그레이':'LA','모카':'MO','오렌지':'OR',
   // 복합 컬러 (이카운트에 그대로 존재하는 한글 컬러명)
   '밀크카키':'KH','밀크브라운':'BR','모카무스':'MO','오카무스':'MO','모카베이지':'BE','모카브라운':'MO',
-  '틸블루':'틸블루','스카이블루':'스카이블루','라이트블루':'라이트블루','딥블루':'BL','블루그레이':'블루그레이','그레이블루':'그레이블루',
+  '틸블루':'TB','스카이블루':'BL','라이트블루':'BL','딥블루':'BL','블루그레이':'BG','그레이블루':'BG',
   '딥퍼플':'딥퍼플','퍼플브라운':'퍼플브라운','바이올렛':'PU',
   '카키브라운':'카키브라운','카멜베이지':'카멜베이지','오트베이지':'OT','도브베이지':'BE',
   '연핑크':'연핑크','마젠타핑크':'마젠타핑크','핑크코랄':'핑크코랄','시에나로즈':'시에나로즈',
@@ -2571,6 +2615,76 @@ function autoMapAll() {
   } else {
     alert(`자동매핑 결과\n\n이카운트/김포에서 매칭 가능한 항목이 없습니다.\n수동으로 입력해주세요.`);
   }
+}
+
+// ══════════════════════════════════════════════
+// SET 빠른등록 패널
+// ══════════════════════════════════════════════
+function toggleSetPanel() {
+  const panel = document.getElementById('setRegPanel');
+  const arrow = document.getElementById('setArrow');
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  arrow.textContent = open ? '▲' : '▼';
+  if (open) renderSetRegList();
+}
+
+function quickRegSet() {
+  const sab = (document.getElementById('setRegSab').value || '').trim();
+  const gp  = (document.getElementById('setRegGp').value  || '').trim();
+  if (!sab || !gp) { showToast('사방넷코드와 김포품번을 모두 입력하세요', 'warn'); return; }
+  extraMap[sab] = gp;
+  saveExtra();
+  document.getElementById('setRegSab').value = '';
+  document.getElementById('setRegGp').value  = '';
+  showToast(`✅ SET 등록: ${sab} → ${gp}`, 'ok', 3000);
+  renderSetRegList();
+  const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
+  if (sheetsUrl) {
+    showToast('🔄 구글시트 동기화 중...', 'warn', 4000);
+    fetch(sheetsUrl, {
+      method: 'POST',
+      body: JSON.stringify({ map: extraMap, soldout: soldoutMap }),
+      headers: { 'Content-Type': 'text/plain' }
+    }).then(r => r.json()).then(d => {
+      if (d.ok) showToast(`✅ 구글시트 반영 완료`, 'ok');
+      else showToast('⚠ 구글시트 반영 실패 — 로컬만 저장됨', 'err');
+    }).catch(() => showToast('⚠ 구글시트 연결 오류 — 로컬만 저장됨', 'err'));
+  }
+}
+
+function renderSetRegList() {
+  const el = document.getElementById('setRegList');
+  if (!el) return;
+  // extraMap에서 SET 관련 항목만 추출 (코드에 _set, -set, 2set, 4set 포함)
+  const setEntries = Object.entries(extraMap)
+    .filter(([k, v]) => v !== '__DELETED__' && /(_set|-set|\dset)/i.test(k));
+  const cntTag = document.getElementById('setRegCntTag');
+  if (cntTag) cntTag.textContent = setEntries.length + '건';
+  if (!setEntries.length) {
+    el.innerHTML = '<div style="font-size:10px;color:var(--text3);padding:4px 0">등록된 SET 없음</div>';
+    return;
+  }
+  el.innerHTML = setEntries.map(([sab, gp]) => {
+    const qty = gpMap[gp] !== undefined ? gpMap[gp] : '—';
+    const col = qty > 0 ? 'var(--success)' : qty === 0 ? 'var(--warn)' : 'var(--text3)';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--border);gap:4px">
+      <span style="font-family:var(--mono);font-size:10px;color:var(--accent);word-break:break-all">${sab}</span>
+      <span style="font-family:var(--mono);font-size:10px;white-space:nowrap">
+        <span style="color:var(--text2)">${gp}</span>
+        <span style="color:${col}"> (${qty})</span>
+        <button onclick="delSetReg('${sab}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:11px;padding:0 2px;margin-left:2px">✕</button>
+      </span>
+    </div>`;
+  }).join('');
+}
+
+function delSetReg(sab) {
+  if (!confirm(`"${sab}" SET 등록을 삭제할까요?`)) return;
+  extraMap[sab] = '__DELETED__';
+  saveExtra();
+  showToast(`🗑 SET 삭제: ${sab}`, 'ok', 2000);
+  renderSetRegList();
 }
 
 function saveNomapEntries() {
@@ -3676,6 +3790,7 @@ if (batchZoneEl) {
 document.getElementById('expAll').style.border='2px solid var(--accent)';
 (async () => {
   loadExtra();
+  renderSetRegList();        // SET 등록 카운트 초기화
   tryLoadSavedMatchFile();   // localStorage 먼저 (파일 업로드 누적분 포함)
   await autoLoadFromSheets(); // 시트 데이터 머지 (공통 키는 시트 우선, 파일 전용 키는 보존)
 })();
