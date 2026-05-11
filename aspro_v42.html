@@ -135,9 +135,17 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+/* toast */
+#toastBox{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:6px;pointer-events:none;}
+.toast{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12.5px;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transform:translateY(10px);transition:opacity .25s,transform .25s;pointer-events:auto;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.ok{border-left:3px solid var(--success);}
+.toast.err{border-left:3px solid var(--danger);}
+.toast.warn{border-left:3px solid var(--warn);}
 </style>
 </head>
 <body>
+<div id="toastBox"></div>
 
 <div class="hdr">
   <div class="logo">ASPRO<em> / 가상재고</em></div>
@@ -921,6 +929,39 @@ const EXTRA_STATIC_MAP = {
   '100931-0001':'JW261GW01-GN-55','100931-0002':'JW261GW01-GN-66','100931-0003':'JW261GW01-GN-77','100931-0004':'JW261GW01-GN-88',
   '100931-0005':'JW261GW01-GR-55','100931-0006':'JW261GW01-GR-66','100931-0007':'JW261GW01-GR-77','100931-0008':'JW261GW01-GR-88',
   '100931-0009':'JW261GW01-NA-55','100931-0010':'JW261GW01-NA-66','100931-0011':'JW261GW01-NA-77','100931-0012':'JW261GW01-NA-88',
+  // ── [SET] 울블렌드 니트 셋업 (251NT14 CD=재킷+SK=스커트 세트, min재고) ──
+  // 100405 블랙 / 100406 오트베이지 / 100407 라벤더그레이 / 100408 크림
+  '100405-0001':'251NT14-CD-BK-55+251NT14-SK-BK-55','100405-0002':'251NT14-CD-BK-66+251NT14-SK-BK-66',
+  '100405-0003':'251NT14-CD-BK-77+251NT14-SK-BK-77','100405-0004':'251NT14-CD-BK-88+251NT14-SK-BK-88',
+  '100406-0001':'251NT14-CD-OT-55+251NT14-SK-OT-55','100406-0002':'251NT14-CD-OT-66+251NT14-SK-OT-66',
+  '100406-0003':'251NT14-CD-OT-77+251NT14-SK-OT-77','100406-0004':'251NT14-CD-OT-88+251NT14-SK-OT-88',
+  '100407-0001':'251NT14-CD-LA-55+251NT14-SK-LA-55','100407-0002':'251NT14-CD-LA-66+251NT14-SK-LA-66',
+  '100407-0003':'251NT14-CD-LA-77+251NT14-SK-LA-77','100407-0004':'251NT14-CD-LA-88+251NT14-SK-LA-88',
+  '100408-0001':'251NT14-CD-CR-55+251NT14-SK-CR-55','100408-0002':'251NT14-CD-CR-66+251NT14-SK-CR-66',
+  '100408-0003':'251NT14-CD-CR-77+251NT14-SK-CR-77','100408-0004':'251NT14-CD-CR-88+251NT14-SK-CR-88',
+  // 102633 = [SET] 울블렌드 니트 셋업 4종택1
+  // 옵션 형식: "55:크림" (SIZE:COLOR) → parseOpt가 자동 swap → GP_MULTI_TYPE_SET['251NT14']로 CD+SK min 처리
+  '102633-0001':'251NT14','102633-0002':'251NT14','102633-0003':'251NT14','102633-0004':'251NT14',
+  '102633-0005':'251NT14','102633-0006':'251NT14','102633-0007':'251NT14','102633-0008':'251NT14',
+  '102633-0009':'251NT14','102633-0010':'251NT14','102633-0011':'251NT14','102633-0012':'251NT14',
+  '102633-0013':'251NT14','102633-0014':'251NT14','102633-0015':'251NT14','102633-0016':'251NT14',
+  // ── 린넨 크로셰 카라 니트 → 김포 252NT33 (BL=틸블루, MO=모카무스, OT=오트밀) ──
+  // 100448 [3컬러]: OATMEAL(OT), MOCHA MOUSSE(MO), TEAL BLUE(BL)
+  '100448-0001':'252NT33-OT-55','100448-0002':'252NT33-OT-66','100448-0003':'252NT33-OT-77','100448-0004':'252NT33-OT-88',
+  '100448-0005':'252NT33-MO-55','100448-0006':'252NT33-MO-66','100448-0007':'252NT33-MO-77','100448-0008':'252NT33-MO-88',
+  '100448-0009':'252NT33-BL-55','100448-0010':'252NT33-BL-66','100448-0011':'252NT33-BL-77','100448-0012':'252NT33-BL-88',
+  // 102604=틸블루(BL), 102605=모카무스(MO), 102606=오트밀(OT) 단품
+  '102604-0001':'252NT33-BL-55','102604-0002':'252NT33-BL-66','102604-0003':'252NT33-BL-77','102604-0004':'252NT33-BL-88',
+  '102605-0001':'252NT33-MO-55','102605-0002':'252NT33-MO-66','102605-0003':'252NT33-MO-77','102605-0004':'252NT33-MO-88',
+  '102606-0001':'252NT33-OT-55','102606-0002':'252NT33-OT-66','102606-0003':'252NT33-OT-77','102606-0004':'252NT33-OT-88',
+  // ── 린넨 핀턱 니트 버뮤다 팬츠 → 김포 253NT05 (오트밀→BE, 모카무스→CH, 틸블루=없음) ──
+  '100454-0001':'253NT05-BE-55','100454-0002':'253NT05-BE-66','100454-0003':'253NT05-BE-77','100454-0004':'253NT05-BE-88',
+  '100455-0001':'253NT05-CH-55','100455-0002':'253NT05-CH-66','100455-0003':'253NT05-CH-77','100455-0004':'253NT05-CH-88',
+  // ── 마리본 썸머 크로셰 점퍼 4종택1 → 김포 252MX18CD ──
+  '101820-0001':'252MX18CD-BK-55','101820-0002':'252MX18CD-BK-66','101820-0003':'252MX18CD-BK-77','101820-0004':'252MX18CD-BK-88',
+  '101820-0005':'252MX18CD-KH-55','101820-0006':'252MX18CD-KH-66','101820-0007':'252MX18CD-KH-77','101820-0008':'252MX18CD-KH-88',
+  '101820-0009':'252MX18CD-GR-55','101820-0010':'252MX18CD-GR-66','101820-0011':'252MX18CD-GR-77','101820-0012':'252MX18CD-GR-88',
+  '101820-0013':'252MX18CD-WH-55','101820-0014':'252MX18CD-WH-66','101820-0015':'252MX18CD-WH-77','101820-0016':'252MX18CD-WH-88',
 };
 
 // ── LS 로드 ──
@@ -1408,6 +1449,11 @@ const GP_SET_COLOR_OVERRIDE = {
   'JW25SS01':    { gpPrefix: '252JW19', colorMap: { '아이보리':'IV', '스카이블루':'BL', '블랙':'BK', '블루':'BL', '플럼':'BL' } },
   'NT252G0043CD':{ gpPrefix: '252NT41', colorMap: { '오션블루':'BL', '화이트':'IV', '블랙':'BK', '블루':'BL', '아이보리':'IV' } },
 };
+// 세트 상품 타입 분기: prefix → ['타입1','타입2',...] (같은 색상/사이즈로 여러 아이템 묶음)
+// matchMap 값에 prefix만 저장하면 여기서 각 타입별 gpMap 조회 후 min 반환
+const GP_MULTI_TYPE_SET = {
+  '251NT14': ['CD', 'SK'],  // [SET]여성 울블렌드 니트 셋업 (카디건+스커트)
+};
 
 function getGimpoQty(sabCode, opt, sabName, jache = '') {
   let 물류 = EXTRA_STATIC_MAP[sabCode] || extraMap[sabCode] || matchMap[sabCode];
@@ -1465,6 +1511,28 @@ function getGimpoQty(sabCode, opt, sabName, jache = '') {
       }
     }
     if (물류) log(`[자체→김포] ${sabCode}(${jache}) → ${물류}`, 'info');
+  }
+
+  // ── GP_MULTI_TYPE_SET: 같은 색상/사이즈로 여러 타입 묶음 세트 (예: CD+SK) ──
+  // matchMap 값이 prefix만 있을 때 (예: '251NT14') 각 타입 재고 min 반환
+  if (물류 && GP_MULTI_TYPE_SET[물류]) {
+    const types = GP_MULTI_TYPE_SET[물류];
+    const { cc, sz } = parseOpt(opt || '');
+    if (cc && sz) {
+      const gpKeys = types.map(t => `${물류}-${t}-${cc}-${sz}`);
+      const qtys = gpKeys.map(k => gpMap[k] !== undefined ? gpMap[k] : null);
+      if (qtys.some(q => q === null)) return null;
+      return { qty: Math.min(...qtys), src: '김포(세트)', 물류품번: gpKeys.join('+') };
+    }
+    return null;
+  }
+
+  // ── 물류품번 '+' 멀티코드 세트: EXTRA_STATIC_MAP에서 "GP1+GP2" 형태로 저장된 경우 ──
+  if (물류 && 물류.includes('+')) {
+    const parts = 물류.split('+').map(s => s.trim()).filter(Boolean);
+    const qtys = parts.map(p => gpMap[p] !== undefined ? gpMap[p] : null);
+    if (qtys.some(q => q === null)) return null;
+    return { qty: Math.min(...qtys), src: '김포(세트)', 물류품번: 물류 };
   }
 
   if (!물류) return null;
@@ -1605,10 +1673,15 @@ function parseOpt(opt) {
     return { cc: colors[0], sz, isSet: true, setColors: colors };
   }
   if (opt.includes(':')) {
-    const parts = opt.split(':');
-    const cRaw = parts[0].trim();
-    const cc = COLOR_MAP[cRaw.toUpperCase()] || COLOR_MAP[cRaw] || cRaw.slice(0,2).toUpperCase();
-    return { cc, sz: parts[parts.length-1].trim(), isSet: false };
+    const colonIdx = opt.lastIndexOf(':');
+    const left = opt.slice(0, colonIdx).trim();
+    const right = opt.slice(colonIdx + 1).trim();
+    // SIZE:COLOR 역순 형식 감지 (예: "55:크림") — 앞부분이 숫자면 swap
+    let cRaw, sz;
+    if (/^\d{2,3}$/.test(left)) { cRaw = right; sz = left; }
+    else { cRaw = left; sz = right; }
+    const cc = COLOR_MAP[cRaw.toUpperCase()] || COLOR_MAP[cRaw] || null;
+    return { cc, sz, isSet: false };
   }
   return { cc: null, sz: opt.trim(), isSet: false };
 }
@@ -3087,6 +3160,7 @@ async function loadFromSheets() {
     st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건`;
     st.style.color = 'var(--success)';
     log(`[OK] CSV 직접 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
+    showToast(`✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건`, 'ok', 5000);
     if (currentTab === 'mapview') renderMapview();
   } catch(e) {
     const isTimeout = e.name === 'AbortError';
@@ -3139,6 +3213,19 @@ async function autoLoadFromSheets() {
     try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
     updateSavedMapCnt(); updateSoldoutCnt();
 
+    // EXTRA_STATIC_MAP 중 Sheets에 없는 단일GP 항목 → 자동 업로드 (SET 멀티GP는 제외)
+    const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
+    if (sheetsUrl) {
+      const newStatic = {};
+      for (const [sc, gp] of Object.entries(EXTRA_STATIC_MAP)) {
+        if (!gp.includes('+') && !importedMap[sc]) newStatic[sc] = gp;
+      }
+      if (Object.keys(newStatic).length > 0) {
+        fetch(sheetsUrl, { method:'POST', body: JSON.stringify({ map: newStatic }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
+        log(`[INFO] EXTRA_STATIC_MAP 신규 ${Object.keys(newStatic).length}건 → aspro_match 업로드`, 'info');
+      }
+    }
+
     if (btn) {
       const cnt = Object.keys(matchMap).length;
       btn.textContent = `☁ Sheets (${cnt.toLocaleString()}건)`;
@@ -3160,11 +3247,16 @@ async function autoLoadFromSheets() {
       log('[OK] 백그라운드 로드 완료 (normname/iccodemap)', 'ok');
     }).catch(()=>{});
 
-    log(`[OK] CSV 자동 불러오기: 매핑 ${Object.keys(matchMap).length}건`, 'ok');
+    const mapCnt = Object.keys(matchMap).length;
+    const soCnt  = Object.keys(soldoutMap).length;
+    const kcCnt  = Object.keys(kcfiMap).length;
+    log(`[OK] CSV 자동 불러오기: 매핑 ${mapCnt}건`, 'ok');
+    showToast(`✅ 시트 자동 동기화 완료 — 매핑 ${mapCnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcCnt}건`, 'ok', 5000);
     if (currentTab === 'mapview') renderMapview();
   } catch(e) {
     if (btn) { btn.style.background='var(--warn)'; btn.style.color='#000'; btn.textContent='⚠ 불러오기 실패'; }
     log(`[ERR] CSV 자동 불러오기: ${e.message}`, 'err');
+    showToast(`⚠ 시트 자동 동기화 실패 — localStorage 데이터 사용 중`, 'err', 6000);
     // localStorage 폴백
     const lsMatch = localStorage.getItem('aspro_matchfile_v2');
     if (lsMatch) { try { matchMap=JSON.parse(lsMatch); updateSavedMapCnt(); log(`[INFO] localStorage 복원: ${Object.keys(matchMap).length}건`,'info'); } catch(e2) {} }
@@ -3448,6 +3540,19 @@ function log(msg, type='info'){
   a.scrollTop=a.scrollHeight;
 }
 
+function showToast(msg, type='ok', duration=4000){
+  const box = document.getElementById('toastBox'); if(!box) return;
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  box.appendChild(el);
+  requestAnimationFrame(() => { requestAnimationFrame(() => { el.classList.add('show'); }); });
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
 function resetAll(){
   if(!confirm('초기화하시겠습니까? (매핑·품절·신원재고는 유지)')) return;
   icMap={}; gpMap={}; sabData=[]; sabRaw=[]; resultRows=[]; filteredRows=[]; nomapRows=[]; normOptMap={};
@@ -3518,6 +3623,33 @@ function openZeroRemap(ri) {
 function closeZeroRemap() {
   document.getElementById('zeroRemapModal').style.display = 'none';
   _zrIdx = null;
+}
+function zrSearch() {
+  const q = document.getElementById('zrInput').value.trim();
+  const drop = document.getElementById('zrDrop');
+  if (!q || q.length < 2) { drop.style.display = 'none'; return; }
+  const qU = q.toUpperCase();
+  const matches = Object.entries(gpMap)
+    .filter(([k]) => k.toUpperCase().includes(qU))
+    .sort((a, b) => {
+      const aS = a[0].toUpperCase().startsWith(qU) ? 0 : 1;
+      const bS = b[0].toUpperCase().startsWith(qU) ? 0 : 1;
+      return aS - bS || a[0].localeCompare(b[0]);
+    })
+    .slice(0, 15);
+  if (!matches.length) {
+    drop.innerHTML = '<div style="padding:6px 10px;color:var(--text3);font-size:10px">검색 결과 없음</div>';
+  } else {
+    drop.innerHTML = matches.map(([gp, qty]) =>
+      `<div onclick="document.getElementById('zrInput').value='${gp.replace(/'/g,"\\'")}';document.getElementById('zrDrop').style.display='none'"
+        style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
+        <span style="font-family:var(--mono);font-size:10px;flex:1">${gp}</span>
+        <span style="font-size:9px;color:${qty>0?'var(--success)':'var(--text3)'}">${qty}</span>
+        <span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--accent2);color:#fff">김포</span>
+      </div>`
+    ).join('');
+  }
+  drop.style.display = 'block';
 }
 function zrSuggest() {
   const r = resultRows[_zrIdx];
@@ -3694,7 +3826,7 @@ function closeColorModal() {
     <div id="zrInfo" style="font-size:10px;color:var(--text3);margin-bottom:10px;font-family:var(--mono)"></div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px">현재 매핑: <span id="zrCurrent" style="font-family:var(--mono);color:var(--warn)"></span></div>
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-      <input class="fi" id="zrInput" placeholder="새 물류품번 입력..." style="flex:1;font-family:var(--mono)" onkeydown="if(event.key==='Enter')applyZeroRemap()">
+      <input class="fi" id="zrInput" placeholder="새 물류품번 입력... (2자 이상 자동검색)" style="flex:1;font-family:var(--mono)" oninput="zrSearch()" onkeydown="if(event.key==='Enter')applyZeroRemap()">
       <button class="btn" style="color:var(--accent2);border-color:var(--accent2);white-space:nowrap" onclick="zrSuggest()">🔍 추천</button>
     </div>
     <div id="zrDrop" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:4px;max-height:160px;overflow-y:auto;margin-bottom:10px"></div>
