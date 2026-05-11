@@ -1811,9 +1811,19 @@ function runMatch() {
       finalQty = kcfiQty; src = 'KCFI';
       물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
     }
-    if (finalQty === null && soldoutMap[sc]) {
-      finalQty = 0; src = '품절처리'; 물류품번 = '—'; cZ++;
-    } else if (finalQty === null) {
+    // 품절 강제 적용 — 재고 있어도 덮어씀 (시트/로컬 soldoutMap 기준)
+    if (sc in soldoutMap) {
+      finalQty = 0; src = '품절처리';
+    }
+    // forceZero 강제 적용 — 물류품번 prefix 기반, 재고 있어도 0
+    if (finalQty !== null) {
+      const 매핑gp = (extraMap[sc] || matchMap[sc] || '').trim();
+      if (매핑gp && Object.keys(forceZeroMap).some(pfx => 매핑gp.startsWith(pfx))) {
+        finalQty = 0; src = '강제0';
+      }
+    }
+
+    if (finalQty === null) {
       cNM++;
       // 미매핑 이유 분류
       const allMaps2 = { ...matchMap, ...extraMap };
