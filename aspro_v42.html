@@ -1181,9 +1181,10 @@ const IC_STATIC_MAP = {
 // 형식: { '자체코드prefix': { gpPrefix: '김포prefix', colorMap: { '한글색상': '코드' } } }
 // 초기값: 기존 하드코딩 데이터 (Sheets 로드 전 폴백용)
 let setRuleMap = {
-  'MS25S':    { gpPrefix: '252MX05', colorMap: { '플럼':'PL','차콜':'GR','그레이':'GR','베이지':'BE','블랙':'BK' } },
+  'MS25S':    { gpPrefix: '252MX05', colorMap: { '플럼':'BU','차콜':'GR','그레이':'GR','베이지':'BE','블랙':'BK' } },
   'JW25SS02': { gpPrefix: '252JW19', colorMap: { '아이보리':'IV','스카이블루':'BL','블랙':'BK' } },
-  'N1009':    { gpPrefix: 'N1009',   colorMap: { '브라운':'BR','라이트그레이':'LG','네이비':'NA' } },
+  'N1009':    { gpPrefix: 'N1009',   colorMap: { '브라운':'BR','라이트그레이':'LG','리이트그레이':'LG','네이비':'NA' } },
+  '252JW10':  { gpPrefix: '252JW10', colorMap: { '화이트':'WH','블랙':'BK','블루':'BL','아이보리':'IV' } },
 };
 
 function getGimpoQty(sabCode, opt, sabName) {
@@ -1195,7 +1196,10 @@ function getGimpoQty(sabCode, opt, sabName) {
   if (!물류 && opt && opt.includes('+') && opt.includes(':')) {
     const sabRow = sabData.find(s => s.사방넷코드 === sabCode);
     const jache = sabRow?.자체코드 || '';
-    const prefix = jache.replace(/_SET$/i, '').replace(/-SET$/i, '').split('-')[0];
+    // prefix 추출: _SET/-SET 제거 후 → setRuleMap에서 가장 긴 매칭 찾기
+    const jacheClean = jache.replace(/_SET$/i, '').replace(/-SET$/i, '');
+    // 전체 코드로 먼저 시도, 없으면 첫 번째 세그먼트
+    const prefix = setRuleMap[jacheClean] ? jacheClean : jacheClean.split('-')[0];
     const colorOvr = setRuleMap[prefix];
     if (colorOvr) {
       const gpPrefix = colorOvr.gpPrefix;
@@ -1210,6 +1214,7 @@ function getGimpoQty(sabCode, opt, sabName) {
       if (qtys.some(q => q === null)) return null;
       const setQty = Math.min(...qtys);
       const gpCodes = colors.map(c => `${gpPrefix}-${c}-${sz}`);
+      log(`[OK] 세트매핑: ${jache} → ${gpCodes.join('+')} 최솟값=${setQty}`, 'info');
       return { qty: setQty, src: '김포(세트)', 물류품번: gpCodes.join('+') };
     }
   }
