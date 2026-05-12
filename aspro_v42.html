@@ -2746,6 +2746,7 @@ function getSheetsUrl() {
 
 function sanitizeSheetsPayload(data) {
   const payload = { ...data };
+  delete payload._verifyMap;
   if (payload.map) {
     const cleanMap = {};
     Object.entries(payload.map).forEach(([sc, gp]) => {
@@ -2798,7 +2799,7 @@ async function sheetsPOST(data, toastMsg) {
       body: JSON.stringify(payload),
       headers: { 'Content-Type': 'text/plain' }
     });
-    const sample = sampleMapEntries(payload.map);
+    const sample = sampleMapEntries(data._verifyMap || payload.map);
     const verified = await verifySheetMapSaved(sample).catch(e => {
       log(`[WARN] Sheets 저장 검증 실패: ${e.message}`, 'warn');
       return false;
@@ -2820,6 +2821,7 @@ async function sheetsPOST(data, toastMsg) {
 
 function saveNomapEntries() {
   let saved = 0;
+  const changedMap = {};
   // 매핑없음 탭에서 입력된 것
   nomapRows.forEach((r, i) => {
     const el = document.getElementById(`ngp_${i}`);
@@ -2831,6 +2833,7 @@ function saveNomapEntries() {
       if (st) { st.textContent = '✅이카'; st.style.color = 'var(--accent)'; }
     } else if (val) {
       extraMap[r.사방넷코드] = val; saved++;
+      changedMap[r.사방넷코드] = val;
       const st = document.getElementById(`nst_${i}`);
       if (st) { st.textContent = '✅'; st.style.color = ''; }
     }
@@ -2849,12 +2852,14 @@ function saveNomapEntries() {
       // 매칭파일 항목: 값이 원본과 다르면 extraMap에 오버라이드
       if (newGp && newGp !== matchMap[origSc]) {
         extraMap[origSc] = newGp;
+        changedMap[origSc] = newGp;
         saved++;
       }
       if (newSc && newSc !== origSc && newGp) {
         // 코드도 변경된 경우: 기존 코드는 __DELETED__ 처리, 새 코드로 추가
         extraMap[origSc] = '__DELETED__';
         extraMap[newSc] = newGp;
+        changedMap[newSc] = newGp;
         el.dataset.orig = newSc;
         saved++;
       }
@@ -2864,7 +2869,7 @@ function saveNomapEntries() {
         delete extraMap[origSc];
         el.dataset.orig = newSc;
       }
-      if (newSc && newGp) { extraMap[newSc] = newGp; saved++; }
+      if (newSc && newGp) { extraMap[newSc] = newGp; changedMap[newSc] = newGp; saved++; }
       else if (newSc && !newGp) { delete extraMap[newSc]; }
     }
   });
@@ -2885,7 +2890,7 @@ function saveNomapEntries() {
     if (sabData.length && Object.keys(gpMap).length) processAll();
     else if (currentTab === 'nomap') renderNomap();
     else if (currentTab === 'mapview') renderMapview();
-    sheetsPOST({ map: extraMap, soldout: soldoutMap, iccodemap: icCodeMap }, '✅ 구글시트 반영 완료');
+    sheetsPOST({ map: extraMap, soldout: soldoutMap, iccodemap: icCodeMap, _verifyMap: changedMap }, '✅ 구글시트 반영 완료');
   } else {
     showToast('❌ 저장 실패', 'err');
   }
