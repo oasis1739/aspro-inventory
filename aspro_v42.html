@@ -1188,17 +1188,13 @@ let setRuleMap = {
 };
 
 function getGimpoQty(sabCode, opt, sabName) {
-  let 물류 = EXTRA_STATIC_MAP[sabCode] || extraMap[sabCode] || matchMap[sabCode];
-  // __DELETED__ 처리: extraMap에서 명시적으로 삭제된 항목
-  if (물류 === '__DELETED__') return null;
-
-  // ── 세트 옵션 처리 (예: 아이보리+스카이블루+블랙:55) ──
-  if (!물류 && opt && opt.includes('+') && opt.includes(':')) {
+  // ── 세트 옵션 처리 최우선 (예: 화이트+블랙+블루:55) ──
+  // EXTRA_STATIC_MAP/extraMap/matchMap 하드코딩보다 먼저 체크
+  // (하드코딩이 잘못된 SET 코드를 가리킬 수 있으므로)
+  if (opt && opt.includes('+') && opt.includes(':')) {
     const sabRow = sabData.find(s => s.사방넷코드 === sabCode);
     const jache = sabRow?.자체코드 || '';
-    // prefix 추출: _SET/-SET 제거 후 → setRuleMap에서 가장 긴 매칭 찾기
     const jacheClean = jache.replace(/_SET$/i, '').replace(/-SET$/i, '');
-    // 전체 코드로 먼저 시도, 없으면 첫 번째 세그먼트
     const prefix = setRuleMap[jacheClean] ? jacheClean : jacheClean.split('-')[0];
     const colorOvr = setRuleMap[prefix];
     if (colorOvr) {
@@ -1218,6 +1214,10 @@ function getGimpoQty(sabCode, opt, sabName) {
       return { qty: setQty, src: '김포(세트)', 물류품번: gpCodes.join('+') };
     }
   }
+
+  let 물류 = EXTRA_STATIC_MAP[sabCode] || extraMap[sabCode] || matchMap[sabCode];
+  // __DELETED__ 처리: extraMap에서 명시적으로 삭제된 항목
+  if (물류 === '__DELETED__') return null;
 
   if (!물류 && sabName && opt) {
     const key = normName(sabName) + '||' + normOpt(opt);
