@@ -788,6 +788,14 @@ function loadExtra() {
       if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">💾 신원재고 localStorage</div><div class="fcnt">${n}건</div></div>`;
     }
   } catch(e) { kcfiMap = {}; }
+  try {
+    const fz = localStorage.getItem('aspro_forcezero_v1');
+    if (fz) {
+      forceZeroMap = JSON.parse(fz);
+      const n = Object.keys(forceZeroMap).length;
+      if (n > 0) log(`[OK] 저장된 강제품절 로드: ${n}건`, 'ok');
+    }
+  } catch(e) { forceZeroMap = {}; }
   updateSoldoutCnt();
   updateKCFICnt();
   if (!localStorage.getItem(SHEETS_URL_KEY) && DEFAULT_SHEETS_URL) {
