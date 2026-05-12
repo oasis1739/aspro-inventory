@@ -662,6 +662,8 @@ function doPost(e) {
 // STATE
 // ══════════════════════════════════════════════
 const LS_KEY = 'aspro_sab_gimpo_map_v2';
+const SHEETS_URL_KEY = 'aspro_sheets_url';
+const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
 
 let icMap = {};
 let gpMap = {};
@@ -1674,52 +1676,73 @@ function renderMain(rows) {
 
 // ── 전체/매칭완료 탭 인라인 매핑 수정 ──
 function openInlineMapEdit(sc, currentGp, spanEl) {
-  const existingInput = spanEl.parentElement.querySelector(".inline-map-input");
-  if (existingInput) { existingInput.remove(); spanEl.style.display=""; return; }
-  spanEl.style.display = "none";
+  const existingInput = spanEl.parentElement.querySelector('.inline-map-input');
+  if (existingInput) { existingInput.remove(); spanEl.style.display = ''; return; }
+  spanEl.style.display = 'none';
   const td = spanEl.parentElement;
-  const wrapper = document.createElement("div");
-  wrapper.className = "inline-map-input";
-  wrapper.style.cssText = "display:flex;gap:3px;align-items:center";
-  const input = document.createElement("input");
-  input.className = "mi";
-  input.style.cssText = "width:140px;font-size:10px";
-  input.value = (currentGp === "u2014" || currentGp === "__DELETED__") ? "" : currentGp;
-  input.placeholder = "ubb3cub958ud488ubc88 uc785ub825";
-  const saveBtn = document.createElement("button");
-  saveBtn.className = "btn btn-s";
-  saveBtn.style.cssText = "padding:1px 6px;font-size:10px";
-  saveBtn.textContent = "uc800uc7a5";
-  saveBtn.onclick = function() {
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'inline-map-input';
+  wrapper.style.cssText = 'display:flex;gap:3px;align-items:center';
+
+  const input = document.createElement('input');
+  input.className = 'mi';
+  input.style.cssText = 'width:150px;font-size:10px';
+  input.value = (currentGp === '—' || currentGp === '__DELETED__') ? '' : currentGp;
+  input.placeholder = '물류품번 입력';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-s';
+  saveBtn.style.cssText = 'padding:2px 7px;font-size:10px';
+  saveBtn.textContent = '저장';
+  saveBtn.onclick = () => {
     const newGp = input.value.trim();
-    if (!newGp) { alert("ubb3cub958ud488ubc88uc744 uc785ub825ud558uc138uc694."); return; }
-    if (!isValidGp(newGp)) { alert("uc720ud6a8ud558uc9c0 uc54auc740 ubb3cub958ud488ubc88uc785ub2c8ub2e4."); return; }
+    if (!newGp) { alert('물류품번을 입력하세요.'); return; }
+    if (!isValidGp(newGp)) { alert('유효하지 않은 물류품번입니다.'); return; }
     extraMap[sc] = newGp;
     saveExtra();
     const saveMap = {};
-    Object.entries(Object.assign({}, matchMap, extraMap)).forEach(function(e2) { if (e2[1] !== "__DELETED__" && isValidGp(e2[1])) saveMap[e2[0]] = e2[1]; });
-    try { localStorage.setItem("aspro_matchfile_v2", JSON.stringify(saveMap)); } catch(err) {}
+    Object.entries({ ...matchMap, ...extraMap }).forEach(([k, v]) => {
+      if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = v;
+    });
+    try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(saveMap)); } catch(e) {}
     spanEl.textContent = newGp;
-    spanEl.style.display = "";
+    spanEl.style.display = '';
     wrapper.remove();
-    const row = resultRows.find(function(r) { return r["uc0acubc29ub137ucf54ub4dc"] === sc; });
-    if (row) row["_ubb3cub958ud488ubc88"] = newGp;
+    // resultRows 업데이트 (재매칭 없이 표시 갱신)
+    const row = resultRows.find(r => r['사방넷코드'] === sc);
+    if (row) row['_물류품번'] = newGp;
     updateSavedMapCnt();
-    log("[OK] uc778ub77cuc778 ub9e4ud551 uc218uc815: " + sc + " u2192 " + newGp, "ok");
+    log(`[OK] 인라인 매핑 수정: ${sc} → ${newGp}`, 'ok');
+    // Sheets 자동 반영
     const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
     if (sheetsUrl) {
-      fetch(sheetsUrl, { method: "POST", body: JSON.stringify({ map: saveMap, soldout: soldoutMap, nameMap: buildNameMap(saveMap) }), headers: { "Content-Type": "text/plain" } })
-        .then(function(r){return r.json();}).then(function(d){ if(d.ok) log("[OK] uc778ub77cuc778 Sheets ubc18uc601: "+d.saved+"uac74","ok"); else log("[WARN] Sheets ubc18uc601 uc2e4ud328 (ub85cucec8uc740 uc800uc7a5ub428)","warn"); }).catch(function(){ log("[WARN] Sheets ubc18uc601 uc2e4ud328 (ub85cucec8uc740 uc800uc7a5ub428)","warn"); });
+      fetch(sheetsUrl, {
+        method: 'POST',
+        body: JSON.stringify({ map: saveMap, soldout: soldoutMap, nameMap: buildNameMap(saveMap) }),
+        headers: { 'Content-Type': 'text/plain' }
+      }).then(r => r.json()).then(d => {
+        if (d.ok) { setSheetStatus(`✅ 매핑 저장됨: ${sc} → ${newGp}`, 'var(--success)'); log(`[OK] 인라인 Sheets 반영: ${d.saved}건`, 'ok'); }
+        else { setSheetStatus('⚠ 로컬 저장됨, Sheets 반영 실패', 'var(--warn)'); }
+      }).catch(() => setSheetStatus('⚠ 로컬 저장됨, Sheets 반영 실패', 'var(--warn)'));
+    } else {
+      setSheetStatus(`✅ 매핑 저장됨: ${sc} → ${newGp}`, 'var(--success)');
     }
   };
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "btn btn-n";
-  cancelBtn.style.cssText = "padding:1px 5px;font-size:10px";
-  cancelBtn.textContent = "u2715";
-  cancelBtn.onclick = function() { wrapper.remove(); spanEl.style.display=""; };
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-n';
+  cancelBtn.style.cssText = 'padding:2px 5px;font-size:10px';
+  cancelBtn.textContent = '✕';
+  cancelBtn.onclick = () => { wrapper.remove(); spanEl.style.display = ''; };
+
+  // Enter키로 저장
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click(); if (e.key === 'Escape') cancelBtn.click(); });
+
   wrapper.append(input, saveBtn, cancelBtn);
   td.appendChild(wrapper);
-  input.focus(); input.select();
+  input.focus();
+  input.select();
 }
 function renderNomap() {
   const tbody = document.getElementById('nomapBody');
@@ -2330,7 +2353,7 @@ function onMVgp(el, sc, src) {
   }
   // 매칭파일 항목: 실시간 반영은 저장 시 처리
   // 재고 표시 업데이트
-  const td = el.closest('tr')?.cells[3];
+  const td = el.closest('tr')?.cells[4];
   if (td && gpMap[newGp] !== undefined) {
     td.textContent = gpMap[newGp];
     td.style.color = gpMap[newGp] > 0 ? 'var(--success)' : 'var(--warn)';
@@ -2443,7 +2466,6 @@ function exportMapExcel(){
 }
 
 // ── Google Sheets 연동 ──
-const SHEETS_URL_KEY = 'aspro_sheets_url';
 const INVALID_GP_VALUES = new Set([
   'KCFI 코드없음','슈컴퍼니','슈컴퍼니-김포이관','확인요망','#N/A',
   '김포재고O상품코드X','삭제요청','삭제요청위에중복','품절',
@@ -2478,7 +2500,6 @@ function cleanMatchMap(map) {
   if (removed > 0) log(`[INFO] 유효하지 않은 매핑 ${removed}건 제거됨 (_SET 코드는 보호됨)`, 'info');
   return cleaned;
 }
-const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
 
 function showSheetsModal() {
   const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
@@ -2515,7 +2536,16 @@ async function loadFromSheets() {
     const importedIcCodeMap = data.iccodemap || {};
     const filteredImport = {};
     Object.entries(imported).forEach(([k,v]) => { if(isValidGp(v)) filteredImport[k]=v; });
-    matchMap = filteredImport;
+    // cleanMatchMap으로 _SET 보호 + 안전장치 적용 (autoLoadFromSheets와 동일)
+    const cleaned = cleanMatchMap(filteredImport);
+    const localCount = Object.keys(matchMap).length;
+    const sheetsCount = Object.keys(cleaned).length;
+    if (localCount > 50 && sheetsCount < localCount * 0.7) {
+      log(`[WARN] Sheets 매핑(${sheetsCount}건)이 로컬(${localCount}건)보다 적음 → 병합 처리`, 'warn');
+      matchMap = { ...matchMap, ...cleaned };
+    } else {
+      matchMap = cleaned;
+    }
 
     if (Object.keys(importedSoldout).length > 0) {
       soldoutMap = { ...importedSoldout };
@@ -2595,8 +2625,7 @@ async function saveToSheets() {
 function copyAppsScript() {
   const code = document.getElementById('appsScriptCode').textContent;
   navigator.clipboard.writeText(code).then(() => {
-    document.getElementById('sheetsStatus').textContent = '✅ 코드 복사됨';
-    document.getElementById('sheetsStatus').style.color = 'var(--success)';
+    setSheetStatus('✅ Apps Script 코드 복사됨 — 붙여넣기 후 재배포하세요', 'var(--success)');
   });
 }
 
@@ -2811,7 +2840,9 @@ async function autoLoadFromSheets() {
     }
   } catch(e) {
     const isTimeout = e.name === 'AbortError';
+    const errMsg = `❌ Sheets 연결 실패${isTimeout?' (타임아웃)':''} — 로컬 데이터로 실행됩니다`;
     log(`[WARN] Sheets 자동 동기화 실패${isTimeout?' (타임아웃)':''}: ${e.message}`, 'warn');
+    setSheetStatus(errMsg, 'var(--warn)');
     if (btn) {
       btn.style.background = 'var(--warn)'; btn.style.color = '#000';
       btn.style.borderColor = 'var(--warn)';
