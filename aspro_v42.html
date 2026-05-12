@@ -1285,16 +1285,8 @@ async function loadMatchFile(e) {
     // 신규 항목 시트에 반영 (이후 파일 없이도 동일 결과)
     const newCount = Object.keys(newEntries).length;
     if (newCount > 0) {
-      const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-      if (sheetsUrl) {
-        log(`[SYNC] 매칭파일 신규 ${newCount}건 → 시트 업로드 중...`, 'info');
-        fetch(sheetsUrl, {
-          method: 'POST',
-          body: JSON.stringify({ map: newEntries }),
-          headers: { 'Content-Type': 'text/plain' }
-        }).then(() => log(`[SYNC] 시트 업로드 완료 (${newCount}건)`, 'ok'))
-          .catch(err => log(`[WARN] 시트 업로드 실패: ${err.message}`, 'warn'));
-      }
+      log(`[SYNC] 매칭파일 신규 ${newCount}건 → 시트 업로드 중...`, 'info');
+      sheetsPOST({ map: newEntries });
     }
 
     normOptMap = {};
@@ -2510,16 +2502,7 @@ function renderSoldoutTab() {
 function setSoldout(sc, idx) {
   soldoutMap[sc] = new Date().toLocaleDateString('ko-KR');
   saveExtra();
-  const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-  if (sheetsUrl) {
-    fetch(sheetsUrl, {
-      method: 'POST',
-      body: JSON.stringify({ map: { ...matchMap, ...extraMap }, soldout: soldoutMap }),
-      headers: { 'Content-Type': 'text/plain' }
-    }).then(r => r.json()).then(d => {
-      if (d.ok) log(`[OK] 품절처리 Sheets 자동 반영: ${sc}`, 'ok');
-    }).catch(() => log(`[WARN] 품절처리 Sheets 저장 실패`, 'warn'));
-  }
+  sheetsPOST({ soldout: soldoutMap });
   const row = document.querySelector(`tr[data-sc="${sc}"]`);
   if (row) row.style.opacity = '0.4';
   const st = document.getElementById(`nst_${idx}`);
@@ -2538,16 +2521,7 @@ function cancelSoldout(sc) {
   saveExtra();
   updateSoldoutCnt();
   log(`[OK] 품절해제: ${sc}`, 'ok');
-  const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-  if (sheetsUrl) {
-    fetch(sheetsUrl, {
-      method: 'POST',
-      body: JSON.stringify({ map: { ...matchMap, ...extraMap }, soldout: soldoutMap }),
-      headers: { 'Content-Type': 'text/plain' }
-    }).then(r => r.json()).then(d => {
-      if (d.ok) log(`[OK] 품절해제 Sheets 자동 반영: ${sc}`, 'ok');
-    }).catch(() => {});
-  }
+  sheetsPOST({ soldout: soldoutMap });
 }
 
 function autoMapAll() {
@@ -2702,18 +2676,7 @@ function quickRegSet() {
   document.getElementById('setRegGp').value  = '';
   showToast(`✅ SET 등록: ${sab} → ${gp}`, 'ok', 3000);
   renderSetRegList();
-  const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-  if (sheetsUrl) {
-    showToast('🔄 구글시트 동기화 중...', 'warn', 4000);
-    fetch(sheetsUrl, {
-      method: 'POST',
-      body: JSON.stringify({ map: extraMap, soldout: soldoutMap }),
-      headers: { 'Content-Type': 'text/plain' }
-    }).then(r => r.json()).then(d => {
-      if (d.ok) showToast(`✅ 구글시트 반영 완료`, 'ok');
-      else showToast('⚠ 구글시트 반영 실패 — 로컬만 저장됨', 'err');
-    }).catch(() => showToast('⚠ 구글시트 연결 오류 — 로컬만 저장됨', 'err'));
-  }
+  sheetsPOST({ map: extraMap, soldout: soldoutMap }, '✅ Sheets 반영 완료');
 }
 
 function renderSetRegList() {
@@ -2748,6 +2711,21 @@ function delSetReg(sab) {
   saveExtra();
   showToast(`🗑 SET 삭제: ${sab}`, 'ok', 2000);
   renderSetRegList();
+}
+
+// ── Sheets POST 헬퍼 — mode:'no-cors'로 CORS 차단 없이 전송 (응답 읽기 불가, 전송은 됨) ──
+function sheetsPOST(data, toastMsg) {
+  const url = localStorage.getItem(SHEETS_URL_KEY);
+  if (!url) return;
+  fetch(url, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: JSON.stringify(data),
+    headers: { 'Content-Type': 'text/plain' }
+  }).then(() => {
+    if (toastMsg) showToast(toastMsg, 'ok', 3000);
+    log('[OK] Sheets 전송 완료 (no-cors)', 'ok');
+  }).catch(e => log(`[WARN] Sheets 전송 실패: ${e}`, 'warn'));
 }
 
 function saveNomapEntries() {
@@ -2816,26 +2794,7 @@ function saveNomapEntries() {
     showToast(`💾 로컬 저장 완료 (${saved}건)`, 'ok', 3000);
     if (currentTab === 'nomap') renderNomap();
     else if (currentTab === 'mapview') renderMapview();
-    const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-    if (sheetsUrl) {
-      showToast('🔄 구글시트 동기화 중...', 'warn', 5000);
-      fetch(sheetsUrl, {
-        method: 'POST',
-        body: JSON.stringify({ map: extraMap, soldout: soldoutMap }),
-        headers: { 'Content-Type': 'text/plain' }
-      }).then(r => r.json()).then(d => {
-        if (d.ok) {
-          log(`[OK] 구글시트 자동 반영: ${d.saved}건`, 'ok');
-          showToast(`✅ 구글시트 반영 완료 (${d.saved}건)`, 'ok');
-        } else {
-          log(`[WARN] 구글시트 반영 거부: ${JSON.stringify(d)}`, 'warn');
-          showToast('⚠ 구글시트 반영 실패 — 로컬만 저장됨', 'err');
-        }
-      }).catch(e => {
-        log(`[WARN] 구글시트 반영 실패: ${e}`, 'warn');
-        showToast('⚠ 구글시트 연결 오류 — 로컬만 저장됨', 'err');
-      });
-    }
+    sheetsPOST({ map: extraMap, soldout: soldoutMap, ic: icCodeMap }, '✅ 구글시트 반영 완료');
   } else {
     showToast('❌ 저장 실패', 'err');
   }
@@ -3380,7 +3339,7 @@ async function loadFromSheets() {
     if (localOnlySoL.length > 0) {
       log(`[WARN] 시트 미반영 품절 ${localOnlySoL.length}건 복구 → 재전송`, 'warn');
       const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-      if (sheetsUrl) fetch(sheetsUrl, { method:'POST', body: JSON.stringify({ soldout: soldoutMap }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
+      sheetsPOST({ soldout: soldoutMap });
     }
 
     // kcfi 파싱
@@ -3458,7 +3417,7 @@ async function autoLoadFromSheets() {
     if (localOnlySo.length > 0) {
       log(`[WARN] 시트 미반영 품절 ${localOnlySo.length}건 복구 → 재전송`, 'warn');
       const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-      if (sheetsUrl) fetch(sheetsUrl, { method:'POST', body: JSON.stringify({ soldout: soldoutMap }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
+      sheetsPOST({ soldout: soldoutMap });
     }
 
     const kcfiRows = parseCSV(kcfiCSV).slice(1);
@@ -3480,7 +3439,7 @@ async function autoLoadFromSheets() {
         if (!gp.includes('+') && !importedMap[sc]) newStatic[sc] = gp;
       }
       if (Object.keys(newStatic).length > 0) {
-        fetch(sheetsUrl, { method:'POST', body: JSON.stringify({ map: newStatic }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
+        sheetsPOST({ map: newStatic });
         log(`[INFO] EXTRA_STATIC_MAP 신규 ${Object.keys(newStatic).length}건 → aspro_match 업로드`, 'info');
       }
     }
@@ -3992,10 +3951,7 @@ function applyZeroRemap() {
     log(`[OK] 재매핑: ${r.사방넷코드} → ${newGp}`, 'ok');
   }
   saveExtra();
-  const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-  if (sheetsUrl) {
-    fetch(sheetsUrl, { method:'POST', body: JSON.stringify({ map: extraMap, soldout: soldoutMap, ic: icCodeMap }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
-  }
+  sheetsPOST({ map: extraMap, soldout: soldoutMap, ic: icCodeMap });
   closeZeroRemap();
   if (sabData.length && Object.keys(icMap).length && Object.keys(gpMap).length) processAll();
 }
@@ -4103,10 +4059,7 @@ function closeColorModal() {
   const confirmed = _colorCandidates.filter(c => c.confirmed).length;
   if (confirmed > 0 && sabData.length) {
     // 재매핑 반영
-    const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-    if (sheetsUrl) {
-      fetch(sheetsUrl, { method:'POST', mode:'no-cors', body:JSON.stringify({ map: extraMap }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
-    }
+    sheetsPOST({ map: extraMap });
     processAll();
   }
 }
