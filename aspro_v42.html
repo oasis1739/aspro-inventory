@@ -1047,7 +1047,11 @@ function loadExtra() {
   } catch(e) { kcfiMap = {}; }
   updateSoldoutCnt();
   updateKCFICnt();
-  if (!localStorage.getItem(SHEETS_URL_KEY) && DEFAULT_SHEETS_URL) {
+  const savedSheetsUrl = localStorage.getItem(SHEETS_URL_KEY) || '';
+  if (savedSheetsUrl && isKnownBadSheetsUrl(savedSheetsUrl) && DEFAULT_SHEETS_URL) {
+    localStorage.setItem(SHEETS_URL_KEY, DEFAULT_SHEETS_URL);
+    log('[WARN] 이전 Sheets URL 감지 → 현재 배포 URL로 자동 교체됨', 'warn');
+  } else if (!savedSheetsUrl && DEFAULT_SHEETS_URL) {
     localStorage.setItem(SHEETS_URL_KEY, DEFAULT_SHEETS_URL);
     log('[OK] Sheets URL 자동 설정됨', 'ok');
   }
@@ -3293,6 +3297,17 @@ function cleanMatchMap(map) {
   return cleaned;
 }
 const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxn_yuxbci4MW3JQla3NPf0TFYapNiR7M7w9pznkQVu6KTqlKxIm8MPOayRjdLTNH-0/exec';
+const KNOWN_BAD_SHEETS_URLS = new Set([
+  'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec'
+]);
+
+function normalizeSheetsUrl(url) {
+  return String(url || '').trim().replace(/\/+$/, '');
+}
+
+function isKnownBadSheetsUrl(url) {
+  return KNOWN_BAD_SHEETS_URLS.has(normalizeSheetsUrl(url));
+}
 
 function showSheetsModal() {
   const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
