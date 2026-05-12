@@ -2256,7 +2256,8 @@ function renderNomap() {
           <input class="mi nomap-gp" style="width:175px" id="ngp_${i}"
             value="${extraMap[r.사방넷코드]||''}"
             placeholder="예: NT243G0001-55-BK"
-            oninput="nomapSearch(${i},this.value)">
+            oninput="nomapSearch(${i},this.value)"
+            onchange="nomapAutoSave(${i},this.value)">
           <button class="btn" style="font-size:10px;padding:2px 6px;color:var(--accent2);border-color:var(--accent2);white-space:nowrap"
             onclick="toggleSuggest(${i},'${r.사방넷코드}','${(r.자체코드||'').replace(/'/g,String.fromCharCode(92,39))}','${(r.상품명||'').replace(/'/g,String.fromCharCode(92,39))}')">🔍 추천</button>
         </div>
@@ -2369,6 +2370,18 @@ function applySuggest(i, gp, isIc) {
   }
   const drop = document.getElementById('ndrop_' + i);
   if (drop) drop.style.display = 'none';
+}
+
+// 입력 포커스 이탈 시 즉시 localStorage 자동저장 (Sheets 동기화는 저장 버튼 때)
+function nomapAutoSave(i, val) {
+  const r = nomapRows[i];
+  if (!r) return;
+  const v = val.trim();
+  if (v) { extraMap[r.사방넷코드] = v; }
+  else { delete extraMap[r.사방넷코드]; }
+  try { localStorage.setItem(LS_KEY, JSON.stringify(extraMap)); } catch(e) {}
+  const st = document.getElementById('nst_' + i);
+  if (st && v && !r._icDirect) { st.textContent = '💾'; st.style.color = 'var(--warn)'; }
 }
 
 function nomapSearch(i, val) {
@@ -3489,7 +3502,11 @@ async function autoLoadFromSheets() {
       parseCSV(nnCSV).slice(1).forEach(r => { const nm=r[0]?.trim(), ic=r[1]?.trim(); if(nm&&ic) normOptMap[nm]=ic; });
       const newIcMap = {};
       parseCSV(icCSV).slice(1).forEach(r => { const sc=r[0]?.trim(), ic=r[1]?.trim(); if(sc&&ic) newIcMap[sc]=ic; });
-      if (Object.keys(newIcMap).length>0) { icCodeMap=newIcMap; try{localStorage.setItem('aspro_iccodemap_v1',JSON.stringify(icCodeMap));}catch(e){} }
+      if (Object.keys(newIcMap).length>0) {
+        // 로컬 전용 키 보존 + 시트 데이터 우선 병합 (전체 교체 금지)
+        icCodeMap = { ...icCodeMap, ...newIcMap };
+        try{localStorage.setItem('aspro_iccodemap_v1',JSON.stringify(icCodeMap));}catch(e){}
+      }
       log('[OK] 백그라운드 로드 완료 (normname/iccodemap)', 'ok');
     }).catch(()=>{});
 
@@ -3847,6 +3864,14 @@ if (batchZoneEl) {
 }
 
 document.getElementById('expAll').style.border='2px solid var(--accent)';
+// Ctrl+S: 매핑없음 탭에서 즉시 저장+Sheets 동기화
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    saveNomapEntries();
+    showToast('💾 Ctrl+S 저장 완료', 'ok', 2000);
+  }
+});
 (async () => {
   loadExtra();
   renderSetRegList();        // SET 등록 카운트 초기화
