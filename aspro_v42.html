@@ -3856,13 +3856,15 @@ document.getElementById('expAll').style.border='2px solid var(--accent)';
 
 // ── 재고0 재매핑 ─────────────────────────────────────────────
 let _zrIdx = null;
+let _zrIsIc = false; // true = 이카운트 품번 직접 지정
 function openZeroRemap(ri) {
   const r = resultRows[ri];
   if (!r) return;
   _zrIdx = ri;
+  _zrIsIc = false;
   document.getElementById('zrInfo').textContent = `${r.사방넷코드}  ·  ${r.상품명}`;
   document.getElementById('zrCurrent').textContent = r._물류품번 || '—';
-  document.getElementById('zrInput').value = extraMap[r.사방넷코드] || '';
+  document.getElementById('zrInput').value = icCodeMap[r.사방넷코드] || extraMap[r.사방넷코드] || '';
   document.getElementById('zrDrop').style.display = 'none';
   document.getElementById('zeroRemapModal').style.display = 'flex';
   setTimeout(() => document.getElementById('zrInput').focus(), 50);
@@ -3876,27 +3878,58 @@ function zrSearch() {
   const drop = document.getElementById('zrDrop');
   if (!q || q.length < 2) { drop.style.display = 'none'; return; }
   const qU = q.toUpperCase();
-  const matches = Object.entries(gpMap)
+  // ① 김포 검색
+  const gpMatches = Object.entries(gpMap)
     .filter(([k]) => k.toUpperCase().includes(qU))
     .sort((a, b) => {
       const aS = a[0].toUpperCase().startsWith(qU) ? 0 : 1;
       const bS = b[0].toUpperCase().startsWith(qU) ? 0 : 1;
       return aS - bS || a[0].localeCompare(b[0]);
     })
-    .slice(0, 15);
-  if (!matches.length) {
+    .slice(0, 10);
+  // ② 이카운트 품목코드 검색
+  const icSeen = new Set();
+  const icMatches = [];
+  for (const arr of Object.values(icMap)) {
+    for (const item of arr) {
+      if (!item.품목코드 || icSeen.has(item.품목코드)) continue;
+      if (item.품목코드.toUpperCase().includes(qU)) {
+        icSeen.add(item.품목코드);
+        icMatches.push(item);
+        if (icMatches.length >= 10) break;
+      }
+    }
+    if (icMatches.length >= 10) break;
+  }
+  if (!gpMatches.length && !icMatches.length) {
     drop.innerHTML = '<div style="padding:6px 10px;color:var(--text3);font-size:10px">검색 결과 없음</div>';
   } else {
-    drop.innerHTML = matches.map(([gp, qty]) =>
-      `<div onclick="document.getElementById('zrInput').value='${gp.replace(/'/g,"\\'")}';document.getElementById('zrDrop').style.display='none'"
+    const gpHtml = gpMatches.map(([gp, qty]) =>
+      `<div onclick="zrSelectItem('${gp.replace(/'/g,"\\'")}',false)"
         style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
         <span style="font-family:var(--mono);font-size:10px;flex:1">${gp}</span>
         <span style="font-size:9px;color:${qty>0?'var(--success)':'var(--text3)'}">${qty}</span>
         <span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--accent2);color:#fff">김포</span>
       </div>`
     ).join('');
+    const icHtml = icMatches.map(item =>
+      `<div onclick="zrSelectItem('${item.품목코드.replace(/'/g,"\\'")}',true)"
+        style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
+        <span style="font-family:var(--mono);font-size:10px;flex:1">${item.품목코드}</span>
+        <span style="font-size:9px;color:${item.qty>0?'var(--success)':'var(--text3)'}">${item.qty}</span>
+        <span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--accent);color:#fff">이카운트</span>
+      </div>`
+    ).join('');
+    drop.innerHTML = gpHtml + icHtml;
   }
   drop.style.display = 'block';
+}
+function zrSelectItem(code, isIc) {
+  document.getElementById('zrInput').value = code;
+  document.getElementById('zrDrop').style.display = 'none';
+  _zrIsIc = isIc;
+  // 인풋 border로 구분 표시
+  document.getElementById('zrInput').style.borderColor = isIc ? 'var(--accent)' : '';
 }
 function zrSuggest() {
   const r = resultRows[_zrIdx];
@@ -3925,13 +3958,19 @@ function applyZeroRemap() {
   if (!r) return;
   const newGp = document.getElementById('zrInput').value.trim();
   if (!newGp) { alert('물류품번을 입력해주세요.'); return; }
-  extraMap[r.사방넷코드] = newGp;
+  if (_zrIsIc) {
+    // 이카운트 품번 직접 지정 → icCodeMap에 저장 (getIcountQty 직접조회 경로 사용)
+    icCodeMap[r.사방넷코드] = newGp;
+    log(`[OK] 이카운트 직접매핑: ${r.사방넷코드} → ${newGp}`, 'ok');
+  } else {
+    extraMap[r.사방넷코드] = newGp;
+    log(`[OK] 재매핑: ${r.사방넷코드} → ${newGp}`, 'ok');
+  }
   saveExtra();
   const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
   if (sheetsUrl) {
-    fetch(sheetsUrl, { method:'POST', body: JSON.stringify({ map: extraMap, soldout: soldoutMap }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
+    fetch(sheetsUrl, { method:'POST', body: JSON.stringify({ map: extraMap, soldout: soldoutMap, ic: icCodeMap }), headers:{'Content-Type':'text/plain'} }).catch(()=>{});
   }
-  log(`[OK] 재매핑: ${r.사방넷코드} → ${newGp}`, 'ok');
   closeZeroRemap();
   if (sabData.length && Object.keys(icMap).length && Object.keys(gpMap).length) processAll();
 }
