@@ -1497,6 +1497,84 @@ function resolveIcItems(items, cc, sz, isSet, setColors, 옵션, sabName, isDire
   return null;
 }
 
+// ── 택1 자동매핑 ──
+// 매핑없음 항목 중 상품명에 '택1'이 있는 것 → 기존 matchMap+extraMap에서 상품명+색상으로 찾아 자동 매핑
+function autoMapTaek1() {
+  const allMap = { ...matchMap, ...extraMap };
+  if (!Object.keys(allMap).length) return;
+
+  // 기존 매핑에서 정규화 상품명 → 물류품번 역인덱스 빌드
+  // key: normName(상품명) + '||' + 색상코드
+  const nameColorMap = {};
+  sabData.forEach(s => {
+    const gp = allMap[s.사방넷코드];
+    if (!gp || gp === '__DELETED__' || !isValidGp(gp)) return;
+    if (!s.상품명 || !s.옵션) return;
+    const nm = normName(s.상품명);
+    if (nm.length < 3) return;
+    // 색상 추출
+    const colorPart = s.옵션.includes(':') ? s.옵션.split(':')[0].trim() : '';
+    const colorCode = COLOR_MAP[colorPart] || COLOR_MAP[colorPart.toUpperCase()] || colorPart;
+    const sz = s.옵션.includes(':') ? s.옵션.split(':').pop().trim() : '';
+    // nm||colorCode||sz → gp
+    if (colorCode && sz) nameColorMap[`${nm}||${colorCode}||${sz}`] = gp;
+    if (colorCode) nameColorMap[`${nm}||${colorCode}`] = gp;
+    nameColorMap[`${nm}||${sz}`] = gp;
+  });
+
+  let autoMapped = 0;
+  const newMappings = {};
+
+  nomapRows.forEach(r => {
+    const sc = r.사방넷코드;
+    if (allMap[sc]) return; // 이미 매핑됨
+    if (!r.상품명 || !/(택1|택 1)/i.test(r.상품명)) return; // 택1 상품만
+
+    const nm = normName(r.상품명);
+    const colorPart = r.옵션?.includes(':') ? r.옵션.split(':')[0].trim() : '';
+    const colorCode = COLOR_MAP[colorPart] || COLOR_MAP[colorPart.toUpperCase()] || colorPart;
+    const sz = r.옵션?.includes(':') ? r.옵션.split(':').pop().trim() : '';
+
+    // 우선순위: nm+color+sz → nm+color → nm+sz
+    const gp = nameColorMap[`${nm}||${colorCode}||${sz}`]
+            || nameColorMap[`${nm}||${colorCode}`]
+            || nameColorMap[`${nm}||${sz}`];
+
+    if (gp) {
+      extraMap[sc] = gp;
+      newMappings[sc] = gp;
+      autoMapped++;
+      log(`[OK] 택1 자동매핑: ${sc} "${r.상품명}" [${r.옵션}] → ${gp}`, 'ok');
+    }
+  });
+
+  if (autoMapped === 0) return;
+
+  saveExtra();
+  updateSavedMapCnt();
+  log(`[OK] 택1 자동매핑 완료: ${autoMapped}건 → Sheets 반영 중...`, 'ok');
+
+  // Sheets 반영
+  const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
+  if (sheetsUrl && Object.keys(matchMap).length > 100) {
+    const saveMap = {};
+    Object.entries({ ...matchMap, ...extraMap }).forEach(([k,v]) => {
+      if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = v;
+    });
+    try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(saveMap)); } catch(e) {}
+    fetch(sheetsUrl, {
+      method: 'POST',
+      body: JSON.stringify({ map: saveMap, soldout: soldoutMap, nameMap: buildNameMap(saveMap) }),
+      headers: { 'Content-Type': 'text/plain' }
+    }).then(r => r.json()).then(d => {
+      if (d.ok) {
+        setSheetStatus(`✅ 택1 자동매핑 ${autoMapped}건 Sheets 반영완료`, 'var(--success)');
+        log(`[OK] 택1 자동매핑 Sheets 반영: ${d.saved}건`, 'ok');
+      }
+    }).catch(() => log('[WARN] 택1 자동매핑 Sheets 반영 실패 (로컬은 저장됨)', 'warn'));
+  }
+}
+
 function normName(s) {
   s = String(s||'').toLowerCase()
     .replace(/\[.*?\]/g,'').replace(/\(.*?\)/g,'')
@@ -1623,6 +1701,10 @@ function runMatch() {
   if (document.getElementById('srcKCFI')) document.getElementById('srcKCFI').textContent = cKCFI.toLocaleString();
   log(`[OK] 매칭: ${cM} / 재고0: ${cZ} / 미매칭: ${cU} / 매핑없음: ${cNM}`, 'ok');
   log(`  소스별: 이카운트 ${cIC} / 김포 ${cGP-cKCFI} / KCFI(신원) ${cKCFI}${cSet>0?' / 세트 '+cSet+'건':''}${cAutoSo>0?' / 자동품절 '+cAutoSo+'건':''}`, 'info');
+
+  // ── 택1 자동매핑 ──
+  // 매핑없음 중 상품명에 '택1'이 있는 항목 → 기존 매핑에서 상품명+색상으로 찾아서 자동 매핑
+  autoMapTaek1();
 
   document.getElementById('vEmpty').style.display = 'none';
   document.getElementById('vResult').style.display = 'block';
@@ -2770,9 +2852,30 @@ async function autoLoadFromSheets() {
       // 안전장치: Sheets 매핑이 로컬보다 30% 이상 적으면 경고 후 병합 (덮어쓰기 방지)
       if (localCount > 50 && sheetsCount < localCount * 0.7) {
         log(`[WARN] Sheets 매핑(${sheetsCount}건)이 로컬(${localCount}건)보다 적음 → 병합 처리`, 'warn');
-        matchMap = { ...matchMap, ...sheetsMapCleaned }; // 로컬 우선, Sheets로 보완
+        matchMap = { ...matchMap, ...sheetsMapCleaned };
       } else {
         matchMap = sheetsMapCleaned;
+      }
+
+      // matchMap + nameMap으로 normOptMap 빌드 (택1 자동매핑용)
+      if (data.nameMap && Object.keys(data.nameMap).length > 0) {
+        normOptMap = {};
+        Object.entries(matchMap).forEach(([sc, gp]) => {
+          const nm  = data.nameMap[sc] || '';
+          if (!nm) return;
+          // 사방넷 단품 옵션은 없으니 상품명만으로 키 생성
+          const key = normName(nm) + '||';
+          if (key.length > 4) normOptMap[key] = gp;
+          // 색상 포함 키도 추가 (상품명에서 색상 추출)
+          const colorMatch = nm.match(/\[([^\]]+)\]/);
+          if (colorMatch) {
+            const color = colorMatch[1].trim();
+            const normKey = normName(nm) + '||' + color;
+            normOptMap[normKey] = gp;
+          }
+        });
+        try { localStorage.setItem('aspro_normoptmap_v1', JSON.stringify(normOptMap)); } catch(e2) {}
+        log(`[OK] normOptMap 빌드: ${Object.keys(normOptMap).length}건`, 'ok');
       }
 
       // soldout: Sheets 데이터가 있으면 우선, 없으면 localStorage 유지
