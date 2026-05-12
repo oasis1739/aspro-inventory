@@ -1605,9 +1605,9 @@ function getGimpoQty(sabCode, opt, sabName, jache = '') {
     }
   }
   // ── _SET 상품 전용: 사이즈 기반으로 gpMap 전체 색상 min 반환 ──
-  // 처리 우선순위: ① opt에 명시된 색상목록(+) ② gpMap prefix-CC-size 패턴 전체 검색
-  // 이렇게 하면 사이즈 전용 옵션("55"), 색상코드 불일치(BR vs BW) 등도 모두 처리
-  if (/[_-](SET|2set|4set)$/i.test(sabCode)) {
+  // sabCode 또는 jache(자체코드)에 _SET/-SET/2set/4set 있으면 세트 재고 계산
+  const isSetCode = /[_-](SET|2set|4set)$/i.test(sabCode) || /[_-](SET|2set|4set)$/i.test(jache);
+  if (isSetCode) {
     const { sz: szP } = parseOpt(opt || '');
     const sz = szP || (/^\d{2,3}$/.test((opt||'').trim()) ? opt.trim() : null);
     if (sz) {
@@ -1617,7 +1617,8 @@ function getGimpoQty(sabCode, opt, sabName, jache = '') {
         const parsed = parseOpt(opt);
         if (parsed.isSet && parsed.setColors) {
           const sabPfx = sabCode.replace(/[_-](SET|2set|4set)$/i,'').split(/[-_]/)[0];
-          const colorOvr = GP_SET_COLOR_OVERRIDE[sabPfx];
+          const jachePfx = (jache||'').replace(/[_-](SET|2set|4set)$/i,'').split(/[-_]/)[0];
+          const colorOvr = GP_SET_COLOR_OVERRIDE[sabPfx] || GP_SET_COLOR_OVERRIDE[jachePfx];
           const gpPfx = colorOvr ? colorOvr.gpPrefix : 물류;
           candidates = parsed.setColors.map(c => {
             const code = colorOvr ? (colorOvr.colorMap[c] || c) : c;
@@ -1634,6 +1635,32 @@ function getGimpoQty(sabCode, opt, sabName, jache = '') {
       if (valid.length) {
         log(`[INFO] SET 전체색상 min: ${valid.map(([k])=>k).join('+')}`, 'info');
         return { qty: Math.min(...valid.map(([,q])=>q)), src: '김포(SET)', 물류품번: valid.map(([k])=>k).join('+') };
+      }
+    }
+  }
+
+  // ── 택1 상품: 옵션에 여러 색상 있으면 각 색상 재고 합산 ──
+  // SET가 아닌 단품에서 "베이지+차콜+플럼+블랙:55" 형태 옵션 (4종 택1 등)
+  if (!isSetCode && 물류 && opt && opt.includes('+') && opt.includes(':')) {
+    const sz = opt.split(':').pop().trim();
+    const colorPart = opt.slice(0, opt.lastIndexOf(':'));
+    const colors = colorPart.split('+').map(c => c.trim()).filter(Boolean);
+    if (colors.length > 1 && /^\d{2,3}$/.test(sz)) {
+      const sabPfx = (jache || sabCode).split(/[-_]/)[0];
+      const colorOvr = GP_SET_COLOR_OVERRIDE[sabPfx];
+      if (colorOvr) {
+        const gpPfx = colorOvr.gpPrefix || 물류;
+        const found = [];
+        colors.forEach(c => {
+          const code = colorOvr.colorMap[c.trim()] || c.trim().slice(0,2).toUpperCase();
+          const key = `${gpPfx}-${code}-${sz}`;
+          if (gpMap[key] !== undefined) found.push([key, gpMap[key]]);
+        });
+        if (found.length > 0) {
+          const total = found.reduce((s, [, q]) => s + q, 0);
+          log(`[INFO] 택1 색상합산: ${found.map(([k])=>k).join('+')} → ${total}`, 'info');
+          return { qty: total, src: '김포(택1)', 물류품번: found.map(([k]) => k).join('+') };
+        }
       }
     }
   }
@@ -2792,7 +2819,8 @@ function saveNomapEntries() {
     log(`[OK] 매핑 저장: 총 extraMap ${Object.keys(extraMap).length}건`, 'ok');
     updateSavedMapCnt();
     showToast(`💾 로컬 저장 완료 (${saved}건)`, 'ok', 3000);
-    if (currentTab === 'nomap') renderNomap();
+    if (sabData.length && Object.keys(gpMap).length) processAll();
+    else if (currentTab === 'nomap') renderNomap();
     else if (currentTab === 'mapview') renderMapview();
     sheetsPOST({ map: extraMap, soldout: soldoutMap, iccodemap: icCodeMap }, '✅ 구글시트 반영 완료');
   } else {
@@ -3953,7 +3981,7 @@ function applyZeroRemap() {
   saveExtra();
   sheetsPOST({ map: extraMap, soldout: soldoutMap, iccodemap: icCodeMap });
   closeZeroRemap();
-  if (sabData.length && Object.keys(icMap).length && Object.keys(gpMap).length) processAll();
+  if (sabData.length && Object.keys(gpMap).length) processAll();
 }
 // ── 유사컬러 매핑 검증 ─────────────────────────────────────────
 let _colorCandidates = [];
