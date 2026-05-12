@@ -701,6 +701,8 @@ const SAB_IC_OVERRIDE = {
 const SAB_COLOR_OVERRIDE = {
   '10058754926': {'와인':'WN','베이지':'BE','네이비':'NA','크림':'CR'},
   '10058824019': {'라이트그레이':'LG','썸머브라운':'BR','네이비':'NA'},
+  'N1009_AL':    {'브라운':'BW','썸머브라운':'BW','라이트그레이':'LG','리이트그레이':'LG','네이비':'NA'},
+  'N1009_SET':   {'브라운':'BW','썸머브라운':'BW','라이트그레이':'LG','리이트그레이':'LG','네이비':'NA'},
 };
 const EXTRA_STATIC_MAP = {
   '100334-0005':'243NT05-88-AP','100334-0006':'243NT05-88-GR','100334-0007':'243NT05-88-BK',
@@ -1347,6 +1349,9 @@ function getIcountQty(sabData_row) {
       }
     }
     if (directItems.length) {
+      // 직접매핑에서도 색상 변환 적용
+      const colorOvr = SAB_COLOR_OVERRIDE[자체] || SAB_COLOR_OVERRIDE[자체.split('_')[0] + '_' + 자체.split('_').slice(1).join('_')];
+      if (colorOvr && cc) cc = colorOvr[cc] || colorOvr[parsedOpt.cc] || cc;
       log(`[INFO] 이카운트 직접매핑: ${sc} → ${icDirect} (${directItems.length}개 SKU)`, 'info');
       return resolveIcItems(directItems, cc, sz, isSet, setColors, 옵션, sabName, true, false);
     } else {
