@@ -1047,9 +1047,9 @@ function loadExtra() {
   } catch(e) { kcfiMap = {}; }
   updateSoldoutCnt();
   updateKCFICnt();
-  if (!localStorage.getItem(SHEETS_URL_KEY) && DEFAULT_SHEETS_URL) {
+  if (DEFAULT_SHEETS_URL) {
     localStorage.setItem(SHEETS_URL_KEY, DEFAULT_SHEETS_URL);
-    log('[OK] Sheets URL 자동 설정됨', 'ok');
+    log('[OK] Sheets URL 설정됨', 'ok');
   }
 }
 
@@ -3250,7 +3250,7 @@ function cleanMatchMap(map) {
   if (removed > 0) log(`[INFO] 유효하지 않은 매핑 ${removed}건 제거됨`, 'info');
   return cleaned;
 }
-const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
+const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxn_yuxbci4MW3JQla3NPf0TFYapNiR7M7w9pznkQVu6KTqlKxIm8MPOayRjdLTNH-0/exec';
 
 function showSheetsModal() {
   const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
