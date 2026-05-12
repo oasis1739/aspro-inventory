@@ -672,6 +672,7 @@ let matchMap = {};
 let normOptMap = {};
 let soldoutMap = {};
 let kcfiMap = {};
+let forceZeroMap = {}; // 강제품절: 자체코드(prefix) → true
 
 const SKIP_GP = new Set(['nan','','슈컴퍼니-김포이관','확인요망','삭제요망']);
 let extraMap = {};
@@ -1506,8 +1507,14 @@ function runMatch() {
     const kcfiQty = kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
     let finalQty = null, src = '—', 물류품번 = '—';
 
+    // ★ 강제품절(forceZero) — 자체코드 prefix 기준, 모든 재고보다 우선 적용
+    const jache = String(sab.자체코드 || '').trim();
+    const fzPrefix = jache.split('-')[0] || jache;
+    if (forceZeroMap[jache] || forceZeroMap[fzPrefix] || forceZeroMap[sc]) {
+      finalQty = 0; src = '강제품절'; 물류품번 = extraMap[sc] || matchMap[sc] || '—'; cZ++;
+    }
     // 우선순위: KCFI(재고>0) > 김포(재고>0) > 이카운트 > 김포(재고0) > KCFI(재고0)
-    if (kcfiQty !== null && kcfiQty > 0) {
+    else if (kcfiQty !== null && kcfiQty > 0) {
       finalQty = kcfiQty; src = 'KCFI';
       물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
     } else if (gpRes !== null && gpRes.qty > 0) {
@@ -2173,8 +2180,18 @@ function saveNomapEntries() {
       const allMap = { ...matchMap, ...extraMap };
       const saveMap = {};
       Object.entries(allMap).forEach(([k,v]) => { if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = v; });
-      // 로컬 먼저 저장 (Sheets 실패해도 로컬은 보존)
+      // 로컬 먼저 저장
       try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(saveMap)); } catch(e2) {}
+
+      // ★ 안전장치: matchMap 로드 안 된 상태면 Sheets 전송 차단
+      if (Object.keys(matchMap).length < 100) {
+        log(`[WARN] matchMap 로드 미완료 (${Object.keys(matchMap).length}건) → Sheets 전송 차단`, 'warn');
+        setSheetStatus('⚠ Sheets 아직 로드 중 — 로컬만 저장됨', 'var(--warn)');
+        alert(`✅ 로컬 저장 완료 (${Object.keys(saveMap).length}건)\n⚠ Sheets 연동이 아직 로드 중입니다.\n잠시 후 "Sheets에 저장" 버튼을 눌러주세요.`);
+        if (currentTab==='mapview') renderMapview();
+        return;
+      }
+
       fetch(sheetsUrl, {
         method: 'POST',
         body: JSON.stringify({ map: saveMap, soldout: soldoutMap, nameMap: buildNameMap(saveMap) }),
@@ -2182,13 +2199,16 @@ function saveNomapEntries() {
       }).then(r => r.json()).then(d => {
         if (d.ok) {
           log(`[OK] 구글시트 자동 반영: ${d.saved}건`, 'ok');
-          alert(`✅ 저장 완료 (${Object.keys(saveMap).length}건)\n구글시트에도 자동 반영됐습니다.`);
+          setSheetStatus(`✅ 저장 완료 — ${d.saved}건 (${new Date().toLocaleTimeString('ko-KR')})`, 'var(--success)');
+          alert(`✅ 저장 완료 (${Object.keys(saveMap).length}건)\n구글시트에도 반영됐습니다.`);
         } else {
           log(`[WARN] 구글시트 반영 실패: ${d.error||'알 수 없는 오류'}`, 'warn');
+          setSheetStatus('⚠ 로컬 저장됨, Sheets 반영 실패', 'var(--warn)');
           alert(`✅ 로컬 저장 완료 (${Object.keys(saveMap).length}건)\n⚠ 구글시트 반영 실패 → Sheets 연동 탭에서 수동 저장하세요\n(로컬 데이터는 안전합니다)`);
         }
       }).catch(err => {
         log(`[WARN] 구글시트 반영 실패: ${err.message}`, 'warn');
+        setSheetStatus('⚠ 로컬 저장됨, Sheets 반영 실패', 'var(--warn)');
         alert(`✅ 로컬 저장 완료 (${Object.keys(saveMap).length}건)\n⚠ 구글시트 반영 실패 → Sheets 연동 탭에서 수동 저장하세요\n(로컬 데이터는 안전합니다)`);
       });
     } else {
@@ -2599,10 +2619,23 @@ function buildNameMap(mapObj) {
 async function saveToSheets() {
   const url = document.getElementById('sheetsUrl').value.trim();
   if (!url) { alert('Apps Script URL을 먼저 입력하세요.'); return; }
+
   const allMap = { ...matchMap, ...extraMap };
   const saveMap = {};
   Object.entries(allMap).forEach(([k,v]) => { if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = v; });
   const total = Object.keys(saveMap).length;
+
+  // ★ 안전장치: matchMap이 로드 안 된 상태면 저장 차단
+  if (Object.keys(matchMap).length < 100 && total < 200) {
+    const proceed = confirm(
+      `⚠ 경고: 현재 로드된 매핑이 ${total}건입니다.\n` +
+      `구글시트에 더 많은 데이터가 있을 수 있습니다.\n\n` +
+      `지금 저장하면 구글시트 데이터가 줄어들 수 있습니다.\n\n` +
+      `정말 저장하시겠습니까?`
+    );
+    if (!proceed) return;
+  }
+
   if (total === 0) { alert('저장할 매핑 데이터가 없습니다.'); return; }
   setSheetStatus(`저장 중... (${total.toLocaleString()}건)`, 'var(--accent2)');
   try {
@@ -2702,6 +2735,16 @@ async function autoLoadFromSheets() {
       if (data.iccodemap && Object.keys(data.iccodemap).length > 0) {
         icCodeMap = { ...data.iccodemap };
         try { localStorage.setItem('aspro_iccodemap_v1', JSON.stringify(icCodeMap)); } catch(e2) {}
+      }
+      // forcezero: aspro_forcezero 시트에서 자체코드(prefix) 목록 로드
+      if (data.forcezero && Object.keys(data.forcezero).length > 0) {
+        forceZeroMap = { ...data.forcezero };
+        try { localStorage.setItem('aspro_forcezero_v1', JSON.stringify(forceZeroMap)); } catch(e2) {}
+        log(`[OK] 강제품절 로드: ${Object.keys(forceZeroMap).length}건`, 'ok');
+      } else {
+        // localStorage에서 복원 시도
+        const fzRaw = localStorage.getItem('aspro_forcezero_v1');
+        if (fzRaw) { try { forceZeroMap = JSON.parse(fzRaw); } catch(e2) {} }
       }
       try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
       updateSavedMapCnt();
