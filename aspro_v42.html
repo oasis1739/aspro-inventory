@@ -142,9 +142,10 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
 <div class="hdr">
   <div class="logo">ASPRO<em> / 가상재고</em></div>
   <div class="hd"></div>
-  <div class="ver">v4.6</div>
+  <div class="ver">v4.7</div>
   <div class="hright">
     <span id="lastUp" style="font-size:10px;color:var(--text3);font-family:var(--mono)">대기중</span>
+    <span id="sheetsStatusBar" style="font-size:11px;color:var(--text2);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
     <button class="hbtn" id="sheetBtn" onclick="showSheetsModal()">☁ Google Sheets 연동</button>
   </div>
 </div>
@@ -589,42 +590,46 @@ function doPost(e) {
       let sh = ss.getSheetByName('aspro_match');
       if (!sh) { sh = ss.insertSheet('aspro_match'); }
       sh.clearContents();
-      sh.appendRow(['사방넷코드','김포물류품번','상품명','메모','등록일']);
       const nmMap = payload.nameMap || {};
-      Object.entries(payload.map).forEach(([k,v]) => { sh.appendRow([k, v, nmMap[k]||'', '', now]); });
+      const rows = [['사방넷코드','김포물류품번','상품명','메모','등록일']];
+      Object.entries(payload.map).forEach(([k,v]) => { rows.push([k, v, nmMap[k]||'', '', now]); });
+      sh.getRange(1, 1, rows.length, 5).setValues(rows);
     }
 
-    // soldout: 빈 데이터로 덮어쓰기 방지
     if (payload.soldout && Object.keys(payload.soldout).length > 0) {
       let so = ss.getSheetByName('aspro_soldout');
       if (!so) { so = ss.insertSheet('aspro_soldout'); }
       so.clearContents();
-      so.appendRow(['사방넷코드','등록일']);
-      Object.entries(payload.soldout).forEach(([k,v]) => { so.appendRow([k, v === true ? now : String(v)]); });
+      const rows = [['사방넷코드','등록일']];
+      Object.entries(payload.soldout).forEach(([k,v]) => { rows.push([k, v === true ? now : String(v)]); });
+      so.getRange(1, 1, rows.length, 2).setValues(rows);
     }
 
     if (payload.kcfi && Object.keys(payload.kcfi).length > 0) {
       let kc = ss.getSheetByName('aspro_kcfi');
       if (!kc) { kc = ss.insertSheet('aspro_kcfi'); }
       kc.clearContents();
-      kc.appendRow(['사방넷코드','재고','업데이트일']);
-      Object.entries(payload.kcfi).forEach(([k,v]) => { kc.appendRow([k, v, now]); });
+      const rows = [['사방넷코드','재고','업데이트일']];
+      Object.entries(payload.kcfi).forEach(([k,v]) => { rows.push([k, v, now]); });
+      kc.getRange(1, 1, rows.length, 3).setValues(rows);
     }
 
     if (payload.normname && Object.keys(payload.normname).length > 0) {
       let nn = ss.getSheetByName('aspro_normname');
       if (!nn) { nn = ss.insertSheet('aspro_normname'); }
       nn.clearContents();
-      nn.appendRow(['정규화상품명(normName)','물류품번','원본사방넷상품명','등록일']);
-      Object.entries(payload.normname).forEach(([k,v]) => { nn.appendRow([k, v, '', now]); });
+      const rows = [['정규화상품명(normName)','물류품번','원본사방넷상품명','등록일']];
+      Object.entries(payload.normname).forEach(([k,v]) => { rows.push([k, v, '', now]); });
+      nn.getRange(1, 1, rows.length, 4).setValues(rows);
     }
 
     if (payload.iccodemap && Object.keys(payload.iccodemap).length > 0) {
       let ic = ss.getSheetByName('aspro_iccodemap');
       if (!ic) { ic = ss.insertSheet('aspro_iccodemap'); }
       ic.clearContents();
-      ic.appendRow(['사방넷코드','이카운트품목코드','등록일']);
-      Object.entries(payload.iccodemap).forEach(([k,v]) => { ic.appendRow([k, v, now]); });
+      const rows = [['사방넷코드','이카운트품목코드','등록일']];
+      Object.entries(payload.iccodemap).forEach(([k,v]) => { rows.push([k, v, now]); });
+      ic.getRange(1, 1, rows.length, 3).setValues(rows);
     }
 
     const saved = payload.map ? Object.keys(payload.map).length : 0;
@@ -793,6 +798,14 @@ function saveExtra() {
   try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e) {}
   try { localStorage.setItem('aspro_iccodemap_v1', JSON.stringify(icCodeMap)); } catch(e) {}
   return true;
+}
+
+// 모달 안 + 헤더 상태바 동시 업데이트
+function setSheetStatus(msg, color) {
+  const st = document.getElementById('sheetsStatus');
+  const bar = document.getElementById('sheetsStatusBar');
+  if (st) { st.textContent = msg; st.style.color = color || 'var(--text2)'; }
+  if (bar) { bar.textContent = msg; bar.style.color = color || 'var(--text2)'; }
 }
 
 function updateSavedMapCnt() {
@@ -2490,8 +2503,7 @@ function saveSheetsUrl() {
 async function loadFromSheets() {
   const url = document.getElementById('sheetsUrl').value.trim();
   if (!url) { alert('Apps Script URL을 먼저 입력하세요.'); return; }
-  const st = document.getElementById('sheetsStatus');
-  st.textContent = '불러오는 중... (최대 20초)'; st.style.color = 'var(--accent2)';
+  setSheetStatus('불러오는 중... (최대 20초)', 'var(--accent2)');
   try {
     const res = await fetchWithTimeout(url, 20000);
     const data = await res.json();
@@ -2505,14 +2517,10 @@ async function loadFromSheets() {
     Object.entries(imported).forEach(([k,v]) => { if(isValidGp(v)) filteredImport[k]=v; });
     matchMap = filteredImport;
 
-    // soldout: 비어있으면 기존 로컬 유지
     if (Object.keys(importedSoldout).length > 0) {
       soldoutMap = { ...importedSoldout };
       try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
-    } else {
-      st.textContent += ' (soldout 비어있음 → 로컬 유지)';
     }
-
     if (Object.keys(importedIcCodeMap).length > 0) {
       icCodeMap = { ...importedIcCodeMap };
       try { localStorage.setItem('aspro_iccodemap_v1', JSON.stringify(icCodeMap)); } catch(e2) {}
@@ -2536,14 +2544,13 @@ async function loadFromSheets() {
     const soCnt = Object.keys(soldoutMap).length;
     const kcfiCnt = Object.keys(kcfiMap).length;
     const nnCnt = Object.keys(importedNormname).length;
-    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건${nnCnt>0?' + 이름매핑 '+nnCnt+'건':''}`;
-    st.style.color = 'var(--success)';
+    const msg = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건${nnCnt>0?' + 이름매핑 '+nnCnt+'건':''}`;
+    setSheetStatus(msg, 'var(--success)');
     log(`[OK] Google Sheets 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
     if (currentTab === 'mapview') renderMapview();
   } catch(e) {
     const isTimeout = e.name === 'AbortError';
-    st.textContent = `❌ ${isTimeout ? '타임아웃 (Apps Script 응답 없음)' : '오류: ' + e.message}`;
-    st.style.color = 'var(--danger)';
+    setSheetStatus(`❌ ${isTimeout ? '타임아웃 (Apps Script 응답 없음)' : '오류: ' + e.message}`, 'var(--danger)');
     log(`[ERR] Sheets 불러오기: ${e.message}`, 'err');
   }
 }
@@ -2562,14 +2569,12 @@ function buildNameMap(mapObj) {
 async function saveToSheets() {
   const url = document.getElementById('sheetsUrl').value.trim();
   if (!url) { alert('Apps Script URL을 먼저 입력하세요.'); return; }
-  const st = document.getElementById('sheetsStatus');
   const allMap = { ...matchMap, ...extraMap };
-  // __DELETED__ 항목 제거 후 실제 저장할 맵 구성
   const saveMap = {};
   Object.entries(allMap).forEach(([k,v]) => { if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = v; });
   const total = Object.keys(saveMap).length;
   if (total === 0) { alert('저장할 매핑 데이터가 없습니다.'); return; }
-  st.textContent = `저장 중... (${total.toLocaleString()}건 — 대용량일 경우 20~30초 소요)`; st.style.color = 'var(--accent2)';
+  setSheetStatus(`저장 중... (${total.toLocaleString()}건)`, 'var(--accent2)');
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -2578,14 +2583,11 @@ async function saveToSheets() {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || '서버 오류');
-    // 저장 성공 시 localStorage도 최신으로 갱신
     try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(saveMap)); } catch(e2) {}
-    st.textContent = `✅ 저장 완료 — ${data.saved.toLocaleString()}건 (${new Date().toLocaleTimeString('ko-KR')})`;
-    st.style.color = 'var(--success)';
+    setSheetStatus(`✅ 저장 완료 — ${data.saved.toLocaleString()}건 (${new Date().toLocaleTimeString('ko-KR')})`, 'var(--success)');
     log(`[OK] Google Sheets 저장: ${data.saved}건`, 'ok');
   } catch(e) {
-    st.textContent = `❌ 저장 실패: ${e.message} — 로컬에는 저장됨, Sheets 연동에서 다시 시도하세요`;
-    st.style.color = 'var(--danger)';
+    setSheetStatus(`❌ 저장 실패: ${e.message} — 로컬은 안전`, 'var(--danger)');
     log(`[ERR] Sheets 저장 실패: ${e.message}`, 'err');
   }
 }
@@ -2719,6 +2721,7 @@ async function autoLoadFromSheets() {
 
       const cnt = Object.keys(matchMap).length;
       log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건 / 신원재고 ${Object.keys(kcfiMap).length}건`, 'ok');
+      setSheetStatus(`✅ 동기화 완료 — 매핑 ${cnt.toLocaleString()}건 (${new Date().toLocaleTimeString('ko-KR')})`, 'var(--success)');
       if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.textContent='☁ Google Sheets 연동'; }
 
       // 2차 요청: 원본 데이터 (사방넷/이카운트/김포) — 별도로 로드
