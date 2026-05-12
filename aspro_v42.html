@@ -1816,6 +1816,15 @@ function getIcountQty(sabData_row) {
                 || IC_STATIC_MAP[sc] || IC_STATIC_MAP[sc.split('-')[0]]
                 || IC_STATIC_MAP[자체] || IC_STATIC_MAP[자체.split('-')[0]];
   if (icDirect) {
+    // ① 정확한 품목코드 직접 조회 (사용자가 재고0탭에서 특정 이카운트 품번 지정한 경우)
+    for (const arr of Object.values(icMap)) {
+      const exact = arr.find(item => item.품목코드 === icDirect);
+      if (exact) {
+        log(`[INFO] 이카운트 품번 직접: ${sc} → ${icDirect} (qty=${exact.qty})`, 'info');
+        return { qty: exact.qty, src: '이카운트(직접)', 품목코드: exact.품목코드 };
+      }
+    }
+    // ② 그룹 prefix 방식 (icCodeMap/IC_STATIC_MAP에 그룹코드 저장된 경우)
     let directItems = icMap[icDirect] || [];
     if (!directItems.length) {
       for (const [key, arr] of Object.entries(icMap)) {
@@ -2343,13 +2352,20 @@ function suggestMapping(sc, 자체코드, 상품명) {
   return [...results.entries()].map(([gp, info]) => ({ gp, ...info }));
 }
 
-function applySuggest(i, gp) {
+function applySuggest(i, gp, isIc) {
   const input = document.getElementById('ngp_' + i);
   if (input) {
     input.value = gp;
-    nomapRows[i]._manualGimpo = gp;
     const st = document.getElementById('nst_' + i);
-    if (st) st.textContent = '✅';
+    if (isIc) {
+      nomapRows[i]._icDirect  = gp;
+      nomapRows[i]._manualGimpo = '';
+      if (st) { st.textContent = '✅이카'; st.style.color = 'var(--accent)'; }
+    } else {
+      nomapRows[i]._manualGimpo = gp;
+      nomapRows[i]._icDirect  = '';
+      if (st) { st.textContent = '✅'; st.style.color = ''; }
+    }
   }
   const drop = document.getElementById('ndrop_' + i);
   if (drop) drop.style.display = 'none';
@@ -2357,28 +2373,52 @@ function applySuggest(i, gp) {
 
 function nomapSearch(i, val) {
   nomapRows[i]._manualGimpo = val;
+  nomapRows[i]._icDirect = ''; // 이카운트 직접선택 초기화
   const drop = document.getElementById('ndrop_' + i);
   if (!drop) return;
   if (!val || val.length < 2) { drop.style.display = 'none'; return; }
   const qU = val.toUpperCase();
-  const matches = Object.entries(gpMap)
+  // ① 김포 검색
+  const gpMatches = Object.entries(gpMap)
     .filter(([k]) => k.toUpperCase().includes(qU))
     .sort((a, b) => {
       const aS = a[0].toUpperCase().startsWith(qU) ? 0 : 1;
       const bS = b[0].toUpperCase().startsWith(qU) ? 0 : 1;
       return aS - bS || a[0].localeCompare(b[0]);
     })
-    .slice(0, 15);
-  if (!matches.length) {
+    .slice(0, 10);
+  // ② 이카운트 품목코드 검색
+  const icSeen = new Set();
+  const icMatches = [];
+  for (const arr of Object.values(icMap)) {
+    for (const item of arr) {
+      if (icSeen.has(item.품목코드)) continue;
+      if (item.품목코드.toUpperCase().includes(qU)) {
+        icSeen.add(item.품목코드);
+        icMatches.push(item);
+        if (icMatches.length >= 10) break;
+      }
+    }
+    if (icMatches.length >= 10) break;
+  }
+  if (!gpMatches.length && !icMatches.length) {
     drop.innerHTML = '<div style="padding:6px 10px;color:var(--text3);font-size:10px">검색 결과 없음</div>';
   } else {
-    drop.innerHTML = matches.map(([gp, qty]) =>
-      '<div onclick="applySuggest(' + i + ',\'' + gp.replace(/'/g,"\\'") + '\')" style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">'
+    const gpHtml = gpMatches.map(([gp, qty]) =>
+      '<div onclick="applySuggest(' + i + ',\'' + gp.replace(/'/g,"\\'") + '\',false)" style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">'
       + '<span style="font-family:var(--mono);font-size:10px;flex:1">' + gp + '</span>'
       + '<span style="font-size:9px;color:' + (qty>0?'var(--success)':'var(--text3)') + '">' + qty + '</span>'
       + '<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--accent2);color:#fff">김포</span>'
       + '</div>'
     ).join('');
+    const icHtml = icMatches.map(item =>
+      '<div onclick="applySuggest(' + i + ',\'' + item.품목코드.replace(/'/g,"\\'") + '\',true)" style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">'
+      + '<span style="font-family:var(--mono);font-size:10px;flex:1">' + item.품목코드 + '</span>'
+      + '<span style="font-size:9px;color:' + (item.qty>0?'var(--success)':'var(--text3)') + '">' + item.qty + '</span>'
+      + '<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--accent);color:#fff">이카운트</span>'
+      + '</div>'
+    ).join('');
+    drop.innerHTML = gpHtml + icHtml;
   }
   drop.style.display = 'block';
 }
@@ -2703,7 +2743,16 @@ function saveNomapEntries() {
   nomapRows.forEach((r, i) => {
     const el = document.getElementById(`ngp_${i}`);
     const val = el ? el.value.trim() : r._manualGimpo;
-    if (val) { extraMap[r.사방넷코드] = val; saved++; const st = document.getElementById(`nst_${i}`); if (st) st.textContent = '✅'; }
+    if (r._icDirect) {
+      // 이카운트 품번 직접 지정 → icCodeMap에 저장
+      icCodeMap[r.사방넷코드] = r._icDirect; saved++;
+      const st = document.getElementById(`nst_${i}`);
+      if (st) { st.textContent = '✅이카'; st.style.color = 'var(--accent)'; }
+    } else if (val) {
+      extraMap[r.사방넷코드] = val; saved++;
+      const st = document.getElementById(`nst_${i}`);
+      if (st) { st.textContent = '✅'; st.style.color = ''; }
+    }
   });
   // 매핑 마스터 탭에서 수정된 것
   document.querySelectorAll('.mv-sc').forEach(el => {
