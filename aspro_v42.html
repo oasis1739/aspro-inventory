@@ -2707,7 +2707,7 @@ function quickRegSet() {
   document.getElementById('setRegGp').value  = '';
   showToast(`✅ SET 등록: ${sab} → ${gp}`, 'ok', 3000);
   renderSetRegList();
-  sheetsPOST({ map: extraMap, soldout: soldoutMap }, '✅ Sheets 반영 완료');
+  sheetsPOST({ map: { [sab]: gp }, _verifyMap: { [sab]: gp } }, '✅ Sheets 반영 완료');
 }
 
 function renderSetRegList() {
@@ -2894,7 +2894,7 @@ function saveNomapEntries() {
     if (sabData.length && Object.keys(gpMap).length) processAll();
     else if (currentTab === 'nomap') renderNomap();
     else if (currentTab === 'mapview') renderMapview();
-    sheetsPOST({ map: extraMap, soldout: soldoutMap, iccodemap: icCodeMap, _verifyMap: changedMap }, '✅ 구글시트 반영 완료');
+    sheetsPOST({ map: changedMap, iccodemap: icCodeMap, _verifyMap: changedMap }, '✅ 구글시트 반영 완료');
   } else {
     showToast('❌ 저장 실패', 'err');
   }
@@ -4060,7 +4060,10 @@ function applyZeroRemap() {
     log(`[OK] 재매핑: ${r.사방넷코드} → ${newGp}`, 'ok');
   }
   saveExtra();
-  sheetsPOST({ map: extraMap, soldout: soldoutMap, iccodemap: icCodeMap });
+  sheetsPOST(_zrIsIc
+    ? { iccodemap: icCodeMap }
+    : { map: { [r.사방넷코드]: newGp }, _verifyMap: { [r.사방넷코드]: newGp } }
+  );
   closeZeroRemap();
   if (sabData.length && Object.keys(gpMap).length) processAll();
 }
@@ -4168,7 +4171,9 @@ function closeColorModal() {
   const confirmed = _colorCandidates.filter(c => c.confirmed).length;
   if (confirmed > 0 && sabData.length) {
     // 재매핑 반영
-    sheetsPOST({ map: extraMap });
+    const changed = {};
+    _colorCandidates.filter(c => c.confirmed).forEach(c => { changed[c.sc] = c.altGp; });
+    sheetsPOST({ map: changed, _verifyMap: changed });
     processAll();
   }
 }
