@@ -135,22 +135,14 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
-/* toast */
-#toastBox{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:6px;pointer-events:none;}
-.toast{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12.5px;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transform:translateY(10px);transition:opacity .25s,transform .25s;pointer-events:auto;}
-.toast.show{opacity:1;transform:translateY(0);}
-.toast.ok{border-left:3px solid var(--success);}
-.toast.err{border-left:3px solid var(--danger);}
-.toast.warn{border-left:3px solid var(--warn);}
 </style>
 </head>
 <body>
-<div id="toastBox"></div>
 
 <div class="hdr">
   <div class="logo">ASPRO<em> / 가상재고</em></div>
   <div class="hd"></div>
-  <div class="ver">v4.7</div>
+  <div class="ver">v4.6</div>
   <div class="hright">
     <span id="lastUp" style="font-size:10px;color:var(--text3);font-family:var(--mono)">대기중</span>
     <button class="hbtn" id="sheetBtn" onclick="showSheetsModal()">☁ Google Sheets 연동</button>
@@ -264,23 +256,6 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
     </div>
   </div>
 
-  <!-- SET 빠른등록 -->
-  <div class="sec">
-    <div class="sec-ttl" style="cursor:pointer" onclick="toggleSetPanel()">
-      🔖 SET 상품 등록 <span class="stag sec2" id="setRegCntTag">0건</span>
-      <span id="setArrow" style="margin-left:auto;font-size:10px;color:var(--text3)">▼</span>
-    </div>
-    <div id="setRegPanel" style="display:none">
-      <div style="font-size:10px;color:var(--text3);margin-bottom:5px">사방넷코드 → 김포품번 빠른등록<br><span style="color:var(--accent2)">extraMap 저장 — 고정매핑 덮어쓰기 가능</span></div>
-      <div style="display:flex;flex-direction:column;gap:4px">
-        <input class="fi" id="setRegSab" placeholder="사방넷코드 (예: 252JW10_SET)" style="width:100%;font-size:11px">
-        <input class="fi" id="setRegGp" placeholder="김포품번 (예: 252JW10)" style="width:100%;font-size:11px">
-        <button class="btn btn-p btnf" onclick="quickRegSet()">💾 등록</button>
-      </div>
-      <div id="setRegList" style="margin-top:7px"></div>
-    </div>
-  </div>
-
   <!-- 버튼 -->
   <div class="sec">
     <div class="bgrp">
@@ -340,7 +315,6 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
         </div>
         <span>수량수정</span>
       </div>
-      <button class="btn btn-pp" id="colorCheckBtn" style="display:none" onclick="runColorSimilarCheck()">🎨 유사컬러 검증</button>
       <span style="color:var(--text3);font-size:10px;margin-left:auto;font-family:var(--mono)" id="rowCnt"></span>
     </div>
 
@@ -372,7 +346,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
         <table>
           <thead><tr>
             <th>#</th><th>사방넷코드</th><th>자체코드</th><th>상품명</th><th>옵션</th>
-            <th>미매핑 이유</th><th>김포 물류품번 직접입력</th><th>저장상태</th><th>품절처리</th>
+            <th>김포 물류품번 직접입력</th><th>저장상태</th><th>품절처리</th>
           </tr></thead>
           <tbody id="nomapBody"></tbody>
         </table>
@@ -487,26 +461,6 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
     <div style="margin-bottom:9px">
       <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">파일명</label>
       <input class="fi" id="expFname" value="사방넷단품대량수정_수정파일_업데이트" style="width:100%">
-    </div>
-    <!-- 안전재고 비율 -->
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:11px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <span style="font-size:11px;font-weight:600;color:var(--text1)">🛡 안전재고 비율</span>
-        <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);cursor:pointer">
-          <input type="checkbox" id="safetyEnabled" onchange="onSafetyToggle()" style="cursor:pointer"> 적용
-        </label>
-      </div>
-      <div id="safetyBody" style="display:none">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="font-size:10px;color:var(--text2);white-space:nowrap">전체 기본</span>
-          <input type="range" id="safetyGlobal" min="10" max="100" step="5" value="70"
-            oninput="document.getElementById('safetyGlobalVal').textContent=this.value+'%';saveSafetySettings()"
-            style="flex:1;accent-color:var(--accent)">
-          <span id="safetyGlobalVal" style="font-size:11px;font-weight:700;color:var(--accent);min-width:34px;text-align:right">70%</span>
-        </div>
-        <div style="font-size:10px;color:var(--text3);margin-bottom:5px">브랜드별 예외 (비어있으면 기본값 사용)</div>
-        <div id="safetyBrandRows" style="display:flex;flex-direction:column;gap:4px"></div>
-      </div>
     </div>
     <div class="modal-acts">
       <button class="btn btn-n" onclick="closeM('expModal')">취소</button>
@@ -627,186 +581,59 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var data = JSON.parse(e.postData.contents);
-    var savedCount = 0;
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const payload = JSON.parse(e.postData.contents);
+    const now = new Date().toLocaleDateString('ko-KR');
 
-    // ── aspro_match: UPSERT (신규 삽입 + 기존값 업데이트) ──
-    if (data.map && Object.keys(data.map).length > 0) {
-      var matchSh = ss.getSheetByName('aspro_match') || ss.insertSheet('aspro_match');
-      var lastRow = matchSh.getLastRow();
-      var lastCol = Math.max(matchSh.getLastColumn(), 2);
-      var allRows = lastRow > 0 ? matchSh.getRange(1, 1, lastRow, lastCol).getValues() : [];
-      var rowIdx = {};
-      for (var i = 1; i < allRows.length; i++) {
-        var c = String(allRows[i][0]).trim();
-        if (c) rowIdx[c] = i;
-      }
-      var toAdd = [];
-      for (var sc in data.map) {
-        if (!sc) continue;
-        var gp = String(data.map[sc]);
-        if (rowIdx[sc] !== undefined) { allRows[rowIdx[sc]][1] = gp; }
-        else { toAdd.push([sc, gp]); }
-        savedCount++;
-      }
-      if (allRows.length > 0) {
-        matchSh.clearContents();
-        matchSh.getRange(1, 1, allRows.length, allRows[0].length).setValues(allRows);
-      }
-      if (toAdd.length > 0) {
-        matchSh.getRange(matchSh.getLastRow() + 1, 1, toAdd.length, 2).setValues(toAdd);
-      }
+    if (payload.map) {
+      let sh = ss.getSheetByName('aspro_match');
+      if (!sh) { sh = ss.insertSheet('aspro_match'); }
+      sh.clearContents();
+      sh.appendRow(['사방넷코드','김포물류품번','상품명','메모','등록일']);
+      const nmMap = payload.nameMap || {};
+      Object.entries(payload.map).forEach(([k,v]) => { sh.appendRow([k, v, nmMap[k]||'', '', now]); });
     }
 
-    // ── aspro_soldout: 전체 덮어쓰기 (빈 데이터면 스킵) ──
-    if (data.soldout && Object.keys(data.soldout).length > 0) {
-      var soldoutSh = ss.getSheetByName('aspro_soldout') || ss.insertSheet('aspro_soldout');
-      soldoutSh.clearContents();
-      var rows = [];
-      for (var sc in data.soldout) { if (sc) rows.push([sc, data.soldout[sc] || '']); }
-      if (rows.length > 0) soldoutSh.getRange(1, 1, rows.length, 2).setValues(rows);
+    // soldout: 빈 데이터로 덮어쓰기 방지
+    if (payload.soldout && Object.keys(payload.soldout).length > 0) {
+      let so = ss.getSheetByName('aspro_soldout');
+      if (!so) { so = ss.insertSheet('aspro_soldout'); }
+      so.clearContents();
+      so.appendRow(['사방넷코드','등록일']);
+      Object.entries(payload.soldout).forEach(([k,v]) => { so.appendRow([k, v === true ? now : String(v)]); });
     }
 
-    // ── aspro_kcfi ──
-    if (data.kcfi && Object.keys(data.kcfi).length > 0) {
-      var kcfiSh = ss.getSheetByName('aspro_kcfi') || ss.insertSheet('aspro_kcfi');
-      kcfiSh.clearContents();
-      var rows = [];
-      for (var sc in data.kcfi) { if (sc) rows.push([sc, data.kcfi[sc]]); }
-      if (rows.length > 0) kcfiSh.getRange(1, 1, rows.length, 2).setValues(rows);
+    if (payload.kcfi && Object.keys(payload.kcfi).length > 0) {
+      let kc = ss.getSheetByName('aspro_kcfi');
+      if (!kc) { kc = ss.insertSheet('aspro_kcfi'); }
+      kc.clearContents();
+      kc.appendRow(['사방넷코드','재고','업데이트일']);
+      Object.entries(payload.kcfi).forEach(([k,v]) => { kc.appendRow([k, v, now]); });
     }
 
-    // ── aspro_normname ──
-    if (data.normname && Object.keys(data.normname).length > 0) {
-      var nnSh = ss.getSheetByName('aspro_normname') || ss.insertSheet('aspro_normname');
-      nnSh.clearContents();
-      var rows = [];
-      for (var k in data.normname) { if (k) rows.push([k, data.normname[k]]); }
-      if (rows.length > 0) nnSh.getRange(1, 1, rows.length, 2).setValues(rows);
+    if (payload.normname && Object.keys(payload.normname).length > 0) {
+      let nn = ss.getSheetByName('aspro_normname');
+      if (!nn) { nn = ss.insertSheet('aspro_normname'); }
+      nn.clearContents();
+      nn.appendRow(['정규화상품명(normName)','물류품번','원본사방넷상품명','등록일']);
+      Object.entries(payload.normname).forEach(([k,v]) => { nn.appendRow([k, v, '', now]); });
     }
 
-    // ── aspro_forcezero ──
-    if (data.forcezero && Object.keys(data.forcezero).length > 0) {
-      var fzSh = ss.getSheetByName('aspro_forcezero') || ss.insertSheet('aspro_forcezero');
-      fzSh.clearContents();
-      var rows = [];
-      for (var c in data.forcezero) { if (c) rows.push([c]); }
-      if (rows.length > 0) fzSh.getRange(1, 1, rows.length, 1).setValues(rows);
+    if (payload.iccodemap && Object.keys(payload.iccodemap).length > 0) {
+      let ic = ss.getSheetByName('aspro_iccodemap');
+      if (!ic) { ic = ss.insertSheet('aspro_iccodemap'); }
+      ic.clearContents();
+      ic.appendRow(['사방넷코드','이카운트품목코드','등록일']);
+      Object.entries(payload.iccodemap).forEach(([k,v]) => { ic.appendRow([k, v, now]); });
     }
 
-    // ── aspro_iccodemap ──
-    if (data.iccodemap && Object.keys(data.iccodemap).length > 0) {
-      var icSh = ss.getSheetByName('aspro_iccodemap') || ss.insertSheet('aspro_iccodemap');
-      icSh.clearContents();
-      var rows = [];
-      for (var sc in data.iccodemap) { if (sc) rows.push([sc, data.iccodemap[sc]]); }
-      if (rows.length > 0) icSh.getRange(1, 1, rows.length, 2).setValues(rows);
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ok: true, saved: savedCount}))
+    const saved = payload.map ? Object.keys(payload.map).length : 0;
+    return ContentService.createTextOutput(JSON.stringify({ok:true, saved}))
       .setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({ok: false, error: err.message}))
+    return ContentService.createTextOutput(JSON.stringify({ok:false, error: err.message}))
       .setMimeType(ContentService.MimeType.JSON);
   }
-}
-
-// ──────────────────────────────────────────────
-// onEdit 트리거: aspro_match 시트에서 A열(사방넷코드) 입력 시
-// C열(상품명)을 사방넷단품원본 시트에서 자동으로 조회하여 채움
-// ──────────────────────────────────────────────
-function onEdit(e) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = e.range.getSheet();
-  if (sheet.getName() !== 'aspro_match') return;
-
-  const editedRow = e.range.getRow();
-  const editedCol = e.range.getColumn();
-  if (editedRow === 1) return; // 헤더행 무시
-
-  // A열 또는 B열 편집 시 상품명 자동완성
-  if (editedCol !== 1 && editedCol !== 2) return;
-
-  const sabCode = sheet.getRange(editedRow, 1).getValue();
-  if (!sabCode || String(sabCode).trim() === '') return;
-
-  // C열이 이미 채워져 있으면 덮어쓰지 않음
-  const existingName = sheet.getRange(editedRow, 3).getValue();
-  if (existingName && String(existingName).trim() !== '') return;
-
-  // 사방넷단품원본 시트에서 상품명 조회
-  const sabSh = ss.getSheetByName('사방넷단품원본');
-  if (!sabSh) return;
-
-  const sabData = sabSh.getDataRange().getValues();
-  if (sabData.length < 2) return;
-
-  const header = sabData[0].map(h => String(h).trim());
-  const codeIdx = header.indexOf('사방넷상품코드') >= 0 ? header.indexOf('사방넷상품코드') : 0;
-  const nameIdx = header.indexOf('상품명') >= 0 ? header.indexOf('상품명') : 2;
-
-  const targetCode = String(sabCode).trim();
-  for (let i = 1; i < sabData.length; i++) {
-    const rowCode = String(sabData[i][codeIdx] || '').trim();
-    if (rowCode === targetCode) {
-      const productName = String(sabData[i][nameIdx] || '').trim();
-      if (productName) {
-        sheet.getRange(editedRow, 3).setValue(productName);
-      }
-      break;
-    }
-  }
-}
-
-// ──────────────────────────────────────────────
-// 일괄 상품명 채우기: aspro_match 시트의 빈 C열을 모두 채움
-// 구글시트에서 직접 실행 가능 (메뉴 → 실행)
-// ──────────────────────────────────────────────
-function fillProductNames() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const matchSh = ss.getSheetByName('aspro_match');
-  if (!matchSh) { SpreadsheetApp.getUi().alert('aspro_match 시트를 찾을 수 없습니다.'); return; }
-
-  const sabSh = ss.getSheetByName('사방넷단품원본');
-  if (!sabSh) { SpreadsheetApp.getUi().alert('사방넷단품원본 시트를 찾을 수 없습니다.'); return; }
-
-  // 사방넷 코드 → 상품명 맵 빌드
-  const sabData = sabSh.getDataRange().getValues();
-  const header = sabData[0].map(h => String(h).trim());
-  const codeIdx = header.indexOf('사방넷상품코드') >= 0 ? header.indexOf('사방넷상품코드') : 0;
-  const nameIdx = header.indexOf('상품명') >= 0 ? header.indexOf('상품명') : 2;
-
-  const sabNameMap = {};
-  for (let i = 1; i < sabData.length; i++) {
-    const c = String(sabData[i][codeIdx] || '').trim();
-    const n = String(sabData[i][nameIdx] || '').trim();
-    if (c && n) sabNameMap[c] = n;
-  }
-
-  // aspro_match 헤더 확인 및 보정
-  const matchData = matchSh.getDataRange().getValues();
-  const mHeader = matchData[0].map(h => String(h).trim());
-
-  // 컬럼 수가 4개 이하면 헤더를 5컬럼으로 재설정
-  if (mHeader.length < 3 || mHeader[2] !== '상품명') {
-    matchSh.getRange(1, 1, 1, 5).setValues([['사방넷코드','김포물류품번','상품명','메모','등록일']]);
-  }
-
-  let filled = 0;
-  for (let i = 1; i < matchData.length; i++) {
-    const sabCode = String(matchData[i][0] || '').trim();
-    if (!sabCode) continue;
-    const existingName = String(matchData[i][2] || '').trim();
-    if (existingName) continue; // 이미 있으면 스킵
-    const name = sabNameMap[sabCode];
-    if (name) {
-      matchSh.getRange(i + 1, 3).setValue(name);
-      filled++;
-    }
-  }
-
-  SpreadsheetApp.getUi().alert(`✅ 상품명 채우기 완료: ${filled}건 업데이트`);
 }</pre>
     </div>
 
@@ -836,74 +663,23 @@ let gpMap = {};
 let sabData = [], sabRaw = [];
 let matchMap = {};
 let normOptMap = {};
-// 이름 기반 이카운트 매핑 정적 초기값 (구글시트 normname 탭 대체/보완)
-const NORM_STATIC_MAP = {
-  // 사방넷 상품명 normName → 이카운트 품목코드 prefix
-  // 후라밍고 24FW
-  '울 밍크 블렌디드 니트 종': 'FM24FW02',
-  '메탈 샤이닝 케이블 니트 종': 'FM24FW01',
-  // M12 25SS 여성
-  '여성 크로셰 후드집업': 'AMWCA2501',
-  '여성 실크블렌디드 후드 니트': 'ASWNT2501',
-  '여성 실크블렌디드 후드 니트 종 택': 'ASWNT2501',
-  '여성 브이넥 돌먼니트': 'AMWNT2504',
-  '여성 린넨블렌디드 크로셰 카라니트': 'AMWNT2503',
-  '여성 린넨블렌디드 크로셰 카라니트 종택': 'AMWNT2503',
-  // M12 24FW 여성 울블렌디드 보머
-  '여성 울블렌디드 니팅 보머 점퍼': 'AFWJP2501',
-  // 디엣 세트
-  '머플러  풀오버 set': '251DT01',
-  // 엔니튜드 24FW
-  '트위드 니트 베스트 종 택': '243NT09VT',
-  'gfa 엔니튜드 트위드 니트 베스트 종 택': '243NT09VT',
-  '캐시 터틀넥': '244NT43',
-  '후드 니트 패딩 베스트': '244NT51VT',
-  // 엔니튜드 25SS
-  '크로셰 썸머 니트셋업': '252NT25',
-  'set 크로셰 썸머 니트셋업': '252NT25',
-  '린넨 크로셰 카라 니트': '252NT33',
-  '린넨 시스루 썸머 가디건': '252NT41',
-  '린넨 시어 가디건': '252NT41',
-  // 막스스튜디오 25SS
-  '홀가먼트 하프 슬리브 니트 종 택': '251MX01',
-  '홀가먼트 하프 슬리브 니트 종 set': '251MX01',
-  '썸머 글리터 캡 슬리브리스 종 택': '252MX05',
-  '썸머 글리터 캡 슬리브리스 종 set': '252MX05',
-  // 메탈샤이닝 (이카운트에 FM24FW01 코드로 있어야 함)
-  '메탈 샤이닝 케이블 니트 종': 'FM24FW01',
-};
 let soldoutMap = {};
 let kcfiMap = {};
 
 const SKIP_GP = new Set(['nan','','슈컴퍼니-김포이관','확인요망','삭제요망']);
 let extraMap = {};
 let icCodeMap = {}; // 사방넷코드 → 이카운트 품목코드 직접 매핑 (IC: 접두어 없이 저장)
-let forceZeroMap = {}; // 강제 0재고 품목코드 맵
 let resultRows = [], filteredRows = [];
 let nomapRows = [];
 let currentTab = 'all', editMode = false, expMode = 'all';
-let safetyRatio = 0.7;  // 글로벌 안전재고 비율
-let brandSafetyRatios = {}; // {prefix: ratio} 브랜드별 예외
-
-const BRAND_LIST = [
-  {prefix:'NT2', name:'엔니튜드'},
-  {prefix:'JW2', name:'제이슨우'},
-  {prefix:'L24', name:'르뎁트'},
-  {prefix:'BK',  name:'베스띠벨리'},
-  {prefix:'SK',  name:'지이크'},
-  {prefix:'FK',  name:'파렌하이트'},
-  {prefix:'MW',  name:'막스/M12'},
-];
 
 const SAB_IC_OVERRIDE = {
   '10058754926': 'N1012',
   '10058824019': 'N1009',
-  'FM24FW01': '244FM11',  // 메탈샤이닝 케이블 니트 — 컬러오버라이드 연결
 };
 const SAB_COLOR_OVERRIDE = {
   '10058754926': {'와인':'WN','베이지':'BE','네이비':'NA','크림':'CR'},
   '10058824019': {'라이트그레이':'LG','썸머브라운':'BR','네이비':'NA'},
-  'FM24FW01': {'베이지':'버터옐로우','블랙':'블랙','그레이':'그레이','그린':'그린','바이올렛':'바이올렛'},
 };
 const EXTRA_STATIC_MAP = {
   '100334-0005':'243NT05-88-AP','100334-0006':'243NT05-88-GR','100334-0007':'243NT05-88-BK',
@@ -967,48 +743,7 @@ const EXTRA_STATIC_MAP = {
   // 마리본 스트라이프니트 3종택1 → 김포 252JW10
   '101859-0001':'252JW10-IV-44','101859-0002':'252JW10-IV-55','101859-0003':'252JW10-IV-66','101859-0004':'252JW10-IV-77','101859-0005':'252JW10-IV-88',
   '101859-0006':'252JW10-BK-44','101859-0007':'252JW10-BK-55','101859-0008':'252JW10-BK-66','101859-0009':'252JW10-BK-77','101859-0010':'252JW10-BK-88',
-  '101859-0011':'252JW10-BL-44','101859-0012':'252JW10-BL-55','101859-0013':'252JW10-BL-66','101859-0014':'252JW10-BL-77','101859-0015':'252JW10-BL-88',
-  // ── 마리본 홀가먼트 실크 니트 1종 → 김포: 제이슨우 26SS 반팔홀가니트3종 (JW261GW02) ──
-  '100930-0001':'JW261GW02-GR-44','100930-0002':'JW261GW02-GR-55','100930-0003':'JW261GW02-GR-66','100930-0004':'JW261GW02-GR-77','100930-0005':'JW261GW02-GR-88',
-  '100930-0006':'JW261GW02-RD-44','100930-0007':'JW261GW02-RD-55','100930-0008':'JW261GW02-RD-66','100930-0009':'JW261GW02-RD-77','100930-0010':'JW261GW02-RD-88',
-  '100930-0011':'JW261GW02-BK-44','100930-0012':'JW261GW02-BK-55','100930-0013':'JW261GW02-BK-66','100930-0014':'JW261GW02-BK-77','100930-0015':'JW261GW02-BK-88',
-  // ── 마리본 케이시 서클컷 가디건 1종 → 김포: 제이슨우 26SS 서클컷가디건 3종 (JW261GW01) ──
-  '100931-0001':'JW261GW01-GN-55','100931-0002':'JW261GW01-GN-66','100931-0003':'JW261GW01-GN-77','100931-0004':'JW261GW01-GN-88',
-  '100931-0005':'JW261GW01-GR-55','100931-0006':'JW261GW01-GR-66','100931-0007':'JW261GW01-GR-77','100931-0008':'JW261GW01-GR-88',
-  '100931-0009':'JW261GW01-NA-55','100931-0010':'JW261GW01-NA-66','100931-0011':'JW261GW01-NA-77','100931-0012':'JW261GW01-NA-88',
-  // ── [SET] 울블렌드 니트 셋업 (251NT14 CD=재킷+SK=스커트 세트, min재고) ──
-  // 100405 블랙 / 100406 오트베이지 / 100407 라벤더그레이 / 100408 크림
-  '100405-0001':'251NT14-CD-BK-55+251NT14-SK-BK-55','100405-0002':'251NT14-CD-BK-66+251NT14-SK-BK-66',
-  '100405-0003':'251NT14-CD-BK-77+251NT14-SK-BK-77','100405-0004':'251NT14-CD-BK-88+251NT14-SK-BK-88',
-  '100406-0001':'251NT14-CD-OT-55+251NT14-SK-OT-55','100406-0002':'251NT14-CD-OT-66+251NT14-SK-OT-66',
-  '100406-0003':'251NT14-CD-OT-77+251NT14-SK-OT-77','100406-0004':'251NT14-CD-OT-88+251NT14-SK-OT-88',
-  '100407-0001':'251NT14-CD-LA-55+251NT14-SK-LA-55','100407-0002':'251NT14-CD-LA-66+251NT14-SK-LA-66',
-  '100407-0003':'251NT14-CD-LA-77+251NT14-SK-LA-77','100407-0004':'251NT14-CD-LA-88+251NT14-SK-LA-88',
-  '100408-0001':'251NT14-CD-CR-55+251NT14-SK-CR-55','100408-0002':'251NT14-CD-CR-66+251NT14-SK-CR-66',
-  '100408-0003':'251NT14-CD-CR-77+251NT14-SK-CR-77','100408-0004':'251NT14-CD-CR-88+251NT14-SK-CR-88',
-  // 102633 = [SET] 울블렌드 니트 셋업 4종택1
-  // 옵션 형식: "55:크림" (SIZE:COLOR) → parseOpt가 자동 swap → GP_MULTI_TYPE_SET['251NT14']로 CD+SK min 처리
-  '102633-0001':'251NT14','102633-0002':'251NT14','102633-0003':'251NT14','102633-0004':'251NT14',
-  '102633-0005':'251NT14','102633-0006':'251NT14','102633-0007':'251NT14','102633-0008':'251NT14',
-  '102633-0009':'251NT14','102633-0010':'251NT14','102633-0011':'251NT14','102633-0012':'251NT14',
-  '102633-0013':'251NT14','102633-0014':'251NT14','102633-0015':'251NT14','102633-0016':'251NT14',
-  // ── 린넨 크로셰 카라 니트 → 김포 252NT33 (BL=틸블루, MO=모카무스, OT=오트밀) ──
-  // 100448 [3컬러]: OATMEAL(OT), MOCHA MOUSSE(MO), TEAL BLUE(BL)
-  '100448-0001':'252NT33-OT-55','100448-0002':'252NT33-OT-66','100448-0003':'252NT33-OT-77','100448-0004':'252NT33-OT-88',
-  '100448-0005':'252NT33-MO-55','100448-0006':'252NT33-MO-66','100448-0007':'252NT33-MO-77','100448-0008':'252NT33-MO-88',
-  '100448-0009':'252NT33-BL-55','100448-0010':'252NT33-BL-66','100448-0011':'252NT33-BL-77','100448-0012':'252NT33-BL-88',
-  // 102604=틸블루(BL), 102605=모카무스(MO), 102606=오트밀(OT) 단품
-  '102604-0001':'252NT33-BL-55','102604-0002':'252NT33-BL-66','102604-0003':'252NT33-BL-77','102604-0004':'252NT33-BL-88',
-  '102605-0001':'252NT33-MO-55','102605-0002':'252NT33-MO-66','102605-0003':'252NT33-MO-77','102605-0004':'252NT33-MO-88',
-  '102606-0001':'252NT33-OT-55','102606-0002':'252NT33-OT-66','102606-0003':'252NT33-OT-77','102606-0004':'252NT33-OT-88',
-  // ── 린넨 핀턱 니트 버뮤다 팬츠 → 김포 253NT05 (오트밀→BE, 모카무스→CH, 틸블루=없음) ──
-  '100454-0001':'253NT05-BE-55','100454-0002':'253NT05-BE-66','100454-0003':'253NT05-BE-77','100454-0004':'253NT05-BE-88',
-  '100455-0001':'253NT05-CH-55','100455-0002':'253NT05-CH-66','100455-0003':'253NT05-CH-77','100455-0004':'253NT05-CH-88',
-  // ── 마리본 썸머 크로셰 점퍼 4종택1 → 김포 252MX18CD ──
-  '101820-0001':'252MX18CD-BK-55','101820-0002':'252MX18CD-BK-66','101820-0003':'252MX18CD-BK-77','101820-0004':'252MX18CD-BK-88',
-  '101820-0005':'252MX18CD-KH-55','101820-0006':'252MX18CD-KH-66','101820-0007':'252MX18CD-KH-77','101820-0008':'252MX18CD-KH-88',
-  '101820-0009':'252MX18CD-GR-55','101820-0010':'252MX18CD-GR-66','101820-0011':'252MX18CD-GR-77','101820-0012':'252MX18CD-GR-88',
-  '101820-0013':'252MX18CD-WH-55','101820-0014':'252MX18CD-WH-66','101820-0015':'252MX18CD-WH-77','101820-0016':'252MX18CD-WH-88',
+  '101859-0011':'252JW10-BL-44','101859-0012':'252JW10-BL-55','101859-0013':'252JW10-BL-66','101859-0014':'252JW10-BL-77','101859-0015':'252JW10-BL-88'
 };
 
 // ── LS 로드 ──
@@ -1047,11 +782,7 @@ function loadExtra() {
   } catch(e) { kcfiMap = {}; }
   updateSoldoutCnt();
   updateKCFICnt();
-  const savedSheetsUrl = localStorage.getItem(SHEETS_URL_KEY) || '';
-  if (savedSheetsUrl && isKnownBadSheetsUrl(savedSheetsUrl) && DEFAULT_SHEETS_URL) {
-    localStorage.setItem(SHEETS_URL_KEY, DEFAULT_SHEETS_URL);
-    log('[WARN] 이전 Sheets URL 감지 → 현재 배포 URL로 자동 교체됨', 'warn');
-  } else if (!savedSheetsUrl && DEFAULT_SHEETS_URL) {
+  if (!localStorage.getItem(SHEETS_URL_KEY) && DEFAULT_SHEETS_URL) {
     localStorage.setItem(SHEETS_URL_KEY, DEFAULT_SHEETS_URL);
     log('[OK] Sheets URL 자동 설정됨', 'ok');
   }
@@ -1175,18 +906,6 @@ async function loadGimpo(e) {
           setCount++;
         }
       }
-      // {prefix}-CD-{color}-{size} 형식 (예: 251NT14-CD-LA-55)
-      const cdMid = code.match(/^(.+)-CD-([A-Z]{2,})-(\d{2,3})$/);
-      if (cdMid) {
-        const [, prefix, color, size] = cdMid;
-        const skKey  = `${prefix}-SK-${color}-${size}`;
-        const setKey = `${prefix}-SET-${color}-${size}`;
-        const skQty  = gpMap[skKey];
-        if (skQty !== undefined) {
-          gpMap[setKey] = Math.min(qty, skQty);
-          setCount++;
-        }
-      }
     }
     document.getElementById('gpZone').classList.add('ok');
     updFI('gpList', file.name, 'ok', n+'품목');
@@ -1264,34 +983,21 @@ async function loadMatchFile(e) {
   addFI('matchList', file.name, 'pending');
   try {
     const rows = (await readXLSX(file))[0];
-    // 구글시트 기존 데이터 유지 — 파일 항목으로 업데이트 (파일 우선)
-    const fileMap = {};
+    matchMap = {};
     let n = 0;
     for (let i = 3; i < rows.length; i++) {
       const r = rows[i];
       if (!r || !r[0]) continue;
       const sc   = String(r[0]).trim();
       const 물류 = String(r[7]||'').trim();
-      if (!sc || !물류 || SKIP_GP.has(물류) || 물류 === 'nan') continue;
-      fileMap[sc] = 물류;
+      if (!sc || SKIP_GP.has(물류) || 물류 === 'nan') continue;
+      matchMap[sc] = 물류;
       n++;
     }
-    // 시트에 없는 신규 항목만 추출 → 시트에 자동 업로드
-    const newEntries = {};
-    for (const [sc, gp] of Object.entries(fileMap)) {
-      if (!matchMap[sc]) newEntries[sc] = gp;
-    }
-    matchMap = { ...matchMap, ...fileMap };
     document.getElementById('matchZone').classList.add('ok');
     updFI('matchList', file.name, 'ok', n+'매핑');
     updateSavedMapCnt();
     log(`[OK] 매칭파일 → ${n}건`, 'ok');
-    // 신규 항목 시트에 반영 (이후 파일 없이도 동일 결과)
-    const newCount = Object.keys(newEntries).length;
-    if (newCount > 0) {
-      log(`[SYNC] 매칭파일 신규 ${newCount}건 → 시트 업로드 중...`, 'info');
-      sheetsPOST({ map: newEntries });
-    }
 
     normOptMap = {};
     for (let i = 3; i < rows.length; i++) {
@@ -1318,21 +1024,13 @@ function tryLoadSavedMatchFile() {
     if (raw) {
       const rawParsed = JSON.parse(raw);
       const filteredRaw = {};
-      Object.entries(rawParsed).forEach(([k,v]) => {
-        const vNorm = normalizeGpCode(v);
-        if(isValidGp(vNorm)) filteredRaw[k]=vNorm;
-      });
+      Object.entries(rawParsed).forEach(([k,v]) => { if(isValidGp(v)) filteredRaw[k]=v; });
       matchMap = filteredRaw;
       const n = Object.keys(matchMap).length;
       try {
         const rawN = localStorage.getItem('aspro_normoptmap_v1');
         if (rawN) normOptMap = JSON.parse(rawN);
-        // 정적 초기값 병합 (로컬 없는 키만 채움)
-        Object.entries(NORM_STATIC_MAP).forEach(([k,v]) => { if(!normOptMap[k]) normOptMap[k]=v; });
-      } catch(e2) {
-        // 로컬 없어도 정적맵 적용
-        Object.assign(normOptMap, NORM_STATIC_MAP);
-      }
+      } catch(e2) {}
       log(`[OK] 저장된 매칭파일 자동 로드: ${n}건`, 'ok');
       document.getElementById('matchList').innerHTML =
         `<div class="fitem ok"><div class="fdot"></div><div class="fname">💾 localStorage 자동로드</div><div class="fcnt">${n}건</div></div>`;
@@ -1437,95 +1135,25 @@ const IC_STATIC_MAP = {
   'AMWCA2501_AL': 'AMWCA2501',
   'AMWNT2504_AL': 'AMWNT2504',
   'MBHK001_AL': 'MBHK001',
-  'MX25HSKN01_AL': '251MX01',
+  'MX25HSKN01_AL': 'MX25HSKN01',
   'MX25SSK01_AL': 'MX25SSK01',
   'N1009_AL': 'N1009',       'N1016_AL': 'N1016',
-  '102597': 'N1009',         // 썸머 쿨 하프소매 볼륨 니트 브라운 옵션 (사방넷코드 prefix → 이카운트 N1009)
-  // ── 후라밍고 24FW ──────────────────────────────────────
-  'FM24FW02': 'FM24FW02',    // 울 밍크 블렌디드 니트 1종
-  'FM24FW01': '244FM11',    // 메탈 샤이닝 케이블 니트 1종
-  // ── M12 25SS 여성 ──────────────────────────────────────
-  'AMWCA2501-CR': 'AMWCA2501',  'AMWCA2501-BL': 'AMWCA2501',
-  'AMWCA2501-BK': 'AMWCA2501',  'AMWCA2501-BR': 'AMWCA2501',
-  'AMWCA2501-LM': 'AMWCA2501',  // 여성 크로셰 후드집업 각 색상
-  'ASWNT2501-PK': 'ASWNT2501',  'ASWNT2501-IV': 'ASWNT2501',
-  'ASWNT2501-BK': 'ASWNT2501',  'ASWNT2501-BE': 'ASWNT2501',
-  'ASWNT2501': 'ASWNT2501',     // 여성 실크블렌디드 후드 니트
-  'AMWNT2504-KH': 'AMWNT2504',  'AMWNT2504-PK': 'AMWNT2504',
-  'AMWNT2504-IB': 'AMWNT2504',  'AMWNT2504-BK': 'AMWNT2504',
-  'AMWNT2504': 'AMWNT2504',     // 여성 브이넥 돌먼니트
-  'AMWNT2503-OT': 'AMWNT2503',  'AMWNT2503-BK': 'AMWNT2503',
-  'AMWNT2503-KH': 'AMWNT2503',  'AMWNT2503-PP': 'AMWNT2503',
-  'AMWNT2503': 'AMWNT2503',     // 여성 린넨블렌디드 크로셰 카라니트
-  // ── M12 24FW 여성 울블렌디드 니팅 보머 점퍼 ───────────
-  'AFWJP2501-BK': 'AFWJP2501',  'AFWJP2501-LV': 'AFWJP2501',
-  'AFWJP2501-BE': 'AFWJP2501',  'AFWJP2501-GR': 'AFWJP2501',
-  'AFWJP2501': 'AFWJP2501',
-  'ASWJP2501-PK': 'ASWJP2501',  'ASWJP2501-MT': 'ASWJP2501',
-  'ASWJP2501': 'ASWJP2501',     // 핑크체크/민트체크 구버전
-  // ── 디엣 머플러+풀오버 세트 ────────────────────────────
-  '251DT01-SET': '251DT01',     // SET → 이카운트 머플러+풀오버 조합
-  // ── 마리본 홀가먼트 실크 니트 (김포: 262HJW03 → JW261GW02) ──
-  '262HJW03': '262HJW03',
-  // ── 마리본 케이시 서클컷 가디건 (김포: 26HJW02 → JW261GW01) ──
-  '26HJW02': '26HJW02',
-  // ── 엔니튜드 24FW ──────────────────────────────────────────
-  '243NT09VT': '243NT09VT',      // 엔니튜드 트위드 니트 베스트 4종 (기존)
-  'NT243G0009-12VT': '243NT09VT', // 엔니튜드 트위드 니트 베스트 (사방넷 자체코드)
-  'NT242G0046-0048VT': '243NT09VT', // GFA 엔니튜드 트위드 니트 베스트 (신버전)
-  '244NT43-CH': '244NT43',       '244NT43-GR': '244NT43',
-  '244NT43-PU': '244NT43',       '244NT43': '244NT43',  // 캐시 터틀넥
-  '244NT51VT-CH': '244NT51VT',   '244NT51VT': '244NT51VT', // 후드 니트 패딩 베스트
-  // ── 엔니튜드 25SS ──────────────────────────────────────────
-  'NT252G0025SET': '252NT25',    'NT252G0026SET': '252NT25',
-  'NT252G0027SET': '252NT25',    // [SET]크로셰 썸머 니트셋업 각 컬러
-  'NT252G0033-35PO': '252NT33',  // 린넨 크로셰 카라 니트 (3컬러)
-  'NT252G0041CD': '252NT41',     'NT252G0042CD': '252NT41',
-  'NT252G0043CD': '252NT41',     // 린넨 시어 가디건 각 컬러
-  'NT252G0043CD_SET': '252NT41', // [1+1+1]린넨 시스루 썸머 가디건 3종 SET
-  // ── 막스스튜디오 25SS ────────────────────────────────────────
-  'MX25HSKN01_BK': 'MX25HSKN01', 'MX25HSKN01_BE': 'MX25HSKN01',
-  'MX25HSKN01_PK': 'MX25HSKN01', // 홀가먼트 하프 슬리브 니트 단품
-  // MX25HSKN01_AL은 기존에 있음
-  '252MX05': '252MX05',           // 썸머 글리터 캡 슬리브리스 4종 택1
-  'MS25S-GL-CAP-BK': '252MX05',  'MS25S-GL-CAP-BE': '252MX05',
-  'MS25S-GL-CAP-CH': '252MX05',  'MS25S-GL-CAP-PL': '252MX05',
-  'MS25S-GL-CAP_AL': '252MX05',  'MS25S-GL-CAP_2set': '252MX05',
-  'MS25S-GL-CAP_SET': '252MX05', // 썸머 글리터 각종 세트
-  // ── [1+1] 세트 자체코드 ────────────────────────────────────
-  'MX25HSKN01_2set': 'MX25HSKN01', // [1+1]홀가먼트 하프 슬리브 세트 (자체코드 MX25로 시작)
-  'JW25SS01_SET': '252JW19',     // [1+1+1]프렌치 린넨 블렌드 슬리브리스 카라니트 3종 SET
-  'N1009_SET': 'N1009',           // [1+1+1]썸머 쿨 하프소매 볼륨 니트 SET
-  // ── 제이슨우 25SS [1+1+1] ────────────────────────────────────
-  'JW25SS02_SET': '252JW19',     // [1+1+1]프렌치 린넨 블렌드 슬리브리스 카라니트 SET (101861계열)
-  '252JW10_SET': '252JW10',      // [1+1+1]마리본 스트라이프니트 SET
 };
 
 const GP_SET_COLOR_OVERRIDE = {
-  'MS25S':       { gpPrefix: '252MX05', colorMap: { '플럼':'PL', '차콜':'CH', '그레이':'GR', '베이지':'BE', '블랙':'BK' } },
-  'JW25SS01':    { gpPrefix: '252JW19', colorMap: { '아이보리':'IV', '스카이블루':'BL', '블랙':'BK', '블루':'BL', '플럼':'BL' } },
-  'NT252G0043CD':{ gpPrefix: '252NT41', colorMap: { '오션블루':'BL', '화이트':'IV', '블랙':'BK', '블루':'BL', '아이보리':'IV' } },
-};
-// 세트 상품 타입 분기: prefix → ['타입1','타입2',...] (같은 색상/사이즈로 여러 아이템 묶음)
-// matchMap 값에 prefix만 저장하면 여기서 각 타입별 gpMap 조회 후 min 반환
-const GP_MULTI_TYPE_SET = {
-  '251NT14': ['CD', 'SK'],  // [SET]여성 울블렌드 니트 셋업 (카디건+스커트)
+  'MS25S': { gpPrefix: '252MX05', colorMap: { '플럼':'BU', '차콜':'GR', '그레이':'GR', '베이지':'BE', '블랙':'BK' } },
 };
 
-function getGimpoQty(sabCode, opt, sabName, jache = '') {
-  // extraMap 우선: 사용자가 추가/수정한 매핑이 고정 매핑보다 우선 적용됨
-  let 물류 = extraMap[sabCode] || EXTRA_STATIC_MAP[sabCode] || matchMap[sabCode];
-  // _SET/-SET 제거 후 재시도
-  if (!물류) {
-    const sabBase = sabCode.replace(/[_-]SET$/i, '');
-    물류 = extraMap[sabBase] || EXTRA_STATIC_MAP[sabBase] || matchMap[sabBase];
-  }
+function getGimpoQty(sabCode, opt, sabName) {
+  let 물류 = EXTRA_STATIC_MAP[sabCode] || extraMap[sabCode] || matchMap[sabCode];
   // __DELETED__ 처리: extraMap에서 명시적으로 삭제된 항목
   if (물류 === '__DELETED__') return null;
 
   // ── 세트 옵션 처리 (예: 플럼+차콜:55) ──
   if (!물류 && opt && opt.includes('+') && opt.includes(':')) {
-    const prefix = (jache || '').split('-')[0];
+    const sabRow = sabData.find(s => s.사방넷코드 === sabCode);
+    const jache = sabRow?.자체코드 || '';
+    const prefix = jache.split('-')[0];
     const colorOvr = GP_SET_COLOR_OVERRIDE[prefix];
     if (colorOvr) {
       const gpPrefix = colorOvr.gpPrefix;
@@ -1548,51 +1176,6 @@ function getGimpoQty(sabCode, opt, sabName, jache = '') {
     const key = normName(sabName) + '||' + normOpt(opt);
     물류 = normOptMap[key] || null;
   }
-
-  // ── 자체코드 → 김포 직접 fallback (신규상품 대응) ──
-  // 케이스1: 자체코드 자체가 물류품번 (예: 253NT14-NA-095)
-  // 케이스2: 자체코드 prefix + 옵션 색상/사이즈 조합 (예: 253NT19L_AL → 253NT19L-MO-55)
-  if (!물류 && jache) {
-    if (gpMap[jache] !== undefined) {
-      물류 = jache;
-    }
-    if (!물류) {
-      const jBase = jache.replace(/[_-]AL$/i, '').split(/[-_]/)[0];
-      if (jBase && jBase.length >= 5) {
-        const { cc: jcc, sz: jsz } = parseOpt(opt || '');
-        if (jcc && jsz) {
-          const c1 = `${jBase}-${jcc}-${jsz}`;
-          const c2 = `${jBase}-${jsz}-${jcc}`;
-          if (gpMap[c1] !== undefined) 물류 = c1;
-          else if (gpMap[c2] !== undefined) 물류 = c2;
-        }
-      }
-    }
-    if (물류) log(`[자체→김포] ${sabCode}(${jache}) → ${물류}`, 'info');
-  }
-
-  // ── GP_MULTI_TYPE_SET: 같은 색상/사이즈로 여러 타입 묶음 세트 (예: CD+SK) ──
-  // matchMap 값이 prefix만 있을 때 (예: '251NT14') 각 타입 재고 min 반환
-  if (물류 && GP_MULTI_TYPE_SET[물류]) {
-    const types = GP_MULTI_TYPE_SET[물류];
-    const { cc, sz } = parseOpt(opt || '');
-    if (cc && sz) {
-      const gpKeys = types.map(t => `${물류}-${t}-${cc}-${sz}`);
-      const qtys = gpKeys.map(k => gpMap[k] !== undefined ? gpMap[k] : null);
-      if (qtys.some(q => q === null)) return null;
-      return { qty: Math.min(...qtys), src: '김포(세트)', 물류품번: gpKeys.join('+') };
-    }
-    return null;
-  }
-
-  // ── 물류품번 '+' 멀티코드 세트: EXTRA_STATIC_MAP에서 "GP1+GP2" 형태로 저장된 경우 ──
-  if (물류 && 물류.includes('+')) {
-    const parts = 물류.split('+').map(s => s.trim()).filter(Boolean);
-    const qtys = parts.map(p => gpMap[p] !== undefined ? gpMap[p] : null);
-    if (qtys.some(q => q === null)) return null;
-    return { qty: Math.min(...qtys), src: '김포(세트)', 물류품번: 물류 };
-  }
-
   if (!물류) return null;
 
   // 물류품번 순서 변환 fallback: 구패턴(사이즈-색상) → 신패턴(색상-사이즈)
@@ -1605,78 +1188,6 @@ function getGimpoQty(sabCode, opt, sabName, jache = '') {
       if (gpMap[converted] !== undefined) {
         물류resolved = converted;
         log(`[INFO] 품번순서 자동변환: ${물류} → ${converted}`, 'info');
-      }
-    }
-  }
-  // ── _SET 상품 전용: 사이즈 기반으로 gpMap 전체 색상 min 반환 ──
-  // sabCode 또는 jache(자체코드)에 _SET/-SET/2set/4set 있으면 세트 재고 계산
-  const isSetCode = /[_-](SET|2set|4set)$/i.test(sabCode) || /[_-](SET|2set|4set)$/i.test(jache);
-  if (isSetCode) {
-    const { sz: szP } = parseOpt(opt || '');
-    const sz = szP || (/^\d{2,3}$/.test((opt||'').trim()) ? opt.trim() : null);
-    if (sz) {
-      let candidates = [];
-      // ① opt에 '+' 포함 시 명시된 색상 조합
-      if (opt && opt.includes('+') && opt.includes(':')) {
-        const parsed = parseOpt(opt);
-        if (parsed.isSet && parsed.setColors) {
-          const sabPfx = sabCode.replace(/[_-](SET|2set|4set)$/i,'').split(/[-_]/)[0];
-          const jachePfx = (jache||'').replace(/[_-](SET|2set|4set)$/i,'').split(/[-_]/)[0];
-          const colorOvr = GP_SET_COLOR_OVERRIDE[sabPfx] || GP_SET_COLOR_OVERRIDE[jachePfx];
-          const gpPfx = colorOvr ? colorOvr.gpPrefix : 물류;
-          candidates = parsed.setColors.map(c => {
-            const code = colorOvr ? (colorOvr.colorMap[c] || c) : c;
-            return `${gpPfx}-${code}-${sz}`;
-          });
-        }
-      }
-      // ② 명시된 색상 없으면 gpMap에서 prefix-CC-size 패턴 전체 검색 (색상코드 불일치 대응)
-      if (!candidates.length) {
-        const re = new RegExp(`^${물류.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}-[A-Z]{2,3}-${sz}$`);
-        candidates = Object.keys(gpMap).filter(k => re.test(k));
-      }
-      const valid = candidates.map(k => [k, gpMap[k]]).filter(([,q]) => q != null);
-      if (valid.length) {
-        log(`[INFO] SET 전체색상 min: ${valid.map(([k])=>k).join('+')}`, 'info');
-        return { qty: Math.min(...valid.map(([,q])=>q)), src: '김포(SET)', 물류품번: valid.map(([k])=>k).join('+') };
-      }
-    }
-  }
-
-  // ── 택1 상품: 옵션에 여러 색상 있으면 각 색상 재고 합산 ──
-  // SET가 아닌 단품에서 "베이지+차콜+플럼+블랙:55" 형태 옵션 (4종 택1 등)
-  if (!isSetCode && 물류 && opt && opt.includes('+') && opt.includes(':')) {
-    const sz = opt.split(':').pop().trim();
-    const colorPart = opt.slice(0, opt.lastIndexOf(':'));
-    const colors = colorPart.split('+').map(c => c.trim()).filter(Boolean);
-    if (colors.length > 1 && /^\d{2,3}$/.test(sz)) {
-      const sabPfx = (jache || sabCode).split(/[-_]/)[0];
-      const colorOvr = GP_SET_COLOR_OVERRIDE[sabPfx];
-      if (colorOvr) {
-        const gpPfx = colorOvr.gpPrefix || 물류;
-        const found = [];
-        colors.forEach(c => {
-          const code = colorOvr.colorMap[c.trim()] || c.trim().slice(0,2).toUpperCase();
-          const key = `${gpPfx}-${code}-${sz}`;
-          if (gpMap[key] !== undefined) found.push([key, gpMap[key]]);
-        });
-        if (found.length > 0) {
-          const total = found.reduce((s, [, q]) => s + q, 0);
-          log(`[INFO] 택1 색상합산: ${found.map(([k])=>k).join('+')} → ${total}`, 'info');
-          return { qty: total, src: '김포(택1)', 물류품번: found.map(([k]) => k).join('+') };
-        }
-      }
-    }
-  }
-  // 품번만 있고 gpMap에 없는 경우 → 옵션의 컬러+사이즈 조합해서 재조회
-  // 예: 물류="251MX01", opt="핑크:55" → "251MX01-PK-55"
-  if (gpMap[물류resolved] === undefined && opt) {
-    const { cc, sz } = parseOpt(opt);
-    if (cc && sz) {
-      const candidate = `${물류}-${cc}-${sz}`;
-      if (gpMap[candidate] !== undefined) {
-        물류resolved = candidate;
-        log(`[INFO] 김포 컬러+사이즈 조합: ${물류} + [${cc}/${sz}] → ${candidate}`, 'info');
       }
     }
   }
@@ -1701,81 +1212,18 @@ function getGimpoQty(sabCode, opt, sabName, jache = '') {
 }
 
 const COLOR_MAP = {
-  // 영문 컬러
   'BLACK':'BK','NAVY':'NA','WHITE':'WH','IVORY':'IV','GRAY':'GR','GREY':'GR',
   'DARK GRAY':'DG','DARK GREY':'DG','DARKGRAY':'DG','LIGHT GRAY':'LG','LIGHT GREY':'LG',
   'BLUE':'BL','RED':'RD','GREEN':'GN','PINK':'PK','BEIGE':'BE','KHAKI':'KH',
   'BROWN':'BR','CREAM':'CR','OATMEAL':'OT','PURPLE':'PU','WINE':'WN',
-  'OLIVE':'OL','MINT':'MT','CHARCOAL':'CH','SILVER':'SR','PEACH':'PE',
-  'TEAL BLUE':'틸블루','TEAL':'틸블루',
-  'MOCHA MOUSSE':'초코무스','MOCHA':'MO',
-  'LIME':'LM','CORAL':'CO','CAMEL':'CM','LAVENDER':'LV',
-  'BLUE GRAY':'BG','MELANGE GRAY':'MG','DARK NAVY':'DN','DARK YELLOW':'DY',
-  // 한글 컬러 → 이카운트 코드
   '블랙':'BK','네이비':'NA','화이트':'WH','아이보리':'IV','그레이':'GR','차콜':'CH',
   '다크그레이':'DG','라이트그레이':'LG','블루':'BL','레드':'RD','그린':'GN',
   '딥그린':'GN','딥그레이':'DG','핑크':'PK','베이지':'BE','카키':'KH','브라운':'BR','크림':'CR',
   '오트밀':'OT','퍼플':'PU','플럼':'PL','와인':'WN','올리브':'OL','민트':'MT',
-  '옐로우':'YE','라벤더':'LV','라벤더그레이':'LA','모카':'MO','오렌지':'OR',
-  // 복합 컬러 (이카운트에 그대로 존재하는 한글 컬러명)
-  '밀크카키':'KH','밀크브라운':'BR','모카무스':'MO','오카무스':'MO','모카베이지':'BE','모카브라운':'MO',
-  '틸블루':'TB','스카이블루':'BL','라이트블루':'BL','딥블루':'BL','블루그레이':'BG','그레이블루':'BG',
-  '딥퍼플':'딥퍼플','퍼플브라운':'퍼플브라운','바이올렛':'PU',
-  '카키브라운':'카키브라운','카멜베이지':'카멜베이지','오트베이지':'OT','도브베이지':'BE',
-  '연핑크':'연핑크','마젠타핑크':'마젠타핑크','핑크코랄':'핑크코랄','시에나로즈':'시에나로즈',
-  '세이지그린':'GN','딥네이비':'DN','다크네이비':'DN','블랙네이비':'블랙네이비',
-  '차콜그레이':'차콜그레이','차콜블랙':'차콜블랙','라이트그레이':'LG','애쉬그레이':'GR',
-  '라이트인디고':'인디고','인디고':'인디고',
-  '코코넛밀크':'크림','라떼':'MO','초코브라운':'BR','올리브브라운':'OL',
-  '와인레드':'WN','카멜':'CM','라임':'LM','실버':'SR',
-  // 단축코드
+  '옐로우':'YE','라벤더':'LV','모카':'MO','오렌지':'OR',
   'LG':'LG','DG':'DG','BG':'BE','SR':'SR','MG':'MG','BW':'BW',
   'CC':'CH','LA':'LV','WI':'WN','PL':'PL','NV':'NA','GY':'GR','YL':'YE',
-  'TB':'TB','MO':'MO','OL':'OL','CM':'CM',
 };
-
-// 유사컬러 그룹 — 같은 배열 안 코드는 서로 대체 가능으로 판단
-const COLOR_SIMILAR_GROUPS = [
-  ['WH','IV','CR','OT'],          // 화이트≈아이보리≈크림≈오트밀
-  ['BK','NA','DN'],               // 블랙≈네이비≈다크네이비
-  ['GR','CH','DG','MG','LG'],     // 그레이≈챠콜≈다크그레이≈멜란지≈라이트그레이
-  ['BE','CM','YE'],               // 베이지≈카멜≈버터옐로우
-  ['OL','KH'],                    // 올리브≈카키
-  ['BR','MO'],                    // 브라운≈모카
-  ['PK','PE','CO'],               // 핑크≈피치≈코랄
-  ['BL','NA'],                    // 블루≈네이비
-];
-const _SIMILAR_FLAT = new Set(COLOR_SIMILAR_GROUPS.flat());
-const CC_KR = {
-  'WH':'화이트','IV':'아이보리','CR':'크림','OT':'오트밀',
-  'BK':'블랙','NA':'네이비','DN':'다크네이비',
-  'GR':'그레이','CH':'챠콜','DG':'다크그레이','MG':'멜란지','LG':'라이트그레이',
-  'BE':'베이지','CM':'카멜','YE':'버터옐로우',
-  'OL':'올리브','KH':'카키','BR':'브라운','MO':'모카',
-  'PK':'핑크','PE':'피치','CO':'코랄','BL':'블루',
-};
-function getSimilarColors(cc) {
-  for (const g of COLOR_SIMILAR_GROUPS) {
-    if (g.includes(cc)) return g.filter(c => c !== cc);
-  }
-  return [];
-}
-function extractColorFromGp(gp) {
-  // PREFIX-COLOR-SIZE (신패턴)
-  let m = gp.match(/^(.+?)-([A-Z]{2,3})-(\d{2,3}(?:~\d{2,3})?)(-.*)?$/);
-  if (m && _SIMILAR_FLAT.has(m[2]))
-    return { prefix:m[1], color:m[2], size:m[3], suffix:m[4]||'', pat:'cs' };
-  // PREFIX-SIZE-COLOR (구패턴)
-  m = gp.match(/^(.+?)-(\d{2,3}(?:~\d{2,3})?)-([A-Z]{2,3})(-.*)?$/);
-  if (m && _SIMILAR_FLAT.has(m[3]))
-    return { prefix:m[1], color:m[3], size:m[2], suffix:m[4]||'', pat:'sc' };
-  return null;
-}
-function buildAltGp(p, altColor) {
-  return p.pat === 'cs'
-    ? `${p.prefix}-${altColor}-${p.size}${p.suffix}`
-    : `${p.prefix}-${p.size}-${altColor}${p.suffix}`;
-}
 
 function parseOpt(opt) {
   opt = String(opt||'').replace(/\(.*?\)/g,'').trim();
@@ -1791,15 +1239,10 @@ function parseOpt(opt) {
     return { cc: colors[0], sz, isSet: true, setColors: colors };
   }
   if (opt.includes(':')) {
-    const colonIdx = opt.lastIndexOf(':');
-    const left = opt.slice(0, colonIdx).trim();
-    const right = opt.slice(colonIdx + 1).trim();
-    // SIZE:COLOR 역순 형식 감지 (예: "55:크림") — 앞부분이 숫자면 swap
-    let cRaw, sz;
-    if (/^\d{2,3}$/.test(left)) { cRaw = right; sz = left; }
-    else { cRaw = left; sz = right; }
-    const cc = COLOR_MAP[cRaw.toUpperCase()] || COLOR_MAP[cRaw] || null;
-    return { cc, sz, isSet: false };
+    const parts = opt.split(':');
+    const cRaw = parts[0].trim();
+    const cc = COLOR_MAP[cRaw.toUpperCase()] || COLOR_MAP[cRaw] || cRaw.slice(0,2).toUpperCase();
+    return { cc, sz: parts[parts.length-1].trim(), isSet: false };
   }
   return { cc: null, sz: opt.trim(), isSet: false };
 }
@@ -1808,9 +1251,7 @@ function extractIcCS(name) {
   const m = name.match(/\[([^/\]]+)\/([^\]]+)\]/);
   if (m) {
     const c = m[1].trim().toUpperCase();
-    // 사이즈 '-공통' 접미사 제거 (예: '55-공통' → '55')
-    const s = m[2].trim().replace(/-공통$/, '');
-    return { c: COLOR_MAP[c] || c, s };
+    return { c: COLOR_MAP[c] || c, s: m[2].trim() };
   }
   return { c: null, s: null };
 }
@@ -1836,18 +1277,8 @@ function getIcountQty(sabData_row) {
   // ── 1순위: icCodeMap 직접 매핑 (IC_STATIC_MAP 포함) ──
   const icDirect = icCodeMap[sc] || icCodeMap[자체]
                 || icCodeMap[sc.split('-')[0]] || icCodeMap[자체.split('-')[0]]
-                || IC_STATIC_MAP[sc] || IC_STATIC_MAP[sc.split('-')[0]]
                 || IC_STATIC_MAP[자체] || IC_STATIC_MAP[자체.split('-')[0]];
   if (icDirect) {
-    // ① 정확한 품목코드 직접 조회 (사용자가 재고0탭에서 특정 이카운트 품번 지정한 경우)
-    for (const arr of Object.values(icMap)) {
-      const exact = arr.find(item => item.품목코드 === icDirect);
-      if (exact) {
-        log(`[INFO] 이카운트 품번 직접: ${sc} → ${icDirect} (qty=${exact.qty})`, 'info');
-        return { qty: exact.qty, src: '이카운트(직접)', 품목코드: exact.품목코드 };
-      }
-    }
-    // ② 그룹 prefix 방식 (icCodeMap/IC_STATIC_MAP에 그룹코드 저장된 경우)
     let directItems = icMap[icDirect] || [];
     if (!directItems.length) {
       for (const [key, arr] of Object.entries(icMap)) {
@@ -1865,16 +1296,13 @@ function getIcountQty(sabData_row) {
   }
 
   // ── 2순위: 자체코드/prefix 직접 조회 ──
-  // _SET, -SET 접미사 제거 후 기존 품번으로 매핑 (예: 252NT25_SET → 252NT25)
-  const 자체base = 자체.replace(/[_-]SET$/i, '').replace(/[_-]\d+SET$/i, '');
-  const pfx = 자체base.split('-')[0];
-  const fb  = getFallbackPrefix(자체base);
-  const overrideKey = SAB_IC_OVERRIDE[자체] || SAB_IC_OVERRIDE[자체base];
+  const pfx = 자체.split('-')[0];
+  const fb  = getFallbackPrefix(자체);
+  const overrideKey = SAB_IC_OVERRIDE[자체];
   if (overrideKey && SAB_COLOR_OVERRIDE[자체] && cc) {
     cc = SAB_COLOR_OVERRIDE[자체][cc] || cc;
   }
   let foundItems = icMap[자체]
-    || icMap[자체base]
     || (overrideKey ? icMap[overrideKey] : null)
     || icMap[pfx]
     || (fb ? icMap[fb] : null)
@@ -2059,7 +1487,7 @@ function runMatch() {
   sabData.forEach(sab => {
     const sc = sab.사방넷코드;
     const icRes  = getIcountQty(sab);
-    const gpRes  = getGimpoQty(sc, sab.옵션, sab.상품명, sab.자체코드 || '');
+    const gpRes  = getGimpoQty(sc, sab.옵션, sab.상품명);
     const kcfiQty = kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
     let finalQty = null, src = '—', 물류품번 = '—';
 
@@ -2077,38 +1505,11 @@ function runMatch() {
       finalQty = kcfiQty; src = 'KCFI';
       물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
     }
-    // 품절 강제 적용 — 재고 있어도 덮어씀 (시트/로컬 soldoutMap 기준)
-    if (sc in soldoutMap) {
-      finalQty = 0; src = '품절처리';
-    }
-    // forceZero 강제 적용 — 자체코드 OR 물류품번 prefix 기반, 재고 있어도 0
-    if (finalQty !== null) {
-      const 자체코드 = sab.자체코드 || '';
-      const 매핑gp = (extraMap[sc] || matchMap[sc] || '').trim();
-      const isForceZero =
-        (자체코드 && forceZeroMap[자체코드]) ||
-        (매핑gp && Object.keys(forceZeroMap).some(pfx => 매핑gp.startsWith(pfx)));
-      if (isForceZero) { finalQty = 0; src = '강제0'; }
-    }
-
-    if (finalQty === null) {
+    if (finalQty === null && soldoutMap[sc]) {
+      finalQty = 0; src = '품절처리'; 물류품번 = '—'; cZ++;
+    } else if (finalQty === null) {
       cNM++;
-      // 미매핑 이유 분류
-      const allMaps2 = { ...matchMap, ...extraMap };
-      const mappedGp2 = allMaps2[sc];
-      let nomapReason = '';
-      if (mappedGp2) {
-        const gpTrim = String(mappedGp2).trim();
-        if (gpTrim === '0') nomapReason = '🚫 품번=0 (미설정)';
-        else if (gpTrim === 'KCFI 코드없음') nomapReason = '🚫 KCFI코드 없음';
-        else if (gpTrim.startsWith('김포재고O')) nomapReason = '🚫 김포코드 없음';
-        else if (gpTrim.includes('???')) nomapReason = '⚠ 코드 불명';
-        else if (gpTrim === '확인요망') nomapReason = '⚠ 확인요망';
-        else nomapReason = '📦 품번: ' + gpTrim + ' → 재고없음';
-      } else {
-        nomapReason = '❌ 매핑 미등록';
-      }
-      nomapRows.push({ ...sab, _manualGimpo: '', _nomapReason: nomapReason });
+      nomapRows.push({ ...sab, _manualGimpo: '' });
     }
 
     let status;
@@ -2182,8 +1583,6 @@ function switchTab(tab) {
   document.getElementById('mapviewWrap').style.display  = tab==='mapview'?'block':'none';
   document.getElementById('logWrap').style.display      = tab==='log'?'block':'none';
   document.getElementById('debugWrap').style.display    = tab==='debug'?'block':'none';
-  const ccBtn = document.getElementById('colorCheckBtn');
-  if (ccBtn) ccBtn.style.display = tab === 'zero' ? 'inline-flex' : 'none';
   if (tab==='nomap') renderNomap();
   else if (tab==='soldout') renderSoldoutTab();
   else if (tab==='mapview') renderMapview();
@@ -2247,8 +1646,7 @@ function renderMain(rows) {
       <td style="font-size:11px;color:var(--text3)">${r.옵션}</td>
       <td>${srcHtml}</td>
       <td style="font-family:var(--mono);font-size:10px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis">
-        ${r._물류품번}
-        ${r._status==='zero'?`<button class="btn" style="font-size:9px;padding:1px 4px;margin-left:3px;color:var(--accent2);border-color:var(--accent2)" onclick="openZeroRemap(${resultRows.indexOf(r)})">✏</button>`:''}
+        <span class="mp-disp" id="mpd_${r.사방넷코드}" style="cursor:pointer;border-bottom:1px dashed var(--border2)" title="클릭하여 매핑 수정" onclick="openInlineMapEdit('${r.사방넷코드}','${(r._물류품번||'').replace(/'/g,'\\'')}',this)">${r._물류품번}</span>
       </td>
       <td style="text-align:right;font-family:var(--mono);color:${(r._qty||0)>0?'var(--success)':'var(--warn)'}">${r._qty??'—'}</td>
       <td style="text-align:right;font-family:var(--mono);color:var(--text3)">${r.가상재고??'—'}</td>
@@ -2260,6 +1658,56 @@ function renderMain(rows) {
   if (rows.length>MAX) tbody.innerHTML+=`<tr><td colspan="11" style="text-align:center;padding:7px;color:var(--text3);font-size:11px">상위 ${MAX}건 표시 (전체 ${rows.length}건)</td></tr>`;
 }
 
+
+// ── 전체/매칭완료 탭 인라인 매핑 수정 ──
+function openInlineMapEdit(sc, currentGp, spanEl) {
+  const existingInput = spanEl.parentElement.querySelector(".inline-map-input");
+  if (existingInput) { existingInput.remove(); spanEl.style.display=""; return; }
+  spanEl.style.display = "none";
+  const td = spanEl.parentElement;
+  const wrapper = document.createElement("div");
+  wrapper.className = "inline-map-input";
+  wrapper.style.cssText = "display:flex;gap:3px;align-items:center";
+  const input = document.createElement("input");
+  input.className = "mi";
+  input.style.cssText = "width:140px;font-size:10px";
+  input.value = (currentGp === "u2014" || currentGp === "__DELETED__") ? "" : currentGp;
+  input.placeholder = "ubb3cub958ud488ubc88 uc785ub825";
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "btn btn-s";
+  saveBtn.style.cssText = "padding:1px 6px;font-size:10px";
+  saveBtn.textContent = "uc800uc7a5";
+  saveBtn.onclick = function() {
+    const newGp = input.value.trim();
+    if (!newGp) { alert("ubb3cub958ud488ubc88uc744 uc785ub825ud558uc138uc694."); return; }
+    if (!isValidGp(newGp)) { alert("uc720ud6a8ud558uc9c0 uc54auc740 ubb3cub958ud488ubc88uc785ub2c8ub2e4."); return; }
+    extraMap[sc] = newGp;
+    saveExtra();
+    const saveMap = {};
+    Object.entries(Object.assign({}, matchMap, extraMap)).forEach(function(e2) { if (e2[1] !== "__DELETED__" && isValidGp(e2[1])) saveMap[e2[0]] = e2[1]; });
+    try { localStorage.setItem("aspro_matchfile_v2", JSON.stringify(saveMap)); } catch(err) {}
+    spanEl.textContent = newGp;
+    spanEl.style.display = "";
+    wrapper.remove();
+    const row = resultRows.find(function(r) { return r["uc0acubc29ub137ucf54ub4dc"] === sc; });
+    if (row) row["_ubb3cub958ud488ubc88"] = newGp;
+    updateSavedMapCnt();
+    log("[OK] uc778ub77cuc778 ub9e4ud551 uc218uc815: " + sc + " u2192 " + newGp, "ok");
+    const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
+    if (sheetsUrl) {
+      fetch(sheetsUrl, { method: "POST", body: JSON.stringify({ map: saveMap, soldout: soldoutMap, nameMap: buildNameMap(saveMap) }), headers: { "Content-Type": "text/plain" } })
+        .then(function(r){return r.json();}).then(function(d){ if(d.ok) log("[OK] uc778ub77cuc778 Sheets ubc18uc601: "+d.saved+"uac74","ok"); else log("[WARN] Sheets ubc18uc601 uc2e4ud328 (ub85cucec8uc740 uc800uc7a5ub428)","warn"); }).catch(function(){ log("[WARN] Sheets ubc18uc601 uc2e4ud328 (ub85cucec8uc740 uc800uc7a5ub428)","warn"); });
+    }
+  };
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "btn btn-n";
+  cancelBtn.style.cssText = "padding:1px 5px;font-size:10px";
+  cancelBtn.textContent = "u2715";
+  cancelBtn.onclick = function() { wrapper.remove(); spanEl.style.display=""; };
+  wrapper.append(input, saveBtn, cancelBtn);
+  td.appendChild(wrapper);
+  input.focus(); input.select();
+}
 function renderNomap() {
   const tbody = document.getElementById('nomapBody');
   if (!nomapRows.length) {
@@ -2273,14 +1721,12 @@ function renderNomap() {
       <td style="font-family:var(--mono);font-size:10px">${r.자체코드}</td>
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px">${r.상품명}</td>
       <td style="font-size:10px;color:var(--text3)">${r.옵션}</td>
-      <td style="font-size:10px">${r._nomapReason ? '<span style="color:var(--warn)">' + r._nomapReason + '</span>' : '<span style="color:var(--text3)">—</span>'}</td>
       <td style="position:relative">
         <div style="display:flex;gap:4px;align-items:center">
           <input class="mi nomap-gp" style="width:175px" id="ngp_${i}"
             value="${extraMap[r.사방넷코드]||''}"
             placeholder="예: NT243G0001-55-BK"
-            oninput="nomapSearch(${i},this.value)"
-            onchange="nomapAutoSave(${i},this.value)">
+            oninput="nomapRows[${i}]._manualGimpo=this.value">
           <button class="btn" style="font-size:10px;padding:2px 6px;color:var(--accent2);border-color:var(--accent2);white-space:nowrap"
             onclick="toggleSuggest(${i},'${r.사방넷코드}','${(r.자체코드||'').replace(/'/g,String.fromCharCode(92,39))}','${(r.상품명||'').replace(/'/g,String.fromCharCode(92,39))}')">🔍 추천</button>
         </div>
@@ -2376,87 +1822,16 @@ function suggestMapping(sc, 자체코드, 상품명) {
   return [...results.entries()].map(([gp, info]) => ({ gp, ...info }));
 }
 
-function applySuggest(i, gp, isIc) {
+function applySuggest(i, gp) {
   const input = document.getElementById('ngp_' + i);
   if (input) {
     input.value = gp;
+    nomapRows[i]._manualGimpo = gp;
     const st = document.getElementById('nst_' + i);
-    if (isIc) {
-      nomapRows[i]._icDirect  = gp;
-      nomapRows[i]._manualGimpo = '';
-      if (st) { st.textContent = '✅이카'; st.style.color = 'var(--accent)'; }
-    } else {
-      nomapRows[i]._manualGimpo = gp;
-      nomapRows[i]._icDirect  = '';
-      if (st) { st.textContent = '✅'; st.style.color = ''; }
-    }
+    if (st) st.textContent = '✅';
   }
   const drop = document.getElementById('ndrop_' + i);
   if (drop) drop.style.display = 'none';
-}
-
-// 입력 포커스 이탈 시 즉시 localStorage 자동저장 (Sheets 동기화는 저장 버튼 때)
-function nomapAutoSave(i, val) {
-  const r = nomapRows[i];
-  if (!r) return;
-  const v = val.trim();
-  if (v) { extraMap[r.사방넷코드] = v; }
-  else { delete extraMap[r.사방넷코드]; }
-  try { localStorage.setItem(LS_KEY, JSON.stringify(extraMap)); } catch(e) {}
-  const st = document.getElementById('nst_' + i);
-  if (st && v && !r._icDirect) { st.textContent = '💾'; st.style.color = 'var(--warn)'; }
-}
-
-function nomapSearch(i, val) {
-  nomapRows[i]._manualGimpo = val;
-  nomapRows[i]._icDirect = ''; // 이카운트 직접선택 초기화
-  const drop = document.getElementById('ndrop_' + i);
-  if (!drop) return;
-  if (!val || val.length < 2) { drop.style.display = 'none'; return; }
-  const qU = val.toUpperCase();
-  // ① 김포 검색
-  const gpMatches = Object.entries(gpMap)
-    .filter(([k]) => k.toUpperCase().includes(qU))
-    .sort((a, b) => {
-      const aS = a[0].toUpperCase().startsWith(qU) ? 0 : 1;
-      const bS = b[0].toUpperCase().startsWith(qU) ? 0 : 1;
-      return aS - bS || a[0].localeCompare(b[0]);
-    })
-    .slice(0, 10);
-  // ② 이카운트 품목코드 검색
-  const icSeen = new Set();
-  const icMatches = [];
-  for (const arr of Object.values(icMap)) {
-    for (const item of arr) {
-      if (icSeen.has(item.품목코드)) continue;
-      if (item.품목코드.toUpperCase().includes(qU)) {
-        icSeen.add(item.품목코드);
-        icMatches.push(item);
-        if (icMatches.length >= 10) break;
-      }
-    }
-    if (icMatches.length >= 10) break;
-  }
-  if (!gpMatches.length && !icMatches.length) {
-    drop.innerHTML = '<div style="padding:6px 10px;color:var(--text3);font-size:10px">검색 결과 없음</div>';
-  } else {
-    const gpHtml = gpMatches.map(([gp, qty]) =>
-      '<div onclick="applySuggest(' + i + ',\'' + gp.replace(/'/g,"\\'") + '\',false)" style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">'
-      + '<span style="font-family:var(--mono);font-size:10px;flex:1">' + gp + '</span>'
-      + '<span style="font-size:9px;color:' + (qty>0?'var(--success)':'var(--text3)') + '">' + qty + '</span>'
-      + '<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--accent2);color:#fff">김포</span>'
-      + '</div>'
-    ).join('');
-    const icHtml = icMatches.map(item =>
-      '<div onclick="applySuggest(' + i + ',\'' + item.품목코드.replace(/'/g,"\\'") + '\',true)" style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">'
-      + '<span style="font-family:var(--mono);font-size:10px;flex:1">' + item.품목코드 + '</span>'
-      + '<span style="font-size:9px;color:' + (item.qty>0?'var(--success)':'var(--text3)') + '">' + item.qty + '</span>'
-      + '<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--accent);color:#fff">이카운트</span>'
-      + '</div>'
-    ).join('');
-    drop.innerHTML = gpHtml + icHtml;
-  }
-  drop.style.display = 'block';
 }
 
 function toggleSuggest(i, sc, 자체코드, 상품명) {
@@ -2533,7 +1908,16 @@ function renderSoldoutTab() {
 function setSoldout(sc, idx) {
   soldoutMap[sc] = new Date().toLocaleDateString('ko-KR');
   saveExtra();
-  sheetsPOST({ soldout: soldoutMap });
+  const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
+  if (sheetsUrl) {
+    fetch(sheetsUrl, {
+      method: 'POST',
+      body: JSON.stringify({ map: { ...matchMap, ...extraMap }, soldout: soldoutMap }),
+      headers: { 'Content-Type': 'text/plain' }
+    }).then(r => r.json()).then(d => {
+      if (d.ok) log(`[OK] 품절처리 Sheets 자동 반영: ${sc}`, 'ok');
+    }).catch(() => log(`[WARN] 품절처리 Sheets 저장 실패`, 'warn'));
+  }
   const row = document.querySelector(`tr[data-sc="${sc}"]`);
   if (row) row.style.opacity = '0.4';
   const st = document.getElementById(`nst_${idx}`);
@@ -2552,7 +1936,16 @@ function cancelSoldout(sc) {
   saveExtra();
   updateSoldoutCnt();
   log(`[OK] 품절해제: ${sc}`, 'ok');
-  sheetsPOST({ soldout: soldoutMap });
+  const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
+  if (sheetsUrl) {
+    fetch(sheetsUrl, {
+      method: 'POST',
+      body: JSON.stringify({ map: { ...matchMap, ...extraMap }, soldout: soldoutMap }),
+      headers: { 'Content-Type': 'text/plain' }
+    }).then(r => r.json()).then(d => {
+      if (d.ok) log(`[OK] 품절해제 Sheets 자동 반영: ${sc}`, 'ok');
+    }).catch(() => {});
+  }
 }
 
 function autoMapAll() {
@@ -2685,162 +2078,13 @@ function autoMapAll() {
   }
 }
 
-// ══════════════════════════════════════════════
-// SET 빠른등록 패널
-// ══════════════════════════════════════════════
-function toggleSetPanel() {
-  const panel = document.getElementById('setRegPanel');
-  const arrow = document.getElementById('setArrow');
-  const open = panel.style.display === 'none';
-  panel.style.display = open ? 'block' : 'none';
-  arrow.textContent = open ? '▲' : '▼';
-  if (open) renderSetRegList();
-}
-
-function quickRegSet() {
-  const sab = (document.getElementById('setRegSab').value || '').trim();
-  const gp  = (document.getElementById('setRegGp').value  || '').trim();
-  if (!sab || !gp) { showToast('사방넷코드와 김포품번을 모두 입력하세요', 'warn'); return; }
-  extraMap[sab] = gp;
-  saveExtra();
-  document.getElementById('setRegSab').value = '';
-  document.getElementById('setRegGp').value  = '';
-  showToast(`✅ SET 등록: ${sab} → ${gp}`, 'ok', 3000);
-  renderSetRegList();
-  sheetsPOST({ map: { [sab]: gp }, _verifyMap: { [sab]: gp } }, '✅ Sheets 반영 완료');
-}
-
-function renderSetRegList() {
-  const el = document.getElementById('setRegList');
-  if (!el) return;
-  // extraMap에서 SET 관련 항목만 추출 (코드에 _set, -set, 2set, 4set 포함)
-  const setEntries = Object.entries(extraMap)
-    .filter(([k, v]) => v !== '__DELETED__' && /(_set|-set|\dset)/i.test(k));
-  const cntTag = document.getElementById('setRegCntTag');
-  if (cntTag) cntTag.textContent = setEntries.length + '건';
-  if (!setEntries.length) {
-    el.innerHTML = '<div style="font-size:10px;color:var(--text3);padding:4px 0">등록된 SET 없음</div>';
-    return;
-  }
-  el.innerHTML = setEntries.map(([sab, gp]) => {
-    const qty = gpMap[gp] !== undefined ? gpMap[gp] : '—';
-    const col = qty > 0 ? 'var(--success)' : qty === 0 ? 'var(--warn)' : 'var(--text3)';
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--border);gap:4px">
-      <span style="font-family:var(--mono);font-size:10px;color:var(--accent);word-break:break-all">${sab}</span>
-      <span style="font-family:var(--mono);font-size:10px;white-space:nowrap">
-        <span style="color:var(--text2)">${gp}</span>
-        <span style="color:${col}"> (${qty})</span>
-        <button onclick="delSetReg('${sab}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:11px;padding:0 2px;margin-left:2px">✕</button>
-      </span>
-    </div>`;
-  }).join('');
-}
-
-function delSetReg(sab) {
-  if (!confirm(`"${sab}" SET 등록을 삭제할까요?`)) return;
-  extraMap[sab] = '__DELETED__';
-  saveExtra();
-  showToast(`🗑 SET 삭제: ${sab}`, 'ok', 2000);
-  renderSetRegList();
-}
-
-function getSheetsUrl() {
-  return localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
-}
-
-function sanitizeSheetsPayload(data) {
-  const payload = { ...data };
-  delete payload._verifyMap;
-  if (payload.map) {
-    const cleanMap = {};
-    Object.entries(payload.map).forEach(([sc, gp]) => {
-      if (sc && isValidGp(gp)) cleanMap[sc] = String(gp).trim();
-    });
-    payload.map = cleanMap;
-  }
-  return payload;
-}
-
-function sampleMapEntries(map, limit = 8) {
-  return Object.entries(map || {})
-    .filter(([, gp]) => isValidGp(gp))
-    .slice(0, limit)
-    .map(([sc, gp]) => [sc, String(gp).trim()]);
-}
-
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function verifySheetMapSaved(sample) {
-  if (!sample.length) return true;
-  await delay(1800);
-  const csv = await fetchCSV(SHEET_GIDS.match, 15000);
-  const sheetMap = {};
-  parseCSV(csv).slice(1).forEach(r => {
-    const sc = r[0]?.trim(), gp = r[1]?.trim();
-    if (sc) sheetMap[sc] = gp || '';
-  });
-  return sample.every(([sc, gp]) => sheetMap[sc] === gp);
-}
-
-// ── Sheets POST 헬퍼 ──
-// Apps Script 응답 CORS가 불안정하므로 no-cors로 전송하고 CSV 재조회로 반영 여부를 검증한다.
-async function sheetsPOST(data, toastMsg) {
-  const url = getSheetsUrl();
-  if (!url) {
-    log('[WARN] Sheets URL 미설정 — 설정 메뉴에서 Apps Script URL을 입력하세요', 'warn');
-    showToast('⚠ Sheets URL 미설정', 'warn', 3000);
-    return false;
-  }
-  const payload = sanitizeSheetsPayload(data);
-  const keys = Object.keys(payload).map(k => `${k}:${Object.keys(payload[k]||{}).length}건`).join(', ');
-  log(`[INFO] Sheets 전송 시작: ${keys}`, 'info');
-  try {
-    await fetch(url, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify(payload),
-      headers: { 'Content-Type': 'text/plain' }
-    });
-    const sample = sampleMapEntries(data._verifyMap || payload.map);
-    const verified = await verifySheetMapSaved(sample).catch(e => {
-      log(`[WARN] Sheets 저장 검증 실패: ${e.message}`, 'warn');
-      return false;
-    });
-    if (verified) {
-      if (toastMsg) showToast(toastMsg, 'ok', 3000);
-      log(`[OK] Sheets 저장 확인 (${keys})`, 'ok');
-    } else {
-      showToast('⚠ Sheets 전송됨 - 반영 확인 실패', 'warn', 5000);
-      log('[WARN] Sheets 전송 후 CSV 검증 불일치 — Apps Script URL/배포 대상 확인 필요', 'warn');
-    }
-    return verified;
-  } catch(e) {
-    showToast('❌ Sheets 전송 실패', 'err', 5000);
-    log(`[ERR] Sheets 전송 실패: ${e.message}`, 'err');
-    return false;
-  }
-}
-
 function saveNomapEntries() {
   let saved = 0;
-  const changedMap = {};
   // 매핑없음 탭에서 입력된 것
   nomapRows.forEach((r, i) => {
     const el = document.getElementById(`ngp_${i}`);
     const val = el ? el.value.trim() : r._manualGimpo;
-    if (r._icDirect) {
-      // 이카운트 품번 직접 지정 → icCodeMap에 저장
-      icCodeMap[r.사방넷코드] = r._icDirect; saved++;
-      const st = document.getElementById(`nst_${i}`);
-      if (st) { st.textContent = '✅이카'; st.style.color = 'var(--accent)'; }
-    } else if (val) {
-      extraMap[r.사방넷코드] = val; saved++;
-      changedMap[r.사방넷코드] = val;
-      const st = document.getElementById(`nst_${i}`);
-      if (st) { st.textContent = '✅'; st.style.color = ''; }
-    }
+    if (val) { extraMap[r.사방넷코드] = val; saved++; const st = document.getElementById(`nst_${i}`); if (st) st.textContent = '✅'; }
   });
   // 매핑 마스터 탭에서 수정된 것
   document.querySelectorAll('.mv-sc').forEach(el => {
@@ -2856,14 +2100,12 @@ function saveNomapEntries() {
       // 매칭파일 항목: 값이 원본과 다르면 extraMap에 오버라이드
       if (newGp && newGp !== matchMap[origSc]) {
         extraMap[origSc] = newGp;
-        changedMap[origSc] = newGp;
         saved++;
       }
       if (newSc && newSc !== origSc && newGp) {
         // 코드도 변경된 경우: 기존 코드는 __DELETED__ 처리, 새 코드로 추가
         extraMap[origSc] = '__DELETED__';
         extraMap[newSc] = newGp;
-        changedMap[newSc] = newGp;
         el.dataset.orig = newSc;
         saved++;
       }
@@ -2873,7 +2115,7 @@ function saveNomapEntries() {
         delete extraMap[origSc];
         el.dataset.orig = newSc;
       }
-      if (newSc && newGp) { extraMap[newSc] = newGp; changedMap[newSc] = newGp; saved++; }
+      if (newSc && newGp) { extraMap[newSc] = newGp; saved++; }
       else if (newSc && !newGp) { delete extraMap[newSc]; }
     }
   });
@@ -2890,13 +2132,35 @@ function saveNomapEntries() {
   if (saveExtra()) {
     log(`[OK] 매핑 저장: 총 extraMap ${Object.keys(extraMap).length}건`, 'ok');
     updateSavedMapCnt();
-    showToast(`💾 로컬 저장 완료 (${saved}건)`, 'ok', 3000);
-    if (sabData.length && Object.keys(gpMap).length) processAll();
-    else if (currentTab === 'nomap') renderNomap();
-    else if (currentTab === 'mapview') renderMapview();
-    sheetsPOST({ map: changedMap, iccodemap: icCodeMap, _verifyMap: changedMap }, '✅ 구글시트 반영 완료');
+    const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
+    if (sheetsUrl) {
+      const allMap = { ...matchMap, ...extraMap };
+      const saveMap = {};
+      Object.entries(allMap).forEach(([k,v]) => { if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = v; });
+      // 로컬 먼저 저장 (Sheets 실패해도 로컬은 보존)
+      try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(saveMap)); } catch(e2) {}
+      fetch(sheetsUrl, {
+        method: 'POST',
+        body: JSON.stringify({ map: saveMap, soldout: soldoutMap, nameMap: buildNameMap(saveMap) }),
+        headers: { 'Content-Type': 'text/plain' }
+      }).then(r => r.json()).then(d => {
+        if (d.ok) {
+          log(`[OK] 구글시트 자동 반영: ${d.saved}건`, 'ok');
+          alert(`✅ 저장 완료 (${Object.keys(saveMap).length}건)\n구글시트에도 자동 반영됐습니다.`);
+        } else {
+          log(`[WARN] 구글시트 반영 실패: ${d.error||'알 수 없는 오류'}`, 'warn');
+          alert(`✅ 로컬 저장 완료 (${Object.keys(saveMap).length}건)\n⚠ 구글시트 반영 실패 → Sheets 연동 탭에서 수동 저장하세요\n(로컬 데이터는 안전합니다)`);
+        }
+      }).catch(err => {
+        log(`[WARN] 구글시트 반영 실패: ${err.message}`, 'warn');
+        alert(`✅ 로컬 저장 완료 (${Object.keys(saveMap).length}건)\n⚠ 구글시트 반영 실패 → Sheets 연동 탭에서 수동 저장하세요\n(로컬 데이터는 안전합니다)`);
+      });
+    } else {
+      alert(`✅ 저장 완료 (extraMap ${Object.keys(extraMap).length}건)`);
+    }
+    if (currentTab==='mapview') renderMapview();
   } else {
-    showToast('❌ 저장 실패', 'err');
+    alert('저장 실패');
   }
 }
 
@@ -3107,10 +2371,7 @@ function addMapRow() {
 // ══════════════════════════════════════════════
 // EXPORT
 // ══════════════════════════════════════════════
-function showExpModal(){
-  initSafetyUI();
-  document.getElementById('expModal').classList.add('show');
-}
+function showExpModal(){ document.getElementById('expModal').classList.add('show'); }
 function closeM(id){ document.getElementById(id).classList.remove('show'); }
 function setExp(mode, el){
   expMode=mode;
@@ -3123,8 +2384,7 @@ function doExport(){
   const targets = expMode==='matched' ? resultRows.filter(r=>r._status!=='unmatched') : resultRows;
   targets.forEach(r=>{
     const row=[...r._raw];
-    const rawQty = r._status==='matched' ? Math.max(0, r._qty||0) : 0;
-    const qty = rawQty > 0 ? Math.max(1, Math.floor(rawQty * getSafetyRatio(r))) : 0;
+    const qty = r._status==='matched' ? Math.max(0, r._qty||0) : 0;
     row[5] = qty;
     row[6] = qty > 0 ? 1 : 2;
     out.push(row);
@@ -3137,86 +2397,6 @@ function doExport(){
   XLSX.writeFile(wb, fname+'.xlsx');
   log(`[OK] 내보내기: ${fname}.xlsx (${targets.length}행)`, 'ok');
   closeM('expModal');
-}
-
-function getSafetyRatio(r){
-  if (!document.getElementById('safetyEnabled')?.checked) return 1;
-  const sc = r._sc || r['사방넷코드'] || '';
-  for (const b of BRAND_LIST) {
-    if (sc.startsWith(b.prefix)) {
-      const bv = brandSafetyRatios[b.prefix];
-      if (bv != null) return bv / 100;
-      break;
-    }
-  }
-  return safetyRatio;
-}
-
-function onSafetyToggle(){
-  const en = document.getElementById('safetyEnabled').checked;
-  document.getElementById('safetyBody').style.display = en ? 'block' : 'none';
-  saveSafetySettings();
-}
-
-function initSafetyUI(){
-  const saved = (() => { try { return JSON.parse(localStorage.getItem('aspro_safety')||'{}'); } catch(e){ return {}; } })();
-  const enabled = !!saved.enabled;
-  const global = saved.global ?? 70;
-  const brands = saved.brands || {};
-
-  document.getElementById('safetyEnabled').checked = enabled;
-  document.getElementById('safetyBody').style.display = enabled ? 'block' : 'none';
-  document.getElementById('safetyGlobal').value = global;
-  document.getElementById('safetyGlobalVal').textContent = global + '%';
-  safetyRatio = global / 100;
-  brandSafetyRatios = Object.assign({}, brands);
-
-  const container = document.getElementById('safetyBrandRows');
-  container.innerHTML = '';
-  BRAND_LIST.forEach(b => {
-    const bv = brands[b.prefix] ?? '';
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:6px';
-    row.innerHTML = `
-      <span style="font-size:10px;color:var(--text2);min-width:64px">${b.name}</span>
-      <input type="range" min="10" max="100" step="5" value="${bv||global}"
-        data-prefix="${b.prefix}"
-        oninput="onBrandSlider(this)"
-        style="flex:1;accent-color:var(--accent2);opacity:${bv?'1':'0.35'}"
-        ${bv?'':'title="기본값 사용"'}>
-      <span id="brv_${b.prefix}" style="font-size:11px;font-weight:700;color:var(--accent2);min-width:34px;text-align:right">${bv?bv+'%':'기본'}</span>
-      <button onclick="clearBrandRatio('${b.prefix}')" style="font-size:9px;padding:1px 4px;background:none;border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--text3)">↺</button>
-    `;
-    container.appendChild(row);
-  });
-}
-
-function onBrandSlider(el){
-  const prefix = el.dataset.prefix;
-  const v = parseInt(el.value);
-  brandSafetyRatios[prefix] = v;
-  el.style.opacity = '1';
-  document.getElementById('brv_'+prefix).textContent = v + '%';
-  saveSafetySettings();
-}
-
-function clearBrandRatio(prefix){
-  delete brandSafetyRatios[prefix];
-  const global = parseInt(document.getElementById('safetyGlobal').value);
-  const el = document.querySelector(`[data-prefix="${prefix}"]`);
-  if (el) { el.value = global; el.style.opacity = '0.35'; }
-  const lbl = document.getElementById('brv_'+prefix);
-  if (lbl) lbl.textContent = '기본';
-  saveSafetySettings();
-}
-
-function saveSafetySettings(){
-  const global = parseInt(document.getElementById('safetyGlobal').value);
-  safetyRatio = global / 100;
-  const enabled = document.getElementById('safetyEnabled').checked;
-  try {
-    localStorage.setItem('aspro_safety', JSON.stringify({ enabled, global, brands: brandSafetyRatios }));
-  } catch(e) {}
 }
 
 function exportMapExcel(){
@@ -3254,7 +2434,7 @@ const SHEETS_URL_KEY = 'aspro_sheets_url';
 const INVALID_GP_VALUES = new Set([
   'KCFI 코드없음','슈컴퍼니','슈컴퍼니-김포이관','확인요망','#N/A',
   '김포재고O상품코드X','삭제요청','삭제요청위에중복','품절',
-  '수량은 있는데 코드가 없음','공통색상코드없음','0','','__DELETED__'
+  '수량은 있는데 코드가 없음','공통색상코드없음','0',''
 ]);
 function isValidGp(v) {
   if (!v) return false;
@@ -3269,45 +2449,23 @@ function isValidGp(v) {
 }
 
 // 구글시트에서 불러온 matchMap 중 유효하지 않은 항목 정리
-// - 사방넷 단품에 없는 사방넷코드 제거
+// - 사방넷 단품에 없는 사방넷코드 제거 (단, _SET 코드는 보호)
 // - 물류품번이 유효하지 않은 항목 제거
-// 이카운트 SKU코드(품번-숫자3~4자리)를 품번으로 변환
-// 예: L24W401-001 → L24W401
-const RE_IC_SKU = /^([A-Za-z][A-Za-z0-9]+)-(\d{3,4})$/;
-function normalizeGpCode(gp) {
-  const m = String(gp||'').trim().match(RE_IC_SKU);
-  return m ? m[1] : gp;
-}
-
 function cleanMatchMap(map) {
   const sabSet = new Set(sabData.map(s => s.사방넷코드));
   const cleaned = {};
-  let removed = 0, normalized = 0;
+  let removed = 0;
   Object.entries(map).forEach(([sc, gp]) => {
-    // SKU코드 → 품번 자동 변환
-    const gpNorm = normalizeGpCode(gp);
-    if (gpNorm !== gp) normalized++;
-    if (!isValidGp(gpNorm)) { removed++; return; }
-    // 사방넷 단품에 없는 코드 제거 (sabData 로드된 경우에만)
-    if (sabData.length > 0 && !sabSet.has(sc)) { removed++; return; }
-    cleaned[sc] = gpNorm;
+    if (!isValidGp(gp)) { removed++; return; }
+    // _SET / -SET 코드는 사방넷 단품에 없어도 항상 보호
+    const isSetCode = /[_-]SET(-\d+)?$/i.test(sc) || /[_-]SET(-[A-Z0-9]+)?$/i.test(gp);
+    if (sabData.length > 0 && !sabSet.has(sc) && !isSetCode) { removed++; return; }
+    cleaned[sc] = gp;
   });
-  if (normalized > 0) log(`[INFO] SKU코드→품번 자동변환: ${normalized}건`, 'info');
-  if (removed > 0) log(`[INFO] 유효하지 않은 매핑 ${removed}건 제거됨`, 'info');
+  if (removed > 0) log(`[INFO] 유효하지 않은 매핑 ${removed}건 제거됨 (_SET 코드는 보호됨)`, 'info');
   return cleaned;
 }
-const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxn_yuxbci4MW3JQla3NPf0TFYapNiR7M7w9pznkQVu6KTqlKxIm8MPOayRjdLTNH-0/exec';
-const KNOWN_BAD_SHEETS_URLS = new Set([
-  'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec'
-]);
-
-function normalizeSheetsUrl(url) {
-  return String(url || '').trim().replace(/\/+$/, '');
-}
-
-function isKnownBadSheetsUrl(url) {
-  return KNOWN_BAD_SHEETS_URLS.has(normalizeSheetsUrl(url));
-}
+const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
 
 function showSheetsModal() {
   const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
@@ -3329,35 +2487,115 @@ function saveSheetsUrl() {
   if (url) localStorage.setItem(SHEETS_URL_KEY, url);
 }
 
-function copyAppsScript() {
-  const code = document.getElementById('appsScriptCode')?.textContent || '';
-  navigator.clipboard.writeText(code).then(() => {
-    document.getElementById('sheetsStatus').textContent = '✅ 코드 복사됨';
-    document.getElementById('sheetsStatus').style.color = 'var(--success)';
+async function loadFromSheets() {
+  const url = document.getElementById('sheetsUrl').value.trim();
+  if (!url) { alert('Apps Script URL을 먼저 입력하세요.'); return; }
+  const st = document.getElementById('sheetsStatus');
+  st.textContent = '불러오는 중... (최대 20초)'; st.style.color = 'var(--accent2)';
+  try {
+    const res = await fetchWithTimeout(url, 20000);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || '서버 오류');
+    const imported = data.map || {};
+    const importedSoldout = data.soldout || {};
+    const importedKcfi = data.kcfi || {};
+    const importedNormname = data.normname || {};
+    const importedIcCodeMap = data.iccodemap || {};
+    const filteredImport = {};
+    Object.entries(imported).forEach(([k,v]) => { if(isValidGp(v)) filteredImport[k]=v; });
+    matchMap = filteredImport;
+
+    // soldout: 비어있으면 기존 로컬 유지
+    if (Object.keys(importedSoldout).length > 0) {
+      soldoutMap = { ...importedSoldout };
+      try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
+    } else {
+      st.textContent += ' (soldout 비어있음 → 로컬 유지)';
+    }
+
+    if (Object.keys(importedIcCodeMap).length > 0) {
+      icCodeMap = { ...importedIcCodeMap };
+      try { localStorage.setItem('aspro_iccodemap_v1', JSON.stringify(icCodeMap)); } catch(e2) {}
+      log(`[OK] 이카운트 직접매핑 불러오기: ${Object.keys(icCodeMap).length}건`, 'ok');
+    }
+    if (Object.keys(importedNormname).length > 0) {
+      normOptMap = { ...normOptMap, ...importedNormname };
+      try { localStorage.setItem('aspro_normoptmap_v1', JSON.stringify(normOptMap)); } catch(e2) {}
+      log(`[OK] 이름매핑(normname) 불러오기: ${Object.keys(importedNormname).length}건`, 'ok');
+    }
+    if (Object.keys(importedKcfi).length > 0) {
+      kcfiMap = { ...importedKcfi };
+      try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
+      updateKCFICnt();
+    }
+    try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
+    saveExtra();
+    updateSavedMapCnt();
+    updateSoldoutCnt();
+    const cnt = Object.keys(matchMap).length;
+    const soCnt = Object.keys(soldoutMap).length;
+    const kcfiCnt = Object.keys(kcfiMap).length;
+    const nnCnt = Object.keys(importedNormname).length;
+    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건${nnCnt>0?' + 이름매핑 '+nnCnt+'건':''}`;
+    st.style.color = 'var(--success)';
+    log(`[OK] Google Sheets 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
+    if (currentTab === 'mapview') renderMapview();
+  } catch(e) {
+    const isTimeout = e.name === 'AbortError';
+    st.textContent = `❌ ${isTimeout ? '타임아웃 (Apps Script 응답 없음)' : '오류: ' + e.message}`;
+    st.style.color = 'var(--danger)';
+    log(`[ERR] Sheets 불러오기: ${e.message}`, 'err');
+  }
+}
+
+// 사방넷코드 → 상품명 맵 생성
+function buildNameMap(mapObj) {
+  const nm = {};
+  const sabMap = {};
+  sabData.forEach(s => { sabMap[s.사방넷코드] = s.상품명; });
+  Object.keys(mapObj).forEach(sc => {
+    if (sabMap[sc]) nm[sc] = sabMap[sc];
   });
+  return nm;
 }
 
 async function saveToSheets() {
   const url = document.getElementById('sheetsUrl').value.trim();
   if (!url) { alert('Apps Script URL을 먼저 입력하세요.'); return; }
-  localStorage.setItem(SHEETS_URL_KEY, url);
   const st = document.getElementById('sheetsStatus');
   const allMap = { ...matchMap, ...extraMap };
-  const total = Object.keys(allMap).length;
+  // __DELETED__ 항목 제거 후 실제 저장할 맵 구성
+  const saveMap = {};
+  Object.entries(allMap).forEach(([k,v]) => { if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = v; });
+  const total = Object.keys(saveMap).length;
   if (total === 0) { alert('저장할 매핑 데이터가 없습니다.'); return; }
-  st.textContent = `저장 중... (${total.toLocaleString()}건)`; st.style.color = 'var(--accent2)';
-  const ok = await sheetsPOST(
-    { map: allMap, soldout: soldoutMap, kcfi: kcfiMap, normname: normOptMap, iccodemap: icCodeMap },
-    '✅ Sheets 저장 확인 완료'
-  );
-  if (ok) {
-    st.textContent = `✅ 저장 확인 완료 (${total.toLocaleString()}건)`;
+  st.textContent = `저장 중... (${total.toLocaleString()}건 — 대용량일 경우 20~30초 소요)`; st.style.color = 'var(--accent2)';
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      body: JSON.stringify({ map: saveMap, soldout: soldoutMap, kcfi: kcfiMap, normname: normOptMap, iccodemap: icCodeMap, nameMap: buildNameMap(saveMap) }),
+      headers: { 'Content-Type': 'text/plain' }
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || '서버 오류');
+    // 저장 성공 시 localStorage도 최신으로 갱신
+    try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(saveMap)); } catch(e2) {}
+    st.textContent = `✅ 저장 완료 — ${data.saved.toLocaleString()}건 (${new Date().toLocaleTimeString('ko-KR')})`;
     st.style.color = 'var(--success)';
-    log(`[OK] Google Sheets 저장 확인: ${total}건`, 'ok');
-  } else {
-    st.textContent = '⚠ 저장 요청 후 시트 반영 확인 실패 — Apps Script 배포/URL을 확인하세요';
+    log(`[OK] Google Sheets 저장: ${data.saved}건`, 'ok');
+  } catch(e) {
+    st.textContent = `❌ 저장 실패: ${e.message} — 로컬에는 저장됨, Sheets 연동에서 다시 시도하세요`;
     st.style.color = 'var(--danger)';
+    log(`[ERR] Sheets 저장 실패: ${e.message}`, 'err');
   }
+}
+
+function copyAppsScript() {
+  const code = document.getElementById('appsScriptCode').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    document.getElementById('sheetsStatus').textContent = '✅ 코드 복사됨';
+    document.getElementById('sheetsStatus').style.color = 'var(--success)';
+  });
 }
 
 async function fetchWithTimeout(url, ms = 15000) {
@@ -3373,224 +2611,222 @@ async function fetchWithTimeout(url, ms = 15000) {
   }
 }
 
-// ── CSV 직접 읽기 설정 ─────────────────────────────────────
-const SHEET_ID = '1cl-uZ9s0_VNF_YwagnujAhPTdREuzfcaPisWRRp7zwY';
-const SHEET_GIDS = {
-  match:     0,
-  soldout:   720644177,
-  kcfi:      1620605389,
-  normname:  277934196,
-  forcezero: 639408328,
-  iccodemap: 1447985208,
-};
-
-function csvUrl(gid) {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
-}
-
-function parseCSV(text) {
-  const rows = [];
-  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    const cells = []; let cur = '', inQ = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') { inQ = !inQ; }
-      else if (c === ',' && !inQ) { cells.push(cur.trim()); cur = ''; }
-      else { cur += c; }
-    }
-    cells.push(cur.trim());
-    rows.push(cells);
-  }
-  return rows;
-}
-
-async function fetchCSV(gid, timeout = 10000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeout);
-  try {
-    const res = await fetch(csvUrl(gid), { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.text();
-  } catch(e) { clearTimeout(timer); throw e; }
-}
-
-async function loadFromSheets() {
-  const st = document.getElementById('sheetsStatus');
-  st.textContent = '불러오는 중... (CSV)'; st.style.color = 'var(--accent2)';
-  try {
-    const [matchCSV, soldoutCSV, kcfiCSV, normnameCSV, forceCSV, iccodeCSV] = await Promise.all([
-      fetchCSV(SHEET_GIDS.match),
-      fetchCSV(SHEET_GIDS.soldout),
-      fetchCSV(SHEET_GIDS.kcfi),
-      fetchCSV(SHEET_GIDS.normname),
-      fetchCSV(SHEET_GIDS.forcezero),
-      fetchCSV(SHEET_GIDS.iccodemap),
-    ]);
-
-    // match 파싱
-    const importedMap = {};
-    parseCSV(matchCSV).slice(1).forEach(r => {
-      const sc=r[0]?.trim(), gp=r[1]?.trim();
-      if (sc && gp && isValidGp(gp)) importedMap[sc]=gp;
-    });
-    matchMap = { ...matchMap, ...importedMap };
-
-    // soldout 파싱 — 로컬 미반영 품절 보존
-    const soldoutRows = parseCSV(soldoutCSV).slice(1);
-    const sheetSoldoutL = {};
-    soldoutRows.forEach(r => { const sc=r[0]?.trim(); if(sc){ const dt=r[1]?.trim()||''; sheetSoldoutL[sc]=(dt==='TRUE'||dt==='true')?'':dt; } });
-    const localOnlySoL = Object.keys(soldoutMap).filter(sc => !(sc in sheetSoldoutL));
-    soldoutMap = { ...sheetSoldoutL, ...Object.fromEntries(localOnlySoL.map(sc => [sc, soldoutMap[sc]])) };
-    try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
-    if (localOnlySoL.length > 0) {
-      log(`[WARN] 시트 미반영 품절 ${localOnlySoL.length}건 복구 → 재전송`, 'warn');
-      const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-      sheetsPOST({ soldout: soldoutMap });
-    }
-
-    // kcfi 파싱
-    const kcfiRows = parseCSV(kcfiCSV).slice(1);
-    if (kcfiRows.length > 0) {
-      kcfiMap = {};
-      kcfiRows.forEach(r => { const sc=r[0]?.trim(), qty=parseInt(r[1]); if(sc&&!isNaN(qty)) kcfiMap[sc]=qty; });
-      try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
-      updateKCFICnt();
-    }
-
-    // normname 파싱
-    parseCSV(normnameCSV).slice(1).forEach(r => {
-      const nm=r[0]?.trim(), ic=r[1]?.trim();
-      if (nm && ic) normOptMap[nm]=ic;
-    });
-
-    // forcezero 파싱
-    parseCSV(forceCSV).slice(1).forEach(r => {
-      const c=r[0]?.trim(); if(c) forceZeroMap[c]=true;
-    });
-
-    // iccodemap 파싱
-    const newIcMap = {};
-    parseCSV(iccodeCSV).slice(1).forEach(r => {
-      const sc=r[0]?.trim(), ic=r[1]?.trim(); if(sc&&ic) newIcMap[sc]=ic;
-    });
-    if (Object.keys(newIcMap).length>0) {
-      icCodeMap = newIcMap;
-      try { localStorage.setItem('aspro_iccodemap_v1', JSON.stringify(icCodeMap)); } catch(e2) {}
-    }
-
-    try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
-    saveExtra(); updateSavedMapCnt(); updateSoldoutCnt();
-    const cnt=Object.keys(matchMap).length, soCnt=Object.keys(soldoutMap).length, kcfiCnt=Object.keys(kcfiMap).length;
-    st.textContent = `✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건`;
-    st.style.color = 'var(--success)';
-    log(`[OK] CSV 직접 불러오기: 매핑 ${cnt}건 / 품절 ${soCnt}건 / 신원재고 ${kcfiCnt}건`, 'ok');
-    showToast(`✅ 불러오기 완료 — 매핑 ${cnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcfiCnt}건`, 'ok', 5000);
-    if (currentTab === 'mapview') renderMapview();
-  } catch(e) {
-    const isTimeout = e.name === 'AbortError';
-    st.textContent = `❌ ${isTimeout ? '타임아웃' : '오류: ' + e.message}`;
-    st.style.color = 'var(--danger)';
-    log(`[ERR] CSV 불러오기: ${e.message}`, 'err');
-  }
-}
-
 async function autoLoadFromSheets() {
+  const url = localStorage.getItem(SHEETS_URL_KEY);
+  if (!url) {
+    const btn = document.getElementById('sheetBtn');
+    if (btn) {
+      btn.style.background = 'var(--warn)'; btn.style.color = '#000';
+      btn.style.borderColor = 'var(--warn)';
+      btn.textContent = '⚠ Sheets 연동 필요';
+    }
+    return;
+  }
+
+  // Sheets 로드 전 — localStorage soldout 먼저 복원 (Sheets 실패해도 유지)
   const lsSoldout = localStorage.getItem('aspro_soldout_v1');
-  if (lsSoldout) { try { soldoutMap=JSON.parse(lsSoldout); updateSoldoutCnt(); } catch(e) {} }
+  if (lsSoldout) {
+    try {
+      soldoutMap = JSON.parse(lsSoldout);
+      updateSoldoutCnt();
+    } catch(e) {}
+  }
+
   const btn = document.getElementById('sheetBtn');
   try {
-    const [matchCSV, soldoutCSV, kcfiCSV, fzCSVauto] = await Promise.all([
-      fetchCSV(SHEET_GIDS.match),
-      fetchCSV(SHEET_GIDS.soldout),
-      fetchCSV(SHEET_GIDS.kcfi),
-      fetchCSV(SHEET_GIDS.forcezero),
-    ]);
-
-    const importedMap = {};
-    parseCSV(matchCSV).slice(1).forEach(r => {
-      const sc=r[0]?.trim(), gp=r[1]?.trim();
-      if (sc && gp && isValidGp(gp)) importedMap[sc]=gp;
-    });
-    matchMap = cleanMatchMap({ ...matchMap, ...importedMap });
-
-    const soldoutRows = parseCSV(soldoutCSV).slice(1);
-    const sheetSoldout = {};
-    soldoutRows.forEach(r => { const sc=r[0]?.trim(); if(sc){ const dt=r[1]?.trim()||''; sheetSoldout[sc]=(dt==='TRUE'||dt==='true')?'':dt; } });
-    // 로컬에만 있는 품절(시트 POST 실패 잔여물) 보존 후 재전송
-    const localOnlySo = Object.keys(soldoutMap).filter(sc => !(sc in sheetSoldout));
-    soldoutMap = { ...sheetSoldout, ...Object.fromEntries(localOnlySo.map(sc => [sc, soldoutMap[sc]])) };
-    try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
-    if (localOnlySo.length > 0) {
-      log(`[WARN] 시트 미반영 품절 ${localOnlySo.length}건 복구 → 재전송`, 'warn');
-      const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-      sheetsPOST({ soldout: soldoutMap });
-    }
-
-    const kcfiRows = parseCSV(kcfiCSV).slice(1);
-    if (kcfiRows.length > 0) {
-      kcfiMap = {};
-      kcfiRows.forEach(r => { const sc=r[0]?.trim(), qty=parseInt(r[1]); if(sc&&!isNaN(qty)) kcfiMap[sc]=qty; });
-      try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
-      updateKCFICnt();
-    }
-
-    try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
-    updateSavedMapCnt(); updateSoldoutCnt();
-
-    // EXTRA_STATIC_MAP 중 Sheets에 없는 단일GP 항목 → 자동 업로드 (SET 멀티GP는 제외)
-    const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
-    if (sheetsUrl) {
-      const newStatic = {};
-      for (const [sc, gp] of Object.entries(EXTRA_STATIC_MAP)) {
-        if (!gp.includes('+') && !importedMap[sc]) newStatic[sc] = gp;
+    // 1차 요청: 매핑/품절/kcfi (빠름)
+    const res = await fetchWithTimeout(url, 20000);
+    const data = await res.json();
+    if (data.ok && data.map) {
+      const filteredMap = {};
+      Object.entries(data.map).forEach(([k,v]) => { if(isValidGp(v)) filteredMap[k]=v; });
+      const sheetsMapCleaned = cleanMatchMap(filteredMap);
+      const localCount = Object.keys(matchMap).length;
+      const sheetsCount = Object.keys(sheetsMapCleaned).length;
+      // 안전장치: Sheets 매핑이 로컬보다 30% 이상 적으면 경고 후 병합 (덮어쓰기 방지)
+      if (localCount > 50 && sheetsCount < localCount * 0.7) {
+        log(`[WARN] Sheets 매핑(${sheetsCount}건)이 로컬(${localCount}건)보다 적음 → 병합 처리`, 'warn');
+        matchMap = { ...matchMap, ...sheetsMapCleaned }; // 로컬 우선, Sheets로 보완
+      } else {
+        matchMap = sheetsMapCleaned;
       }
-      if (Object.keys(newStatic).length > 0) {
-        sheetsPOST({ map: newStatic });
-        log(`[INFO] EXTRA_STATIC_MAP 신규 ${Object.keys(newStatic).length}건 → aspro_match 업로드`, 'info');
-      }
-    }
 
-    if (btn) {
+      // soldout: Sheets 데이터가 있으면 우선, 없으면 localStorage 유지
+      const sheetsSoldout = data.soldout || {};
+      if (Object.keys(sheetsSoldout).length > 0) {
+        soldoutMap = { ...sheetsSoldout };
+        try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
+        log(`[OK] Sheets soldout 복원: ${Object.keys(soldoutMap).length}건`, 'ok');
+      } else {
+        log(`[INFO] Sheets soldout 비어있음 → localStorage 유지 (${Object.keys(soldoutMap).length}건)`, 'info');
+      }
+
+      if (data.kcfi && Object.keys(data.kcfi).length > 0) {
+        kcfiMap = { ...data.kcfi };
+        try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
+        updateKCFICnt();
+        const list = document.getElementById('kcfiList');
+        if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 신원재고</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
+      }
+      if (data.iccodemap && Object.keys(data.iccodemap).length > 0) {
+        icCodeMap = { ...data.iccodemap };
+        try { localStorage.setItem('aspro_iccodemap_v1', JSON.stringify(icCodeMap)); } catch(e2) {}
+      }
+      try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
+      updateSavedMapCnt();
+      updateSoldoutCnt();
+
+      // 김포원본 시트 → gpMap 세팅
+      let gpCnt = 0;
+      if (data.gpRaw && data.gpRaw.length > 3) {
+        gpMap = {};
+        // 헤더: Row0=날짜, Row1=헤더(품목코드,품목명,...), Row2~=데이터
+        // 구조: col[0]=품목코드, col[2~]=각 창고 재고 (총수량 = 합계)
+        const gpHeader = data.gpRaw[1] || [];
+        // 총수량 컬럼 찾기 (없으면 col[2]~끝 합산)
+        const totalIdx = gpHeader.findIndex(h => String(h).includes('총'));
+        for (let i = 2; i < data.gpRaw.length; i++) {
+          const r = data.gpRaw[i];
+          if (!r || !r[0]) continue;
+          const code = String(r[0]).trim();
+          if (!code || code === '품목코드') continue;
+          let qty = 0;
+          if (totalIdx >= 0) {
+            qty = parseInt(r[totalIdx]) || 0;
+          } else {
+            // col[2]부터 숫자인 컬럼 모두 합산
+            for (let j = 2; j < r.length; j++) {
+              qty += parseInt(r[j]) || 0;
+            }
+          }
+          gpMap[code] = (gpMap[code]||0) + qty;
+          gpCnt++;
+        }
+        // 세트 자동계산
+        let setCount = 0;
+        for (const [code, qty] of Object.entries(gpMap)) {
+          if (code.endsWith('-CD')) {
+            const base = code.slice(0,-3);
+            const skQty = gpMap[base+'-SK'];
+            if (skQty !== undefined) { gpMap[base+'-SET'] = Math.min(qty, skQty); setCount++; }
+          }
+        }
+        document.getElementById('gpZone').classList.add('ok');
+        const gpList = document.getElementById('gpList');
+        if (gpList) gpList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 김포원본</div><div class="fcnt">${gpCnt}품목</div></div>`;
+        log(`[OK] Sheets 김포원본 → ${gpCnt}품목${setCount>0?' / 세트: '+setCount+'건':''}`, 'ok');
+      }
+
       const cnt = Object.keys(matchMap).length;
-      btn.textContent = `☁ Sheets (${cnt.toLocaleString()}건)`;
-      btn.style.background=''; btn.style.color=''; btn.style.borderColor='';
-    }
+      log(`[OK] Sheets 동기화: 매핑 ${cnt.toLocaleString()}건 / 품절 ${Object.keys(soldoutMap).length}건 / 신원재고 ${Object.keys(kcfiMap).length}건`, 'ok');
+      if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.textContent='☁ Google Sheets 연동'; }
 
-    // forcezero 메인 로드 (매칭 전 준비)
-    forceZeroMap = {};
-    parseCSV(fzCSVauto).slice(1).forEach(r => { const c=r[0]?.trim(); if(c) forceZeroMap[c]=true; });
-    const fzCnt = Object.keys(forceZeroMap).length;
-    if (fzCnt > 0) log(`[OK] 강제품절 ${fzCnt}건 로드`, 'ok');
+      // 2차 요청: 원본 데이터 (사방넷/이카운트/김포) — 별도로 로드
+      log('[INFO] 원본 데이터 로드 중... (이카운트/김포/사방넷)', 'info');
+      if (btn) btn.textContent = '☁ 원본 로드 중...';
+      try {
+        const res2 = await fetchWithTimeout(url + '?type=raw', 60000);
+        const data2 = await res2.json();
+        if (data2.ok) {
+          let sabCnt = 0, icCnt = 0, gpCnt = 0;
 
-    // 백그라운드: normname, iccodemap
-    Promise.all([fetchCSV(SHEET_GIDS.normname), fetchCSV(SHEET_GIDS.iccodemap)]).then(([nnCSV, icCSV]) => {
-      parseCSV(nnCSV).slice(1).forEach(r => { const nm=r[0]?.trim(), ic=r[1]?.trim(); if(nm&&ic) normOptMap[nm]=ic; });
-      const newIcMap = {};
-      parseCSV(icCSV).slice(1).forEach(r => { const sc=r[0]?.trim(), ic=r[1]?.trim(); if(sc&&ic) newIcMap[sc]=ic; });
-      if (Object.keys(newIcMap).length>0) {
-        // 로컬 전용 키 보존 + 시트 데이터 우선 병합 (전체 교체 금지)
-        icCodeMap = { ...icCodeMap, ...newIcMap };
-        try{localStorage.setItem('aspro_iccodemap_v1',JSON.stringify(icCodeMap));}catch(e){}
+          // 사방넷단품원본
+          if (data2.sabRawData && data2.sabRawData.length > 3) {
+            sabRaw = data2.sabRawData; sabData = [];
+            for (let i = 3; i < data2.sabRawData.length; i++) {
+              const r = data2.sabRawData[i];
+              if (!r || !r[0]) continue;
+              sabData.push({ _idx:i, 사방넷코드:String(r[0]).trim(), 바코드:r[1], 상품명:String(r[2]||'').trim(), 옵션:String(r[3]||'').trim(), 안전재고:r[4], 가상재고:r[5], 공급상태:r[6], 단품추가금액:r[7], 옵션구분:r[8], 연결상품코드:r[9], 옵션별칭:r[10], 모델명:r[11], EA:r[12], LOCATION:r[13], 재고관리:r[14], 현재고:r[15], 판매가:r[16], 원가:r[17], TAG가:r[18], 자체코드:String(r[19]||'').trim(), 옵션제목:r[20], 등록일시:r[21], 옵션수정여부:r[22], 매입처:r[23], 제조사:r[24], 상품약어:r[25], 모델NO:r[26], 상품상태:r[27], _raw:[...r] });
+              sabCnt++;
+            }
+            document.getElementById('sabZone').classList.add('ok');
+            const sabList = document.getElementById('sabList');
+            if (sabList) sabList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 사방넷단품원본</div><div class="fcnt">${sabCnt}단품</div></div>`;
+          }
+
+          // 이카운트원본
+          if (data2.icRaw && data2.icRaw.length > 2) {
+            icMap = {};
+            let nSab = 0;
+            for (let i = 2; i < data2.icRaw.length; i++) {
+              const r = data2.icRaw[i];
+              if (!r || !r[0]) continue;
+              const code = String(r[0]).trim();
+              if (!code || code.includes('계') || code.includes('회사명')) continue;
+              const sabCode = String(r[1]||'').trim();
+              const name = String(r[4]||'').trim();
+              const qty = parseFloat(r[5]) || 0;
+              const brand = String(r[2]||'').trim();
+              const prefix = code.split('-')[0];
+              if (!icMap[prefix]) icMap[prefix] = [];
+              icMap[prefix].push({ 품목코드:code, qty, name, brand, prefix, sabCode });
+              if (sabCode && sabCode !== prefix) {
+                if (!icMap[sabCode]) icMap[sabCode] = [];
+                icMap[sabCode].push({ 품목코드:code, qty, name, brand, prefix, sabCode });
+              }
+              icCnt++; if (sabCode) nSab++;
+            }
+            document.getElementById('icZone').classList.add('ok');
+            const icList = document.getElementById('icList');
+            if (icList) icList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 이카운트원본</div><div class="fcnt">${icCnt}SKU</div></div>`;
+            document.getElementById('icInfo').style.display='block';
+            document.getElementById('icInfo').textContent=`Sheets 이카운트 ${icCnt}SKU`;
+          }
+
+          // 김포원본
+          if (data2.gpRaw && data2.gpRaw.length > 2) {
+            gpMap = {};
+            const gpHeader = data2.gpRaw[1] || [];
+            const totalIdx = gpHeader.findIndex(h => String(h).includes('총'));
+            for (let i = 2; i < data2.gpRaw.length; i++) {
+              const r = data2.gpRaw[i];
+              if (!r || !r[0]) continue;
+              const code = String(r[0]).trim();
+              if (!code || code === '품목코드') continue;
+              let qty = 0;
+              if (totalIdx >= 0) { qty = parseInt(r[totalIdx]) || 0; }
+              else { for (let j = 2; j < r.length; j++) qty += parseInt(r[j]) || 0; }
+              gpMap[code] = (gpMap[code]||0) + qty;
+              gpCnt++;
+            }
+            let setCount = 0;
+            for (const [code, qty] of Object.entries(gpMap)) {
+              if (code.endsWith('-CD')) { const base=code.slice(0,-3); const skQty=gpMap[base+'-SK']; if (skQty!==undefined){gpMap[base+'-SET']=Math.min(qty,skQty);setCount++;} }
+            }
+            document.getElementById('gpZone').classList.add('ok');
+            const gpList = document.getElementById('gpList');
+            if (gpList) gpList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 김포원본</div><div class="fcnt">${gpCnt}품목</div></div>`;
+          }
+
+          log(`[OK] 원본 로드 완료: 사방넷 ${sabCnt}단품 / 이카운트 ${icCnt}SKU / 김포 ${gpCnt}품목`, 'ok');
+          if (btn) btn.textContent = '☁ Google Sheets 연동';
+        }
+      } catch(e2) {
+        log(`[WARN] 원본 데이터 로드 실패: ${e2.message} — 파일 직접 업로드 사용`, 'warn');
+        if (btn) btn.textContent = '☁ Google Sheets 연동';
       }
-      log('[OK] 백그라운드 로드 완료 (normname/iccodemap)', 'ok');
-    }).catch(()=>{});
-
-    const mapCnt = Object.keys(matchMap).length;
-    const soCnt  = Object.keys(soldoutMap).length;
-    const kcCnt  = Object.keys(kcfiMap).length;
-    log(`[OK] CSV 자동 불러오기: 매핑 ${mapCnt}건`, 'ok');
-    showToast(`✅ 시트 자동 동기화 완료 — 매핑 ${mapCnt.toLocaleString()}건 + 품절 ${soCnt}건 + 신원재고 ${kcCnt}건`, 'ok', 5000);
-    if (currentTab === 'mapview') renderMapview();
+    }
   } catch(e) {
-    if (btn) { btn.style.background='var(--warn)'; btn.style.color='#000'; btn.textContent='⚠ 불러오기 실패'; }
-    log(`[ERR] CSV 자동 불러오기: ${e.message}`, 'err');
-    showToast(`⚠ 시트 자동 동기화 실패 — localStorage 데이터 사용 중`, 'err', 6000);
-    // localStorage 폴백
-    const lsMatch = localStorage.getItem('aspro_matchfile_v2');
-    if (lsMatch) { try { matchMap=JSON.parse(lsMatch); updateSavedMapCnt(); log(`[INFO] localStorage 복원: ${Object.keys(matchMap).length}건`,'info'); } catch(e2) {} }
+    const isTimeout = e.name === 'AbortError';
+    log(`[WARN] Sheets 자동 동기화 실패${isTimeout?' (타임아웃)':''}: ${e.message}`, 'warn');
+    if (btn) {
+      btn.style.background = 'var(--warn)'; btn.style.color = '#000';
+      btn.style.borderColor = 'var(--warn)';
+      btn.textContent = '⚠ Sheets 재연결 필요';
+    }
+    // 5초 후 1회 재시도
+    setTimeout(async () => {
+      try {
+        const url2 = localStorage.getItem(SHEETS_URL_KEY);
+        if (!url2) return;
+        const res2 = await fetchWithTimeout(url2, 20000);
+        const data2 = await res2.json();
+        if (data2.ok) {
+          log('[INFO] Sheets 재시도 성공', 'ok');
+          await autoLoadFromSheets();
+        }
+      } catch(e2) { log(`[INFO] Sheets 재시도 실패: ${e2.message}`, 'info'); }
+    }, 5000);
   }
 }
 
@@ -3871,22 +3107,9 @@ function log(msg, type='info'){
   a.scrollTop=a.scrollHeight;
 }
 
-function showToast(msg, type='ok', duration=4000){
-  const box = document.getElementById('toastBox'); if(!box) return;
-  const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.textContent = msg;
-  box.appendChild(el);
-  requestAnimationFrame(() => { requestAnimationFrame(() => { el.classList.add('show'); }); });
-  setTimeout(() => {
-    el.classList.remove('show');
-    setTimeout(() => el.remove(), 300);
-  }, duration);
-}
-
 function resetAll(){
-  if(!confirm('초기화하시겠습니까? (매핑·품절·신원재고는 유지)')) return;
-  icMap={}; gpMap={}; sabData=[]; sabRaw=[]; resultRows=[]; filteredRows=[]; nomapRows=[]; normOptMap={};
+  if(!confirm('초기화하시겠습니까? (매핑·신원재고는 유지)')) return;
+  icMap={}; gpMap={}; sabData=[]; sabRaw=[]; resultRows=[]; filteredRows=[]; nomapRows=[]; normOptMap={}; soldoutMap={};
   ['icList','gpList','sabList'].forEach(id=>document.getElementById(id).innerHTML='');
   ['icIn','gpIn','sabIn'].forEach(id=>document.getElementById(id).value='');
   ['icZone','gpZone','sabZone'].forEach(id=>document.getElementById(id).classList.remove('ok'));
@@ -3932,286 +3155,11 @@ if (batchZoneEl) {
 }
 
 document.getElementById('expAll').style.border='2px solid var(--accent)';
-// Ctrl+S: 매핑없음 탭에서 즉시 저장+Sheets 동기화
-document.addEventListener('keydown', e => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-    e.preventDefault();
-    saveNomapEntries();
-    showToast('💾 Ctrl+S 저장 완료', 'ok', 2000);
-  }
-});
 (async () => {
   loadExtra();
-  renderSetRegList();        // SET 등록 카운트 초기화
-  tryLoadSavedMatchFile();   // localStorage 먼저 (파일 업로드 누적분 포함)
-  await autoLoadFromSheets(); // 시트 데이터 머지 (공통 키는 시트 우선, 파일 전용 키는 보존)
+  await autoLoadFromSheets();
+  if (Object.keys(matchMap).length === 0) tryLoadSavedMatchFile();
 })();
-
-// ── 재고0 재매핑 ─────────────────────────────────────────────
-let _zrIdx = null;
-let _zrIsIc = false; // true = 이카운트 품번 직접 지정
-function openZeroRemap(ri) {
-  const r = resultRows[ri];
-  if (!r) return;
-  _zrIdx = ri;
-  _zrIsIc = false;
-  document.getElementById('zrInfo').textContent = `${r.사방넷코드}  ·  ${r.상품명}`;
-  document.getElementById('zrCurrent').textContent = r._물류품번 || '—';
-  document.getElementById('zrInput').value = icCodeMap[r.사방넷코드] || extraMap[r.사방넷코드] || '';
-  document.getElementById('zrDrop').style.display = 'none';
-  document.getElementById('zeroRemapModal').style.display = 'flex';
-  setTimeout(() => document.getElementById('zrInput').focus(), 50);
-}
-function closeZeroRemap() {
-  document.getElementById('zeroRemapModal').style.display = 'none';
-  _zrIdx = null;
-}
-function zrSearch() {
-  const q = document.getElementById('zrInput').value.trim();
-  const drop = document.getElementById('zrDrop');
-  if (!q || q.length < 2) { drop.style.display = 'none'; return; }
-  const qU = q.toUpperCase();
-  // ① 김포 검색
-  const gpMatches = Object.entries(gpMap)
-    .filter(([k]) => k.toUpperCase().includes(qU))
-    .sort((a, b) => {
-      const aS = a[0].toUpperCase().startsWith(qU) ? 0 : 1;
-      const bS = b[0].toUpperCase().startsWith(qU) ? 0 : 1;
-      return aS - bS || a[0].localeCompare(b[0]);
-    })
-    .slice(0, 10);
-  // ② 이카운트 품목코드 검색
-  const icSeen = new Set();
-  const icMatches = [];
-  for (const arr of Object.values(icMap)) {
-    for (const item of arr) {
-      if (!item.품목코드 || icSeen.has(item.품목코드)) continue;
-      if (item.품목코드.toUpperCase().includes(qU)) {
-        icSeen.add(item.품목코드);
-        icMatches.push(item);
-        if (icMatches.length >= 10) break;
-      }
-    }
-    if (icMatches.length >= 10) break;
-  }
-  if (!gpMatches.length && !icMatches.length) {
-    drop.innerHTML = '<div style="padding:6px 10px;color:var(--text3);font-size:10px">검색 결과 없음</div>';
-  } else {
-    const gpHtml = gpMatches.map(([gp, qty]) =>
-      `<div onclick="zrSelectItem('${gp.replace(/'/g,"\\'")}',false)"
-        style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
-        <span style="font-family:var(--mono);font-size:10px;flex:1">${gp}</span>
-        <span style="font-size:9px;color:${qty>0?'var(--success)':'var(--text3)'}">${qty}</span>
-        <span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--accent2);color:#fff">김포</span>
-      </div>`
-    ).join('');
-    const icHtml = icMatches.map(item =>
-      `<div onclick="zrSelectItem('${item.품목코드.replace(/'/g,"\\'")}',true)"
-        style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
-        <span style="font-family:var(--mono);font-size:10px;flex:1">${item.품목코드}</span>
-        <span style="font-size:9px;color:${item.qty>0?'var(--success)':'var(--text3)'}">${item.qty}</span>
-        <span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--accent);color:#fff">이카운트</span>
-      </div>`
-    ).join('');
-    drop.innerHTML = gpHtml + icHtml;
-  }
-  drop.style.display = 'block';
-}
-function zrSelectItem(code, isIc) {
-  document.getElementById('zrInput').value = code;
-  document.getElementById('zrDrop').style.display = 'none';
-  _zrIsIc = isIc;
-  // 인풋 border로 구분 표시
-  document.getElementById('zrInput').style.borderColor = isIc ? 'var(--accent)' : '';
-}
-function zrSuggest() {
-  const r = resultRows[_zrIdx];
-  if (!r) return;
-  const suggestions = suggestMapping(r.사방넷코드, r.자체코드, r.상품명);
-  const drop = document.getElementById('zrDrop');
-  if (!suggestions.length) {
-    drop.innerHTML = '<div style="padding:6px 10px;color:var(--text3);font-size:10px">추천 결과 없음</div>';
-  } else {
-    drop.innerHTML = suggestions.map(s => {
-      const srcColor = s.src==='이카운트'?'var(--accent)':s.src==='김포'?'var(--accent2)':s.src==='매핑파일'?'var(--success)':'var(--warn)';
-      const qtyLabel = s.qty !== undefined ? ` <span style="color:var(--success)">(${s.qty})</span>` : '';
-      return `<div onclick="document.getElementById('zrInput').value='${s.gp.replace(/'/g,"\\'")}';document.getElementById('zrDrop').style.display='none'"
-        style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px">
-        <span style="font-family:var(--mono);font-size:10px">${s.gp}</span>
-        <span style="font-size:9px;color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(s.상품명||'').slice(0,22)}</span>
-        ${qtyLabel}
-        <span style="font-size:9px;padding:1px 5px;border-radius:2px;background:${srcColor};color:#fff">${s.src}</span>
-      </div>`;
-    }).join('');
-  }
-  drop.style.display = 'block';
-}
-function applyZeroRemap() {
-  const r = resultRows[_zrIdx];
-  if (!r) return;
-  const newGp = document.getElementById('zrInput').value.trim();
-  if (!newGp) { alert('물류품번을 입력해주세요.'); return; }
-  if (_zrIsIc) {
-    // 이카운트 품번 직접 지정 → icCodeMap에 저장 (getIcountQty 직접조회 경로 사용)
-    icCodeMap[r.사방넷코드] = newGp;
-    log(`[OK] 이카운트 직접매핑: ${r.사방넷코드} → ${newGp}`, 'ok');
-  } else {
-    extraMap[r.사방넷코드] = newGp;
-    log(`[OK] 재매핑: ${r.사방넷코드} → ${newGp}`, 'ok');
-  }
-  saveExtra();
-  sheetsPOST(_zrIsIc
-    ? { iccodemap: icCodeMap }
-    : { map: { [r.사방넷코드]: newGp }, _verifyMap: { [r.사방넷코드]: newGp } }
-  );
-  closeZeroRemap();
-  if (sabData.length && Object.keys(gpMap).length) processAll();
-}
-// ── 유사컬러 매핑 검증 ─────────────────────────────────────────
-let _colorCandidates = [];
-
-function runColorSimilarCheck() {
-  const zeroRows = resultRows.filter(r => r._status === 'zero' && !extraMap[r.사방넷코드]);
-  _colorCandidates = [];
-
-  for (const r of zeroRows) {
-    const sc = r.사방넷코드;
-    const gp = (r._물류품번 || '').split('+')[0].trim(); // 세트면 첫 번째만
-    if (!gp) continue;
-    const parsed = extractColorFromGp(gp);
-    if (!parsed) continue;
-    const similars = getSimilarColors(parsed.color);
-    if (!similars.length) continue;
-
-    for (const altColor of similars) {
-      const altGp = buildAltGp(parsed, altColor);
-      const altQty = gpMap[altGp];
-      if (altQty !== undefined && altQty > 0) {
-        _colorCandidates.push({
-          sc, gp, altGp, altQty, altColor,
-          origColor: parsed.color,
-          상품명: r.상품명, 옵션: r.옵션, 자체코드: r.자체코드,
-          confirmed: false, skipped: false,
-        });
-        break;
-      }
-    }
-  }
-
-  if (!_colorCandidates.length) {
-    alert('유사컬러 대안 매핑을 찾지 못했습니다.');
-    return;
-  }
-  renderColorModal();
-  document.getElementById('colorSimilarModal').style.display = 'flex';
-}
-
-function renderColorModal() {
-  const total = _colorCandidates.length;
-  const pending = _colorCandidates.filter(c => !c.confirmed && !c.skipped).length;
-  document.getElementById('cmHeader').textContent =
-    `🎨 유사컬러 매핑 검증 — ${total}건 발견 (미처리: ${pending}건)`;
-
-  const list = document.getElementById('cmList');
-  list.innerHTML = _colorCandidates.map((c, i) => {
-    const dimmed = c.confirmed || c.skipped;
-    const origKr = CC_KR[c.origColor] || c.origColor;
-    const altKr  = CC_KR[c.altColor]  || c.altColor;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;
-        border-bottom:1px solid var(--border);opacity:${dimmed?0.4:1}">
-      <div style="min-width:120px;font-family:var(--mono);font-size:10px;color:var(--accent)">${c.sc}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.상품명}">${c.상품명}</div>
-        <div style="font-size:10px;color:var(--text3)">${c.옵션}</div>
-      </div>
-      <div style="font-size:10px;font-family:var(--mono);white-space:nowrap">
-        <span style="color:var(--warn)">${c.gp}</span>
-        <span style="color:var(--text3)"> (재고0)</span>
-        <span style="color:var(--text3);margin:0 4px">→</span>
-        <span style="color:var(--success)">${c.altGp}</span>
-        <span style="color:var(--success);margin-left:3px">(${altKr}, ${c.altQty}개)</span>
-      </div>
-      ${c.confirmed
-        ? `<span style="font-size:10px;color:var(--success);white-space:nowrap">✓ 확정</span>`
-        : c.skipped
-        ? `<span style="font-size:10px;color:var(--text3);white-space:nowrap">건너뜀</span>`
-        : `<button class="btn" style="font-size:10px;padding:3px 7px;background:var(--accent);color:#fff;border-color:var(--accent);white-space:nowrap" onclick="cmConfirm(${i})">확정</button>
-           <button class="btn" style="font-size:10px;padding:3px 7px;white-space:nowrap" onclick="cmSkip(${i})">건너뜀</button>`
-      }
-    </div>`;
-  }).join('');
-}
-
-function cmConfirm(i) {
-  const c = _colorCandidates[i];
-  if (!c) return;
-  c.confirmed = true;
-  extraMap[c.sc] = c.altGp;
-  saveExtra();
-  log(`[유사컬러] 확정: ${c.sc} → ${c.altGp} (${CC_KR[c.altColor]||c.altColor}, ${c.altQty}개)`, 'ok');
-  renderColorModal();
-}
-
-function cmSkip(i) {
-  if (_colorCandidates[i]) { _colorCandidates[i].skipped = true; renderColorModal(); }
-}
-
-function cmConfirmAll() {
-  _colorCandidates.filter(c => !c.confirmed && !c.skipped).forEach((c, _, arr) => {
-    c.confirmed = true;
-    extraMap[c.sc] = c.altGp;
-    log(`[유사컬러] 확정: ${c.sc} → ${c.altGp} (${CC_KR[c.altColor]||c.altColor}, ${c.altQty}개)`, 'ok');
-  });
-  saveExtra();
-  renderColorModal();
-}
-
-function closeColorModal() {
-  document.getElementById('colorSimilarModal').style.display = 'none';
-  const confirmed = _colorCandidates.filter(c => c.confirmed).length;
-  if (confirmed > 0 && sabData.length) {
-    // 재매핑 반영
-    const changed = {};
-    _colorCandidates.filter(c => c.confirmed).forEach(c => { changed[c.sc] = c.altGp; });
-    sheetsPOST({ map: changed, _verifyMap: changed });
-    processAll();
-  }
-}
-// ────────────────────────────────────────────────────────────
 </script>
-
-<!-- 유사컬러 검증 모달 -->
-<div id="colorSimilarModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center" onclick="if(event.target===this)closeColorModal()">
-  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:860px;max-width:96vw;max-height:85vh;display:flex;flex-direction:column">
-    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-      <span id="cmHeader" style="font-size:13px;font-weight:600;flex:1"></span>
-      <button class="btn btn-s" style="font-size:11px" onclick="cmConfirmAll()">✓ 모두 확정</button>
-      <button class="btn" style="font-size:11px" onclick="closeColorModal()">닫기 / 재매칭</button>
-    </div>
-    <div style="padding:8px 14px;background:var(--bg3);font-size:10px;color:var(--text3);border-bottom:1px solid var(--border)">
-      재고0 항목 중 물류품번 컬러만 바꾸면 재고가 있는 경우를 자동 검출합니다. 확정 시 extraMap에 저장되고 닫기 버튼을 누르면 재매칭이 실행됩니다.
-    </div>
-    <div id="cmList" style="overflow-y:auto;flex:1"></div>
-  </div>
-</div>
-
-<!-- 재고0 재매핑 모달 -->
-<div id="zeroRemapModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);align-items:center;justify-content:center" onclick="if(event.target===this)closeZeroRemap()">
-  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px;width:440px;max-width:95vw">
-    <div style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--text1)">✏ 재매핑 — 재고0 수정</div>
-    <div id="zrInfo" style="font-size:10px;color:var(--text3);margin-bottom:10px;font-family:var(--mono)"></div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">현재 매핑: <span id="zrCurrent" style="font-family:var(--mono);color:var(--warn)"></span></div>
-    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-      <input class="fi" id="zrInput" placeholder="새 물류품번 입력... (2자 이상 자동검색)" style="flex:1;font-family:var(--mono)" oninput="zrSearch()" onkeydown="if(event.key==='Enter')applyZeroRemap()">
-      <button class="btn" style="color:var(--accent2);border-color:var(--accent2);white-space:nowrap" onclick="zrSuggest()">🔍 추천</button>
-    </div>
-    <div id="zrDrop" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:4px;max-height:160px;overflow-y:auto;margin-bottom:10px"></div>
-    <div style="display:flex;gap:6px;justify-content:flex-end">
-      <button class="btn" onclick="closeZeroRemap()">취소</button>
-      <button class="btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="applyZeroRemap()">저장</button>
-    </div>
-  </div>
-</div>
 </body>
 </html>
-
