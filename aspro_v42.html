@@ -1661,7 +1661,7 @@ function renderMain(rows) {
       <td style="font-size:11px;color:var(--text3)">${r.옵션}</td>
       <td>${srcHtml}</td>
       <td style="font-family:var(--mono);font-size:10px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis">
-        <span class="mp-disp" id="mpd_${r.사방넷코드}" style="cursor:pointer;border-bottom:1px dashed var(--border2)" title="클릭하여 매핑 수정" onclick="openInlineMapEdit('${r.사방넷코드}','${(r._물류품번||'').replace(/'/g,'\\'')}',this)">${r._물류품번}</span>
+        <span class="mp-disp" id="mpd_${r.사방넷코드}" style="cursor:pointer;border-bottom:1px dashed var(--border2)" title="클릭하여 매핑 수정" onclick="openInlineMapEdit('${r.사방넷코드}','${r._물류품번||''}',this)">${r._물류품번}</span>
       </td>
       <td style="text-align:right;font-family:var(--mono);color:${(r._qty||0)>0?'var(--success)':'var(--warn)'}">${r._qty??'—'}</td>
       <td style="text-align:right;font-family:var(--mono);color:var(--text3)">${r.가상재고??'—'}</td>
