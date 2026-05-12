@@ -708,6 +708,11 @@ const SAB_COLOR_OVERRIDE = {
   'N1009_BW':    {'브라운':'BW','썸머브라운':'BW'},
   'N1009_SET':   {'브라운':'BW','썸머브라운':'BW','라이트그레이':'LG','리이트그레이':'LG','네이비':'NA'},
 };
+// N1009-BW 브라운 단품 직접 재고 고정 (이카운트 N1009-009/010)
+const DIRECT_QTY_MAP = {
+  '102579-0001': { qty: 26, src: '이카운트', 품목코드: 'N1009-009' },
+  '102579-0002': { qty: 28, src: '이카운트', 품목코드: 'N1009-010' },
+};
 const EXTRA_STATIC_MAP = {
   '100334-0005':'243NT05-88-AP','100334-0006':'243NT05-88-GR','100334-0007':'243NT05-88-BK',
   '100334-0008':'243NT05-77-BK','100334-0009':'243NT05-55-BK','100334-0010':'243NT05-55-GR',
@@ -1331,6 +1336,9 @@ function getIcountQty(sabData_row) {
   const 옵션   = sabData_row.옵션;
   const sc     = sabData_row.사방넷코드;
   const sabName = sabData_row.상품명 || '';
+
+  // ── 0순위: 직접 재고 고정값 ──
+  if (DIRECT_QTY_MAP[sc]) return DIRECT_QTY_MAP[sc];
   const parsedOpt = parseOpt(옵션);
   let { cc, sz, isSet, setColors } = parsedOpt;
 
