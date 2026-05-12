@@ -1183,8 +1183,8 @@ const IC_STATIC_MAP = {
 let setRuleMap = {
   'MS25S':    { gpPrefix: '252MX05', colorMap: { '플럼':'BU','차콜':'GR','그레이':'GR','베이지':'BE','블랙':'BK' } },
   'JW25SS02': { gpPrefix: '252JW19', colorMap: { '아이보리':'IV','스카이블루':'BL','블랙':'BK' } },
-  'N1009':    { gpPrefix: 'N1009',   colorMap: { '브라운':'BR','라이트그레이':'LG','리이트그레이':'LG','네이비':'NA' } },
-  '252JW10':  { gpPrefix: '252JW10', colorMap: { '화이트':'WH','블랙':'BK','블루':'BL','아이보리':'IV' } },
+  'N1009':    { gpPrefix: 'N1009',   colorMap: { '브라운':'BR','썸머브라운':'BR','라이트그레이':'LG','리이트그레이':'LG','라이트 그레이':'LG','네이비':'NA' } },
+  '252JW10':  { gpPrefix: '252JW10', colorMap: { '화이트':'WH','블랙':'BK','블루':'BL','아이보리':'IV','스카이블루':'BL','화이트(아이보리+블랙+블루)':'WH' } },
 };
 
 function getGimpoQty(sabCode, opt, sabName) {
@@ -1202,10 +1202,16 @@ function getGimpoQty(sabCode, opt, sabName) {
       const colorMap = colorOvr.colorMap;
       const sz = opt.split(':').pop().trim();
       const colorPart = opt.slice(0, opt.lastIndexOf(':'));
-      const colors = colorPart.split('+').map(c => colorMap[c.trim()] || c.trim().slice(0,2).toUpperCase());
-      const qtys = colors.map(c => {
+      // colorMap 없으면 COLOR_MAP(전역 한글→영문) → 그래도 없으면 앞2자
+      const colors = colorPart.split('+').map(c => {
+        const trimmed = c.trim();
+        return colorMap[trimmed] || COLOR_MAP[trimmed] || COLOR_MAP[trimmed.toUpperCase()] || trimmed.slice(0,2).toUpperCase();
+      });
+      const qtys = colors.map((c, idx) => {
         const gpKey = `${gpPrefix}-${c}-${sz}`;
-        return gpMap[gpKey] !== undefined ? gpMap[gpKey] : null;
+        const qty = gpMap[gpKey] !== undefined ? gpMap[gpKey] : null;
+        if (qty === null) log(`[WARN] 세트매핑 gpMap 없음: ${gpKey} (색상원본: ${colorPart.split('+')[idx]?.trim()})`, 'warn');
+        return qty;
       });
       if (qtys.some(q => q === null)) return null;
       const setQty = Math.min(...qtys);
