@@ -1497,6 +1497,19 @@ function resolveIcItems(items, cc, sz, isSet, setColors, 옵션, sabName, isDire
   return null;
 }
 
+// 옵션에서 색상/사이즈 추출 — 색상:사이즈, 사이즈:색상 둘 다 처리
+function parseColorSz(opt) {
+  opt = String(opt || '').trim();
+  if (!opt.includes(':')) return { color: opt, sz: '' };
+  const parts = opt.split(':');
+  const a = parts[0].trim();
+  const b = parts[parts.length - 1].trim();
+  const aIsSize = /^\d/.test(a) || /^(S|M|L|XL|FREE|free)$/i.test(a);
+  const bIsSize = /^\d/.test(b) || /^(S|M|L|XL|FREE|free)$/i.test(b);
+  if (aIsSize && !bIsSize) return { color: b, sz: a };
+  return { color: a, sz: b };
+}
+
 // ── 택1 자동매핑 ──
 // 매핑없음 항목 중 상품명에 '택1'이 있는 것 → 기존 matchMap+extraMap에서 상품명+색상으로 찾아 자동 매핑
 function autoMapTaek1() {
@@ -1504,7 +1517,6 @@ function autoMapTaek1() {
   if (!Object.keys(allMap).length) return;
 
   // 기존 매핑에서 정규화 상품명 → 물류품번 역인덱스 빌드
-  // key: normName(상품명) + '||' + 색상코드
   const nameColorMap = {};
   sabData.forEach(s => {
     const gp = allMap[s.사방넷코드];
@@ -1512,37 +1524,36 @@ function autoMapTaek1() {
     if (!s.상품명 || !s.옵션) return;
     const nm = normName(s.상품명);
     if (nm.length < 3) return;
-    // 색상 추출
-    const colorPart = s.옵션.includes(':') ? s.옵션.split(':')[0].trim() : '';
-    const colorCode = COLOR_MAP[colorPart] || COLOR_MAP[colorPart.toUpperCase()] || colorPart;
-    const sz = s.옵션.includes(':') ? s.옵션.split(':').pop().trim() : '';
-    // nm||colorCode||sz → gp
-    if (colorCode && sz) nameColorMap[`${nm}||${colorCode}||${sz}`] = gp;
+    const { color: c1, sz: s1 } = parseColorSz(s.옵션);
+    const colorCode = COLOR_MAP[c1] || COLOR_MAP[c1.toUpperCase()] || c1;
+    if (colorCode && s1) nameColorMap[`${nm}||${colorCode}||${s1}`] = gp;
     if (colorCode) nameColorMap[`${nm}||${colorCode}`] = gp;
-    nameColorMap[`${nm}||${sz}`] = gp;
+    if (s1) nameColorMap[`${nm}||${s1}`] = gp;
+    // 한글 색상명도 키로 추가
+    if (c1 && s1) nameColorMap[`${nm}||${c1}||${s1}`] = gp;
+    if (c1) nameColorMap[`${nm}||${c1}`] = gp;
   });
 
   let autoMapped = 0;
-  const newMappings = {};
 
   nomapRows.forEach(r => {
     const sc = r.사방넷코드;
-    if (allMap[sc]) return; // 이미 매핑됨
-    if (!r.상품명 || !/(택1|택 1)/i.test(r.상품명)) return; // 택1 상품만
+    if (allMap[sc]) return;
+    if (!r.상품명 || !/(택1|택 1)/i.test(r.상품명)) return;
 
     const nm = normName(r.상품명);
-    const colorPart = r.옵션?.includes(':') ? r.옵션.split(':')[0].trim() : '';
-    const colorCode = COLOR_MAP[colorPart] || COLOR_MAP[colorPart.toUpperCase()] || colorPart;
-    const sz = r.옵션?.includes(':') ? r.옵션.split(':').pop().trim() : '';
+    const { color: rawColor, sz } = parseColorSz(r.옵션 || '');
+    const colorCode = COLOR_MAP[rawColor] || COLOR_MAP[rawColor.toUpperCase()] || rawColor;
 
-    // 우선순위: nm+color+sz → nm+color → nm+sz
+    // 우선순위: nm+color코드+sz → nm+한글color+sz → nm+color코드 → nm+한글color → nm+sz
     const gp = nameColorMap[`${nm}||${colorCode}||${sz}`]
+            || nameColorMap[`${nm}||${rawColor}||${sz}`]
             || nameColorMap[`${nm}||${colorCode}`]
+            || nameColorMap[`${nm}||${rawColor}`]
             || nameColorMap[`${nm}||${sz}`];
 
     if (gp) {
       extraMap[sc] = gp;
-      newMappings[sc] = gp;
       autoMapped++;
       log(`[OK] 택1 자동매핑: ${sc} "${r.상품명}" [${r.옵션}] → ${gp}`, 'ok');
     }
