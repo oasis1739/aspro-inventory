@@ -2794,7 +2794,7 @@ function saveNomapEntries() {
     showToast(`💾 로컬 저장 완료 (${saved}건)`, 'ok', 3000);
     if (currentTab === 'nomap') renderNomap();
     else if (currentTab === 'mapview') renderMapview();
-    sheetsPOST({ map: extraMap, soldout: soldoutMap, ic: icCodeMap }, '✅ 구글시트 반영 완료');
+    sheetsPOST({ map: extraMap, soldout: soldoutMap, iccodemap: icCodeMap }, '✅ 구글시트 반영 완료');
   } else {
     showToast('❌ 저장 실패', 'err');
   }
@@ -3951,7 +3951,7 @@ function applyZeroRemap() {
     log(`[OK] 재매핑: ${r.사방넷코드} → ${newGp}`, 'ok');
   }
   saveExtra();
-  sheetsPOST({ map: extraMap, soldout: soldoutMap, ic: icCodeMap });
+  sheetsPOST({ map: extraMap, soldout: soldoutMap, iccodemap: icCodeMap });
   closeZeroRemap();
   if (sabData.length && Object.keys(icMap).length && Object.keys(gpMap).length) processAll();
 }
