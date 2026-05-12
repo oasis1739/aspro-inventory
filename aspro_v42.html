@@ -575,8 +575,21 @@ function doGet(e) {
   const iccodemap = {};
   icData.slice(1).forEach(r => { if (r[0] && r[1]) iccodemap[String(r[0]).trim()] = String(r[1]).trim(); });
 
+  // aspro_setmap: 세트규칙 (A=자체코드prefix, B=김포prefix, C=색상매핑)
+  // 예: JW25SS02 | 252JW19 | 아이보리:IV,스카이블루:BL,블랙:BK
+  const smSh = ss.getSheetByName('aspro_setmap');
+  const setmap = {};
+  if (smSh && smSh.getLastRow() > 1) {
+    smSh.getDataRange().getValues().slice(1).forEach(r => {
+      const prefix = String(r[0]||'').trim(), gpPfx = String(r[1]||'').trim(), colorStr = String(r[2]||'').trim();
+      if (!prefix || !gpPfx) return;
+      const colorMap = {};
+      colorStr.split(',').forEach(p => { const [k,v] = p.split(':'); if(k&&v) colorMap[k.trim()]=v.trim(); });
+      setmap[prefix] = { gpPrefix: gpPfx, colorMap };
+    });
+  }
 
-  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout, kcfi, normname, iccodemap}))
+  return ContentService.createTextOutput(JSON.stringify({ok:true, map, soldout, kcfi, normname, iccodemap, setmap}))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -1164,8 +1177,13 @@ const IC_STATIC_MAP = {
   'N1009_AL': 'N1009',       'N1016_AL': 'N1016',
 };
 
-const GP_SET_COLOR_OVERRIDE = {
-  'MS25S': { gpPrefix: '252MX05', colorMap: { '플럼':'BU', '차콜':'GR', '그레이':'GR', '베이지':'BE', '블랙':'BK' } },
+// ── 세트 규칙: 구글시트 aspro_setmap에서 로드 (앱 시작 시 자동 갱신) ──
+// 형식: { '자체코드prefix': { gpPrefix: '김포prefix', colorMap: { '한글색상': '코드' } } }
+// 초기값: 기존 하드코딩 데이터 (Sheets 로드 전 폴백용)
+let setRuleMap = {
+  'MS25S':    { gpPrefix: '252MX05', colorMap: { '플럼':'PL','차콜':'GR','그레이':'GR','베이지':'BE','블랙':'BK' } },
+  'JW25SS02': { gpPrefix: '252JW19', colorMap: { '아이보리':'IV','스카이블루':'BL','블랙':'BK' } },
+  'N1009':    { gpPrefix: 'N1009',   colorMap: { '브라운':'BR','라이트그레이':'LG','네이비':'NA' } },
 };
 
 function getGimpoQty(sabCode, opt, sabName) {
@@ -1173,12 +1191,12 @@ function getGimpoQty(sabCode, opt, sabName) {
   // __DELETED__ 처리: extraMap에서 명시적으로 삭제된 항목
   if (물류 === '__DELETED__') return null;
 
-  // ── 세트 옵션 처리 (예: 플럼+차콜:55) ──
+  // ── 세트 옵션 처리 (예: 아이보리+스카이블루+블랙:55) ──
   if (!물류 && opt && opt.includes('+') && opt.includes(':')) {
     const sabRow = sabData.find(s => s.사방넷코드 === sabCode);
     const jache = sabRow?.자체코드 || '';
-    const prefix = jache.split('-')[0];
-    const colorOvr = GP_SET_COLOR_OVERRIDE[prefix];
+    const prefix = jache.replace(/_SET$/i, '').replace(/-SET$/i, '').split('-')[0];
+    const colorOvr = setRuleMap[prefix];
     if (colorOvr) {
       const gpPrefix = colorOvr.gpPrefix;
       const colorMap = colorOvr.colorMap;
@@ -2753,6 +2771,15 @@ async function autoLoadFromSheets() {
         // localStorage에서 복원 시도
         const fzRaw = localStorage.getItem('aspro_forcezero_v1');
         if (fzRaw) { try { forceZeroMap = JSON.parse(fzRaw); } catch(e2) {} }
+      }
+      // setmap: aspro_setmap 시트에서 세트 규칙 로드 (기존 하드코딩에 merge)
+      if (data.setmap && Object.keys(data.setmap).length > 0) {
+        setRuleMap = { ...setRuleMap, ...data.setmap };
+        try { localStorage.setItem('aspro_setmap_v1', JSON.stringify(data.setmap)); } catch(e2) {}
+        log(`[OK] 세트규칙 로드: ${Object.keys(data.setmap).length}건`, 'ok');
+      } else {
+        const smRaw = localStorage.getItem('aspro_setmap_v1');
+        if (smRaw) { try { setRuleMap = { ...setRuleMap, ...JSON.parse(smRaw) }; } catch(e2) {} }
       }
       try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
       updateSavedMapCnt();
