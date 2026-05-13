@@ -317,6 +317,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
         <span>수량수정</span>
       </div>
       <span style="color:var(--text3);font-size:10px;margin-left:auto;font-family:var(--mono)" id="rowCnt"></span>
+      <button class="btn btn-n" id="dlMatchedBtn" onclick="exportCurrentTab()" style="display:none;font-size:11px;padding:3px 8px">⬇ 현재탭 다운로드</button>
     </div>
 
     <!-- 메인 테이블 -->
@@ -1261,8 +1262,34 @@ function getGimpoQty(sabCode, opt, sabName, jacheOpt) {
       }
     }
   }
-  const gpQty = gpMap[물류resolved] !== undefined ? gpMap[물류resolved] : 0;
+  const gpQty = gpMap[물류resolved] !== undefined ? gpMap[물류resolved] : -1;
   물류 = 물류resolved;
+
+  // ── 김포에 없으면 이카운트에서 찾기 ──
+  // aspro_match에 이카운트 품목코드가 들어있는 경우 처리
+  if (gpQty === -1) {
+    // icMap에서 직접 코드로 찾기
+    const icItems = icMap[물류] || [];
+    if (icItems.length > 0) {
+      // 단일 품목코드면 바로 반환
+      const icRow = icItems[0];
+      log(`[INFO] match→이카운트 fallback: ${물류} → 재고 ${icRow.qty}`, 'info');
+      return { qty: icRow.qty, src: '이카운트', 물류품번: 물류, 품목코드: 물류 };
+    }
+    // icMap에서 prefix로 찾기 (예: 252NT37PT → 252NT37PT-009)
+    const pfx = 물류.split('-').slice(0, 2).join('-');
+    for (const [key, arr] of Object.entries(icMap)) {
+      if (key === 물류 || key.startsWith(물류 + '-') || 물류.startsWith(key)) {
+        if (arr.length > 0) {
+          log(`[INFO] match→이카운트 prefix fallback: ${물류} → ${key} 재고 ${arr[0].qty}`, 'info');
+          return { qty: arr[0].qty, src: '이카운트', 물류품번: 물류, 품목코드: key };
+        }
+      }
+    }
+    // 이카운트에도 없으면 null (미매핑 처리)
+    return null;
+  }
+
   const { sz } = parseOpt(opt || '');
   let sameCount = 0;
   const allMaps = { ...matchMap, ...extraMap };
@@ -1758,11 +1785,37 @@ function switchTab(tab) {
   document.getElementById('mapviewWrap').style.display  = tab==='mapview'?'block':'none';
   document.getElementById('logWrap').style.display      = tab==='log'?'block':'none';
   document.getElementById('debugWrap').style.display    = tab==='debug'?'block':'none';
+  // 다운로드 버튼: 메인탭에서만 표시
+  const dlBtn = document.getElementById('dlMatchedBtn');
+  if (dlBtn) dlBtn.style.display = showMain ? 'inline-block' : 'none';
   if (tab==='nomap') renderNomap();
   else if (tab==='soldout') renderSoldoutTab();
   else if (tab==='mapview') renderMapview();
   else if (tab==='debug') showIcMapSample();
   else if (tab!=='log') applyFilter();
+}
+
+function exportCurrentTab() {
+  const q = document.getElementById('qSearch').value.toLowerCase();
+  const b = document.getElementById('qBrand').value.toUpperCase();
+  let rows = resultRows;
+  if (currentTab==='matched')   rows = rows.filter(r=>r._status==='matched');
+  else if(currentTab==='unmatched') rows = rows.filter(r=>r._status==='unmatched');
+  else if(currentTab==='zero')  rows = rows.filter(r=>r._status==='zero');
+  if (q) rows = rows.filter(r=>(r.사방넷코드||'').toLowerCase().includes(q)||(r.상품명||'').toLowerCase().includes(q));
+  if (b) rows = rows.filter(r=>(r.자체코드||'').toUpperCase().includes(b)||(r.사방넷코드||'').toUpperCase().includes(b));
+
+  const tabName = {all:'전체',matched:'매칭완료',unmatched:'미매칭',zero:'재고0'}[currentTab]||currentTab;
+  const headers = ['사방넷코드','자체코드','상품명','옵션','소스','물류품번','재고','현가상재고','수정재고','상태'];
+  const data = [headers, ...rows.map(r => [
+    r.사방넷코드||'', r.자체코드||'', r.상품명||'', r.옵션||'',
+    r._src||'', r._gp||'', r._qty??'', r._adjQty??'', r._editQty||'', r._status||''
+  ])];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:16},{wch:18},{wch:35},{wch:15},{wch:12},{wch:22},{wch:7},{wch:10},{wch:8},{wch:8}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, tabName);
+  XLSX.writeFile(wb, `aspro_${tabName}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 function applyFilter() {
