@@ -1315,7 +1315,8 @@ function getGimpoQty(sabCode, opt, sabName, jacheOpt) {
         log(`[WARN] match→이카운트 색상불일치: ${물류} [${rawColor}/${rawSz}]`, 'warn');
       }
     }
-    return null;
+    // 김포에도 이카운트에도 없으면 재고0 (매핑없음 아님)
+    return { qty: 0, src: '김포', 물류품번: 물류 };
   }
 
   const { sz } = parseOpt(opt || '');
