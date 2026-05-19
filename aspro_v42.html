@@ -235,7 +235,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
       📌 <b>김포재고</b>: "김포" (매칭 제외)<br>
       📌 <b>사방넷</b>: "사방넷" or "단품"<br>
       📌 <b>매칭파일</b>: "매칭" or "match"<br>
-      📌 <b>신원재고</b>: PK/FK/BK/SK로 시작
+      📌 <b>신원재고</b>: PK/FK/BK/SK로 시작 또는 <code>물류별재고.xlsx</code>(KCFI 시트 자동인식)
     </div>
   </div>
 
@@ -1096,9 +1096,28 @@ function tryLoadSavedMatchFile() {
 async function loadKCFI(e) {
   const files = e.target ? e.target.files : e;
   if (!files || !files.length) return;
+
+  // ★ 멀티블록 포맷 자동 감지 (물류별재고.xlsx에 'KCFI' 시트 있으면) ★
+  const fileArray = Array.from(files);
+  const remainingFiles = [];
+  for (const file of fileArray) {
+    try {
+      const info = await readXLSXWithNames(file);
+      if (info.names.includes('KCFI')) {
+        await loadKCFIMultiblock(file, info);
+      } else {
+        remainingFiles.push(file);
+      }
+    } catch (ex) {
+      remainingFiles.push(file);
+    }
+  }
+  if (remainingFiles.length === 0) return;
+
+  // ── 기존 단순 포맷 처리 (변경 없음) ──
   let totalLoaded = 0;
   const newMap = { ...kcfiMap };
-  for (const file of Array.from(files)) {
+  for (const file of remainingFiles) {
     try {
       const sheets = await readXLSX(file);
       const rows = sheets[0];
@@ -1136,6 +1155,113 @@ async function loadKCFI(e) {
   if (zone) zone.classList.add('ok');
   const list = document.getElementById('kcfiList');
   if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">💜 신원재고 업로드</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
+}
+
+// ── KCFI 물류별재고.xlsx 멀티블록 파서 ──
+// 구조: 상품헤더(A=상품명, C=날짜) → 컬럼헤더([이미지,색상,사이즈,실수량,비고]) → 데이터 → TTL → ...
+async function loadKCFIMultiblock(file, sheetInfo) {
+  if (!sabData || sabData.length === 0) {
+    log('[ERR] 사방넷 단품을 먼저 로드해주세요 (③번)', 'err');
+    showToast('❌ 사방넷 단품 먼저 로드 필요', 'err', 4000);
+    return;
+  }
+  const kcfiIdx = sheetInfo.names.indexOf('KCFI');
+  if (kcfiIdx < 0) { log('[ERR] KCFI 시트 없음', 'err'); return; }
+  const rows = sheetInfo.data[kcfiIdx];
+  if (!rows || rows.length < 3) { log('[ERR] KCFI 시트 데이터 부족', 'err'); return; }
+
+  // 사방넷 prefix별 옵션 색인 빌드: prefix → { '색상:사이즈': 사방넷코드 }
+  const sabByPrefix = {};
+  sabData.forEach(s => {
+    const sc = String(s.사방넷코드 || '').trim();
+    const opt = String(s.옵션 || '').trim();
+    if (!sc || !opt) return;
+    const pfx = sc.split('-')[0];
+    if (!sabByPrefix[pfx]) sabByPrefix[pfx] = {};
+    sabByPrefix[pfx][opt] = sc;
+  });
+
+  let currentProduct = null, currentPrefix = null;
+  let matched = 0, unmatched = 0, productsSeen = 0, productsMapped = 0;
+  const newMap = { ...kcfiMap };
+  const unmatchedSamples = [];
+  const missingProducts = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const a = (r[0] === null || r[0] === undefined) ? '' : String(r[0]).trim();
+    const b = (r[1] === null || r[1] === undefined) ? '' : String(r[1]).trim();
+
+    // 블록 헤더: A에 상품명, B는 비어있음 (그리고 '이미지'/'TTL' 아님)
+    if (a && a !== '이미지' && a !== 'TTL' && !b) {
+      currentProduct = a;
+      currentPrefix = KCFI_PRODUCT_MAP[a] || null;
+      productsSeen++;
+      if (currentPrefix) productsMapped++;
+      else if (!missingProducts.includes(a)) missingProducts.push(a);
+      continue;
+    }
+    if (a === '이미지' || a === 'TTL') continue;
+
+    // 데이터 행: A 비어있고 B=색상, C=사이즈, D=수량
+    if (!a && b && r[2] !== null && r[2] !== undefined && r[3] !== null && r[3] !== undefined) {
+      // 색상 정규화: "블랙(공통)" → "블랙" (괄호 안 (공통) 만 제거)
+      const color = b.replace(/\s*\(공통\)\s*$/, '').trim();
+      const size = String(r[2]).trim();
+      const qtyRaw = String(r[3]).trim();
+      if (!color || !size) continue;
+      const qty = (qtyRaw === '-' || qtyRaw === '') ? 0 : parseInt(qtyRaw.replace(/,/g, ''));
+      if (isNaN(qty)) continue;
+
+      if (!currentPrefix) {
+        unmatched++;
+        continue;
+      }
+      const optKey = `${color}:${size}`;
+      const sabCode = sabByPrefix[currentPrefix]?.[optKey];
+      if (sabCode) {
+        newMap[sabCode] = qty;
+        matched++;
+      } else {
+        unmatched++;
+        if (unmatchedSamples.length < 5) {
+          unmatchedSamples.push(`${currentPrefix}[${optKey}]`);
+        }
+      }
+    }
+  }
+
+  kcfiMap = newMap;
+  try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch (e2) {}
+  updateKCFICnt();
+
+  log(`[OK] KCFI 멀티블록 로드: ${file.name}`, 'ok');
+  log(`     상품 ${productsSeen}개 (매핑됨 ${productsMapped}개) → 매칭 ${matched}건 / 미매칭 ${unmatched}건`, matched > 0 ? 'ok' : 'warn');
+  if (missingProducts.length) {
+    log(`[WARN] KCFI_PRODUCT_MAP 누락: ${missingProducts.join(' / ')}`, 'warn');
+  }
+  if (unmatchedSamples.length) {
+    log(`     미매칭 옵션 샘플: ${unmatchedSamples.join(' / ')}`, 'warn');
+  }
+
+  const zone = document.getElementById('kcfiZone');
+  if (zone) zone.classList.add('ok');
+  const list = document.getElementById('kcfiList');
+  if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">💜 KCFI 멀티블록 (${matched}건 매칭)</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
+  showToast(`✅ KCFI ${matched}건 매칭 / 미매칭 ${unmatched}건`, matched > 0 ? 'ok' : 'warn', 4000);
+
+  // Sheets 자동 반영
+  const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
+  if (sheetsUrl && matched > 0) {
+    fetch(sheetsUrl, {
+      method: 'POST',
+      body: JSON.stringify({ kcfi: kcfiMap }),
+      headers: { 'Content-Type': 'text/plain' }
+    }).then(r => r.json()).then(d => {
+      if (d.ok) log(`[OK] KCFI 시트 자동 반영: ${Object.keys(kcfiMap).length}건`, 'ok');
+      else log(`[WARN] KCFI 시트 반영 실패: ${d.error || ''}`, 'warn');
+    }).catch(err => log(`[WARN] KCFI 시트 반영 실패: ${err.message}`, 'warn'));
+  }
 }
 
 function triggerBatchUpload() {
@@ -1193,6 +1319,19 @@ const IC_STATIC_MAP = {
   // 추가 (2026-05-13): 자체코드=이카운트품번 케이스
   'L24W403': 'L24W403',
   'NT244G0069-73JK': '244NT69',
+};
+
+// 신원(KCFI) 물류별재고 멀티블록 포맷 — KCFI 시트 상품명 → 사방넷 prefix
+// 신규 상품 추가될 때마다 여기에 1줄씩 추가
+const KCFI_PRODUCT_MAP = {
+  '24FW 막스스튜디오 니트 베스트3종': '101489',
+  '24FW 막스스튜디오 캐시 홀가 판초1종': '101490',
+  '24FW 막스스튜디오 캐시블렌드 윈터 가디건': '101491',
+  '24FW 막스스튜디오 원피스+재킷 세트': '102069',
+  '25SS 스프링 니트 자켓': '101497',
+  '25SS 후라밍고(마리본) 메탈 라운드 니트 카디건 3종': '101498',
+  '25SS 코튼 블렌딩 크로셰 가디건 2종 니트탑 블라우스': '101499',
+  '25SS 후라밍고 크로셰 풀오버 3종+나시탑1종': '101500',
 };
 
 // ── 세트 규칙: 구글시트 aspro_setmap에서 로드 (앱 시작 시 자동 갱신) ──
