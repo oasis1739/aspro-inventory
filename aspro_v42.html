@@ -692,6 +692,56 @@ const LS_KEY = 'aspro_sab_gimpo_map_v2';
 const SHEETS_URL_KEY = 'aspro_sheets_url';
 const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
 
+// ── 읽기 전용 CSV 직접 연동 (Apps Script 배포 불필요) ──
+// 시트가 "링크 있는 모든 사용자: 뷰어" 공유면 어느 PC에서든 추가 설정 없이 읽힘
+const SHEET_ID = '1cl-uZ9s0_VNF_YwagnujAhPTdREuzfcaPisWRRp7zwY';
+function csvUrl(sheetName) {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheetName)}`;
+}
+function csvToRows(csvText) {
+  const wb = XLSX.read(csvText, { type: 'string' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
+}
+async function fetchCsvRows(sheetName) {
+  const res = await fetchWithTimeout(csvUrl(sheetName), 30000);
+  const txt = await res.text();
+  return csvToRows(txt);
+}
+// 기본 데이터(매핑/품절/kcfi 등) — Apps Script doGet 응답과 동일 구조로 빌드
+async function loadBaseViaCSV() {
+  const [match, soldout, kcfi, iccodemap, forcezero, setmap] = await Promise.all([
+    fetchCsvRows('aspro_match'), fetchCsvRows('aspro_soldout'),
+    fetchCsvRows('aspro_kcfi'), fetchCsvRows('aspro_iccodemap'),
+    fetchCsvRows('aspro_forcezero'), fetchCsvRows('aspro_setmap'),
+  ]);
+  const data = { ok: true, map: {}, nameMap: {}, soldout: {}, kcfi: {}, iccodemap: {}, forcezero: {}, setmap: {} };
+  match.slice(1).forEach(r => {
+    const sc = String(r[0]||'').trim(), gp = String(r[1]||'').trim(), nm = String(r[2]||'').trim();
+    if (sc && gp) data.map[sc] = gp;
+    if (sc && nm) data.nameMap[sc] = nm;
+  });
+  soldout.slice(1).forEach(r => { const sc = String(r[0]||'').trim(); if (sc) data.soldout[sc] = String(r[1]||'').trim(); });
+  kcfi.slice(1).forEach(r => { const sc = String(r[0]||'').trim(), q = parseInt(String(r[1]||'').replace(/,/g,'')); if (sc && !isNaN(q)) data.kcfi[sc] = q; });
+  iccodemap.slice(1).forEach(r => { const sc = String(r[0]||'').trim(), ic = String(r[1]||'').trim(); if (sc && ic) data.iccodemap[sc] = ic; });
+  forcezero.slice(1).forEach(r => { const c = String(r[0]||'').trim(); if (c) data.forcezero[c] = true; });
+  setmap.slice(1).forEach(r => {
+    const jache = String(r[0]||'').trim(), gp = String(r[1]||'').trim(), colorStr = String(r[2]||'').trim();
+    if (!jache || !gp) return;
+    const colorMap = {};
+    colorStr.split(',').forEach(pair => { const [k,v] = pair.split(':'); if (k && v) colorMap[k.trim()] = v.trim(); });
+    data.setmap[jache] = { gpPrefix: gp, colorMap };
+  });
+  return data;
+}
+// 원본 데이터(사방넷/이카운트/김포) — Apps Script type=raw 응답과 동일 구조
+async function loadRawViaCSV() {
+  const [sabRawData, icRaw, gpRaw] = await Promise.all([
+    fetchCsvRows('사방넷단품원본'), fetchCsvRows('이카운트원본'), fetchCsvRows('김포원본'),
+  ]);
+  return { ok: true, sabRawData, icRaw, gpRaw };
+}
+
 let icMap = {};
 let gpMap = {};
 let sabData = [], sabRaw = [];
@@ -3073,16 +3123,8 @@ async function fetchWithTimeout(url, ms = 15000) {
 }
 
 async function autoLoadFromSheets() {
+  // 읽기는 CSV 직접 연동이라 URL 없어도 동작 (URL은 쓰기 전용)
   const url = localStorage.getItem(SHEETS_URL_KEY);
-  if (!url) {
-    const btn = document.getElementById('sheetBtn');
-    if (btn) {
-      btn.style.background = 'var(--warn)'; btn.style.color = '#000';
-      btn.style.borderColor = 'var(--warn)';
-      btn.textContent = '⚠ Sheets 연동 필요';
-    }
-    return;
-  }
 
   // Sheets 로드 전 — localStorage soldout 먼저 복원 (Sheets 실패해도 유지)
   const lsSoldout = localStorage.getItem('aspro_soldout_v1');
@@ -3095,9 +3137,8 @@ async function autoLoadFromSheets() {
 
   const btn = document.getElementById('sheetBtn');
   try {
-    // 1차 요청: 매핑/품절/kcfi (빠름)
-    const res = await fetchWithTimeout(url, 20000);
-    const data = await res.json();
+    // 1차: 매핑/품절/kcfi — CSV 직접 (Apps Script 불필요)
+    const data = await loadBaseViaCSV();
     if (data.ok && data.map) {
       const filteredMap = {};
       Object.entries(data.map).forEach(([k,v]) => { if(isValidGp(v)) filteredMap[k]=v; });
@@ -3223,12 +3264,11 @@ async function autoLoadFromSheets() {
       setSheetStatus(`✅ 동기화 완료 — 매핑 ${cnt.toLocaleString()}건 (${new Date().toLocaleTimeString('ko-KR')})`, 'var(--success)');
       if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.textContent='☁ Google Sheets 연동'; }
 
-      // 2차 요청: 원본 데이터 (사방넷/이카운트/김포) — 별도로 로드
+      // 2차: 원본 데이터 (사방넷/이카운트/김포) — CSV 직접
       log('[INFO] 원본 데이터 로드 중... (이카운트/김포/사방넷)', 'info');
       if (btn) btn.textContent = '☁ 원본 로드 중...';
       try {
-        const res2 = await fetchWithTimeout(url + '?type=raw', 60000);
-        const data2 = await res2.json();
+        const data2 = await loadRawViaCSV();
         if (data2.ok) {
           let sabCnt = 0, icCnt = 0, gpCnt = 0;
 
@@ -3257,7 +3297,7 @@ async function autoLoadFromSheets() {
               if (!code || code.includes('계') || code.includes('회사명')) continue;
               const sabCode = String(r[1]||'').trim();
               const name = String(r[4]||'').trim();
-              const qty = parseFloat(r[5]) || 0;
+              const qty = parseFloat(String(r[5]||'').replace(/,/g,'')) || 0;
               const brand = String(r[2]||'').trim();
               const prefix = code.split('-')[0];
               if (!icMap[prefix]) icMap[prefix] = [];
@@ -3278,16 +3318,20 @@ async function autoLoadFromSheets() {
           // 김포원본
           if (data2.gpRaw && data2.gpRaw.length > 2) {
             gpMap = {};
-            const gpHeader = data2.gpRaw[1] || [];
-            const totalIdx = gpHeader.findIndex(h => String(h).includes('총'));
             for (let i = 2; i < data2.gpRaw.length; i++) {
               const r = data2.gpRaw[i];
               if (!r || !r[0]) continue;
               const code = String(r[0]).trim();
               if (!code || code === '품목코드') continue;
+              // 창고 컬럼(2~)만 합산, 단위(SET/EA) 같은 텍스트 만나면 중단 → 총수량 중복합산 방지
               let qty = 0;
-              if (totalIdx >= 0) { qty = parseInt(r[totalIdx]) || 0; }
-              else { for (let j = 2; j < r.length; j++) qty += parseInt(r[j]) || 0; }
+              for (let j = 2; j < r.length; j++) {
+                const cell = String(r[j]||'').replace(/,/g,'').trim();
+                if (cell === '') continue;
+                const n = parseInt(cell);
+                if (isNaN(n)) break;
+                qty += n;
+              }
               gpMap[code] = (gpMap[code]||0) + qty;
               gpCnt++;
             }
@@ -3318,15 +3362,12 @@ async function autoLoadFromSheets() {
       btn.style.borderColor = 'var(--warn)';
       btn.textContent = '⚠ Sheets 재연결 필요';
     }
-    // 5초 후 1회 재시도
+    // 5초 후 1회 재시도 (CSV 기준)
     setTimeout(async () => {
       try {
-        const url2 = localStorage.getItem(SHEETS_URL_KEY);
-        if (!url2) return;
-        const res2 = await fetchWithTimeout(url2, 20000);
-        const data2 = await res2.json();
-        if (data2.ok) {
-          log('[INFO] Sheets 재시도 성공', 'ok');
+        const probe = await loadBaseViaCSV();
+        if (probe.ok && Object.keys(probe.map).length) {
+          log('[INFO] Sheets(CSV) 재시도 성공', 'ok');
           await autoLoadFromSheets();
         }
       } catch(e2) { log(`[INFO] Sheets 재시도 실패: ${e2.message}`, 'info'); }
