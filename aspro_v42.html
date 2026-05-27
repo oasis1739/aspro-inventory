@@ -1327,6 +1327,77 @@ async function loadKCFIMultiblock(file, sheetInfo) {
   }
 }
 
+// ── KCFI 구글시트(kcfi_원본) 자동 파싱 ──
+// kcfi_원본 시트에 물류별재고.xlsx KCFI 내용을 붙여넣으면 앱 시작 시 자동 파싱
+// 시트가 없거나 비어있으면 조용히 skip (기존 aspro_kcfi 유지)
+async function loadKCFIFromSheetRaw() {
+  if (!sabData || sabData.length === 0) return;
+  let rows;
+  try { rows = await fetchCsvRows('kcfi_원본'); } catch(e) { return; }
+  if (!rows || rows.length < 3) return;
+
+  // 사방넷 prefix별 옵션 색인
+  const sabByPrefix = {};
+  sabData.forEach(s => {
+    const sc = String(s.사방넷코드 || '').trim();
+    const opt = String(s.옵션 || '').trim();
+    if (!sc || !opt) return;
+    const pfx = sc.split('-')[0];
+    if (!sabByPrefix[pfx]) sabByPrefix[pfx] = {};
+    sabByPrefix[pfx][opt] = sc;
+  });
+
+  let currentProduct = null, currentPrefix = null;
+  let matched = 0, unmatched = 0, productsSeen = 0, productsMapped = 0;
+  const newMap = {};
+  const unmatchedSamples = [], missingProducts = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const a = (r[0] === null || r[0] === undefined) ? '' : String(r[0]).trim();
+    const b = (r[1] === null || r[1] === undefined) ? '' : String(r[1]).trim();
+    // 블록 헤더: A=상품명, B 비어있음
+    if (a && a !== '이미지' && a !== 'TTL' && !b) {
+      currentProduct = a;
+      currentPrefix = KCFI_PRODUCT_MAP[a] || null;
+      productsSeen++;
+      if (currentPrefix) productsMapped++;
+      else if (!missingProducts.includes(a)) missingProducts.push(a);
+      continue;
+    }
+    if (a === '이미지' || a === 'TTL') continue;
+    // 데이터 행: A 비어있고 B=색상, C=사이즈, D=수량
+    if (!a && b && r[2] !== null && r[2] !== undefined && r[3] !== null && r[3] !== undefined) {
+      const color = b.replace(/\s*\(공통\)\s*$/, '').trim();
+      const size = String(r[2]).trim();
+      const qtyRaw = String(r[3]).trim();
+      if (!color || !size) continue;
+      const qty = (qtyRaw === '-' || qtyRaw === '') ? 0 : parseInt(qtyRaw.replace(/,/g, ''));
+      if (isNaN(qty)) continue;
+      if (!currentPrefix) { unmatched++; continue; }
+      const optKey = `${color}:${size}`;
+      const sabCode = sabByPrefix[currentPrefix]?.[optKey];
+      if (sabCode) { newMap[sabCode] = qty; matched++; }
+      else {
+        unmatched++;
+        if (unmatchedSamples.length < 5) unmatchedSamples.push(`${currentPrefix}[${optKey}]`);
+      }
+    }
+  }
+
+  if (matched === 0) return; // 의미있는 결과 없으면 기존 kcfiMap 유지
+
+  kcfiMap = newMap;
+  try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
+  updateKCFICnt();
+
+  log(`[OK] Sheets kcfi_원본 파싱: 상품 ${productsSeen}개(매핑 ${productsMapped}개) → ${matched}건 매칭 / ${unmatched}건 미매칭`, 'ok');
+  if (missingProducts.length) log(`[WARN] KCFI_PRODUCT_MAP 누락: ${missingProducts.join(' / ')}`, 'warn');
+  if (unmatchedSamples.length) log(`     미매칭 샘플: ${unmatchedSamples.join(' / ')}`, 'warn');
+  const list = document.getElementById('kcfiList');
+  if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets kcfi_원본 (자동파싱)</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
+}
+
 function triggerBatchUpload() {
   document.getElementById('batchFileIn')?.click();
 }
@@ -3345,6 +3416,14 @@ async function autoLoadFromSheets() {
           }
 
           log(`[OK] 원본 로드 완료: 사방넷 ${sabCnt}단품 / 이카운트 ${icCnt}SKU / 김포 ${gpCnt}품목`, 'ok');
+
+          // 3차: kcfi_원본 시트 자동 파싱 (시트가 있을 때만, 없으면 skip)
+          try {
+            await loadKCFIFromSheetRaw();
+          } catch(e3) {
+            log(`[INFO] kcfi_원본 시트 없음 — 파일 업로드 또는 aspro_kcfi 유지`, 'info');
+          }
+
           if (btn) btn.textContent = '☁ Google Sheets 연동';
         }
       } catch(e2) {
