@@ -1586,9 +1586,18 @@ function resolveKcfiProductMatch(productName) {
   if (KCFI_PRODUCT_MAP[productName]) return { prefix: KCFI_PRODUCT_MAP[productName], method: '수동맵', score: 99 };
   if (!sabData || sabData.length === 0) return null;
 
+  const ranked = rankKcfiProductCandidates(productName);
+  if (!ranked.length || ranked[0].score < 2) return null;
+  if (ranked[1] && ranked[1].score === ranked[0].score) return null;
+  return { prefix: ranked[0].prefix, method: '자동추정', score: ranked[0].score, sabName: ranked[0].name };
+}
+
+function rankKcfiProductCandidates(productName) {
+  if (!sabData || sabData.length === 0) return [];
   const targetNorm = normName(productName);
   const targetKw = nameKeywords(productName);
   const scores = {};
+  const names = {};
 
   sabData.forEach(s => {
     const sc = String(s.사방넷코드 || '').trim();
@@ -1599,13 +1608,15 @@ function resolveKcfiProductMatch(productName) {
     const kwScore = setIntersect(targetKw, nameKeywords(sabName));
     const normScore = targetNorm && sabNorm && (targetNorm.includes(sabNorm) || sabNorm.includes(targetNorm)) ? 3 : 0;
     const score = normScore + kwScore;
-    if (score > (scores[prefix] || 0)) scores[prefix] = score;
+    if (score > (scores[prefix] || 0)) {
+      scores[prefix] = score;
+      names[prefix] = sabName;
+    }
   });
 
-  const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-  if (!ranked.length || ranked[0][1] < 2) return null;
-  if (ranked[1] && ranked[1][1] === ranked[0][1]) return null;
-  return { prefix: ranked[0][0], method: '자동추정', score: ranked[0][1] };
+  return Object.entries(scores)
+    .map(([prefix, score]) => ({ prefix, score, name: names[prefix] || '' }))
+    .sort((a, b) => b.score - a.score);
 }
 
 // ── 세트 규칙: 구글시트 aspro_setmap에서 로드 (앱 시작 시 자동 갱신) ──
@@ -2309,24 +2320,28 @@ function appendKcfiAuditSearchRows(rows, q) {
   const extra = kcfiAuditRows
     .filter(r => [r.productName, r.optKey, r.prefix, r.method, r.sabCode].map(v => String(v || '').toLowerCase()).join(' ').includes(q))
     .filter(r => !r.sabCode || !exists.has(r.sabCode))
-    .map(r => ({
+    .map(r => {
+      const candidate = r.sabCode ? null : (rankKcfiProductCandidates(r.productName || '')[0] || null);
+      const sabangName = r.sabCode ? '' : (candidate && candidate.score >= 2 ? `후보: ${candidate.name}` : '사방넷 매핑 필요');
+      return {
       사방넷코드: r.sabCode || 'KCFI',
       자체코드: r.prefix || '매핑없음',
-      상품명: r.productName || '',
+      상품명: sabangName,
       옵션: r.optKey || '',
       가상재고: '—',
       _status: r.sabCode ? (r.qty > 0 ? 'matched' : 'zero') : 'unmatched',
       _qty: r.qty,
       _src: r.sabCode ? 'KCFI원본' : 'KCFI미연결',
-      _물류품번: r.prefix || 'KCFI_PRODUCT_MAP 필요',
+      _물류품번: r.prefix || '사방넷 매핑 필요',
       _modified: false,
       _nomap: !r.sabCode,
       _kcfiProduct: r.productName || '',
       _kcfiOpt: r.optKey || '',
-      _kcfiPrefix: r.prefix || '',
-      _kcfiMethod: r.method || '미연결',
+      _kcfiPrefix: r.prefix || candidate?.prefix || '',
+      _kcfiMethod: r.method || (candidate && candidate.score >= 2 ? '후보' : '미연결'),
       _readonly: true
-    }));
+    };
+  });
   return extra.length ? rows.concat(extra) : rows;
 }
 
@@ -2371,12 +2386,12 @@ function renderMain(rows) {
 
     const nomapTag = r._nomap?`<span class="bdg b-pp" style="font-size:8px;margin-left:3px">매핑↑</span>`:'';
     const productHtml = r._kcfiProduct
-      ? `<div title="물류상품명: ${escAttr(r._kcfiProduct)} / 사방넷상품명: ${escAttr(r._src==='KCFI미연결' ? '매핑 필요' : r.상품명)} / ${escAttr(r._kcfiOpt)} / ${escAttr(r._kcfiMethod)}">
+      ? `<div title="물류상품명: ${escAttr(r._kcfiProduct)} / 사방넷상품명: ${escAttr(r.상품명 || '사방넷 매핑 필요')} / ${escAttr(r._kcfiOpt)} / ${escAttr(r._kcfiMethod)}">
           <div style="font-size:11px;color:var(--purple);max-width:260px;overflow:hidden;text-overflow:ellipsis">
             <span style="color:var(--text3);font-size:9px">물류</span> ${r._kcfiProduct}
           </div>
           <div style="margin-top:2px;font-size:10px;color:var(--text2);max-width:260px;overflow:hidden;text-overflow:ellipsis">
-            <span style="color:var(--text3);font-size:9px">사방넷</span> ${r._src==='KCFI미연결' ? 'KCFI_PRODUCT_MAP 필요' : r.상품명}
+            <span style="color:var(--text3);font-size:9px">사방넷</span> ${r.상품명 || '사방넷 매핑 필요'}
             <span style="color:var(--text3);font-size:9px">(${r._kcfiMethod})</span>
           </div>
         </div>`
