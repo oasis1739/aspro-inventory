@@ -1221,7 +1221,7 @@ async function loadKCFI(e) {
 }
 
 // ── KCFI 물류별재고.xlsx 멀티블록 파서 ──
-// 구조: 상품헤더(A=상품명, B/C=날짜 허용) → 컬럼헤더([이미지,색상,사이즈,실수량,비고]) → 데이터 → TTL → ...
+// 구조: 상품헤더(A=상품명, B/C=날짜 허용) → 컬럼헤더([제품 이미지,색상,사이즈,전산수량,...]) → 데이터 → TTL → ...
 async function loadKCFIMultiblock(file, sheetInfo) {
   if (!sabData || sabData.length === 0) {
     log('[ERR] 사방넷 단품을 먼저 로드해주세요 (③번)', 'err');
@@ -1264,7 +1264,7 @@ async function loadKCFIMultiblock(file, sheetInfo) {
       else if (!missingProducts.includes(a)) missingProducts.push(a);
       continue;
     }
-    if (a === '이미지' || a === 'TTL') continue;
+    if (isKcfiColumnHeader(a) || a === 'TTL') continue;
 
     // 데이터 행: A 비어있고 B=색상, C=사이즈, D=수량
     if (!a && b && r[2] !== null && r[2] !== undefined && r[3] !== null && r[3] !== undefined) {
@@ -1365,7 +1365,7 @@ async function loadKCFIFromSheetRaw() {
       else if (!missingProducts.includes(a)) missingProducts.push(a);
       continue;
     }
-    if (a === '이미지' || a === 'TTL') continue;
+    if (isKcfiColumnHeader(a) || a === 'TTL') continue;
     // 데이터 행: A 비어있고 B=색상, C=사이즈, D=수량
     if (!a && b && r[2] !== null && r[2] !== undefined && r[3] !== null && r[3] !== undefined) {
       const color = b.replace(/\s*\(공통\)\s*$/, '').trim();
@@ -1469,12 +1469,17 @@ const KCFI_PRODUCT_MAP = {
 };
 
 function isKcfiBlockHeader(rows, idx, productName) {
-  if (!productName || productName === '이미지' || productName === 'TTL') return false;
+  if (!productName || isKcfiColumnHeader(productName) || productName === 'TTL') return false;
   const next = rows[idx + 1] || [];
   const nextA = String(next[0] || '').trim();
   const nextB = String(next[1] || '').trim();
   const nextC = String(next[2] || '').trim();
-  return nextA === '이미지' && nextB === '색상' && nextC === '사이즈';
+  const nextD = String(next[3] || '').trim();
+  return isKcfiColumnHeader(nextA) && nextB === '색상' && nextC === '사이즈' && nextD.includes('수량');
+}
+
+function isKcfiColumnHeader(value) {
+  return String(value || '').trim().includes('이미지');
 }
 
 function resolveKcfiProductPrefix(productName) {
