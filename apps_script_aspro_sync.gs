@@ -122,7 +122,7 @@ function doPost(e) {
       }
     }
 
-    if (data.soldout && Object.keys(data.soldout).length > 0) {
+    if (Object.prototype.hasOwnProperty.call(data, 'soldout')) {
       var soldoutSh = ensureSheet_(ss, 'aspro_soldout', ['사방넷코드','등록일']);
       soldoutSh.clearContents();
       var soldoutRows = [['사방넷코드','등록일']];
