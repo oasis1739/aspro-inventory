@@ -742,6 +742,17 @@ async function loadBaseViaCSV() {
   });
   return data;
 }
+async function loadBaseViaAppsScript() {
+  const baseUrl = getSheetsUrl();
+  if (!baseUrl) return null;
+  const sep = baseUrl.includes('?') ? '&' : '?';
+  const res = await fetchWithTimeout(`${baseUrl}${sep}type=base&cb=${Date.now()}`, 20000);
+  const txt = await res.text();
+  if (!txt.trim().startsWith('{')) throw new Error('Apps Script base 응답이 JSON이 아님');
+  const data = JSON.parse(txt);
+  if (!data.ok) throw new Error(data.error || 'Apps Script base 오류');
+  return data;
+}
 // 원본 데이터(사방넷/이카운트/김포) — Apps Script type=raw 응답과 동일 구조
 async function loadRawViaCSV() {
   const [sabRawData, icRaw, gpRaw] = await Promise.all([
@@ -2087,7 +2098,7 @@ function runMatch() {
       finalQty = kcfiQty; src = 'KCFI';
       물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
     }
-    if (finalQty === null && soldoutMap[sc]) {
+    if (finalQty === null && isSoldoutCode(sc)) {
       finalQty = 0; src = '품절처리'; 물류품번 = '—'; cZ++;
     } else if (finalQty === null) {
       cNM++;
@@ -2376,6 +2387,7 @@ function openInlineMapEdit(sc, currentGp, spanEl) {
 }
 function renderNomap() {
   const tbody = document.getElementById('nomapBody');
+  nomapRows = nomapRows.filter(r => !isSoldoutCode(r.사방넷코드));
   if (!nomapRows.length) {
     tbody.innerHTML=`<tr class="erow"><td colspan="8">매핑 없는 단품이 없습니다 🎉</td></tr>`;
     return;
@@ -2529,6 +2541,25 @@ function updateSoldoutCnt() {
   if (el) el.textContent = cnt > 0 ? cnt : '0';
 }
 
+function isSoldoutCode(sc) {
+  return !!soldoutMap[String(sc || '').trim()];
+}
+
+function pruneSoldoutNomapRows() {
+  const before = nomapRows.length;
+  nomapRows = nomapRows.filter(r => !isSoldoutCode(r.사방넷코드));
+  const removed = before - nomapRows.length;
+  if (removed > 0) {
+    const cnt = document.getElementById('nomapCnt');
+    const total = document.getElementById('nomapTotal');
+    if (cnt) cnt.textContent = nomapRows.length;
+    if (total) total.textContent = `총 ${nomapRows.length}건`;
+    if (currentTab === 'nomap') renderNomap();
+    log(`[OK] 품절처리 ${removed}건 매핑없음 목록에서 제외`, 'ok');
+  }
+  return removed;
+}
+
 async function syncSoldoutToSheets(reason = '품절관리') {
   const sheetsUrl = getSheetsUrl();
   if (!sheetsUrl) {
@@ -2614,6 +2645,7 @@ async function setSoldout(sc, idx) {
   const ni = nomapRows.findIndex(r => r.사방넷코드 === sc);
   if (ni >= 0) {
     nomapRows.splice(ni, 1);
+    pruneSoldoutNomapRows();
     setTimeout(() => { renderNomap(); renderSoldoutTab(); }, 300);
   }
 }
@@ -3376,6 +3408,15 @@ async function autoLoadFromSheets() {
       // soldout: Sheets 데이터가 있으면 우선, 없으면 localStorage 유지
       const sheetsSoldout = data.soldout || {};
       const localSoldout = { ...soldoutMap };
+      try {
+        const freshBase = await loadBaseViaAppsScript();
+        if (freshBase && freshBase.soldout && Object.keys(freshBase.soldout).length > 0) {
+          Object.assign(sheetsSoldout, freshBase.soldout);
+          log(`[OK] Apps Script soldout 최신조회: ${Object.keys(freshBase.soldout).length}건`, 'ok');
+        }
+      } catch(eFresh) {
+        log(`[INFO] Apps Script soldout 최신조회 생략: ${eFresh.message}`, 'info');
+      }
       if (Object.keys(sheetsSoldout).length > 0) {
         soldoutMap = { ...sheetsSoldout, ...localSoldout };
         try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
@@ -3392,6 +3433,7 @@ async function autoLoadFromSheets() {
           if (backedUp) setSheetStatus(`✅ 품절관리 ${localSoldoutCount}건 Sheets 자동백업 완료`, 'var(--success)');
         }
       }
+      pruneSoldoutNomapRows();
 
       if (data.kcfi && Object.keys(data.kcfi).length > 0) {
         kcfiMap = { ...data.kcfi };

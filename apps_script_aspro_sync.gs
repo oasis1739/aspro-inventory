@@ -41,10 +41,19 @@ function doGet(e) {
       if (sc && gp) map[sc] = gp;
     });
 
+    var soldoutSh = ensureSheet_(ss, 'aspro_soldout', ['사방넷코드','등록일']);
+    var soldoutData = soldoutSh.getDataRange().getValues();
+    var soldout = {};
+    soldoutData.slice(1).forEach(function(r) {
+      var sc = String(r[0] || '').trim();
+      if (sc) soldout[sc] = String(r[1] || '');
+    });
+
     return json_({
       ok: true,
       matchCount: Object.keys(map).length,
-      map: type === 'base' ? map : undefined
+      map: type === 'base' ? map : undefined,
+      soldout: type === 'base' ? soldout : undefined
     });
   } catch (err) {
     return json_({ ok: false, error: err.message });
