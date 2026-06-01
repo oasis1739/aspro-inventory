@@ -711,6 +711,9 @@ function csvToRows(csvText) {
   const ws = wb.Sheets[wb.SheetNames[0]];
   return XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
 }
+function normCode(v) {
+  return String(v || '').trim().replace(/^\uFEFF/, '').replace(/^'/, '').replace(/\u200B/g, '');
+}
 async function fetchCsvRows(sheetName) {
   const res = await fetchWithTimeout(csvUrl(sheetName), 30000);
   const txt = await res.text();
@@ -729,7 +732,7 @@ async function loadBaseViaCSV() {
     if (sc && gp) data.map[sc] = gp;
     if (sc && nm) data.nameMap[sc] = nm;
   });
-  soldout.slice(1).forEach(r => { const sc = String(r[0]||'').trim(); if (sc) data.soldout[sc] = String(r[1]||'').trim(); });
+  soldout.slice(1).forEach(r => { const sc = normCode(r[0]); if (sc) data.soldout[sc] = String(r[1]||'').trim(); });
   kcfi.slice(1).forEach(r => { const sc = String(r[0]||'').trim(), q = parseInt(String(r[1]||'').replace(/,/g,'')); if (sc && !isNaN(q)) data.kcfi[sc] = q; });
   iccodemap.slice(1).forEach(r => { const sc = String(r[0]||'').trim(), ic = String(r[1]||'').trim(); if (sc && ic) data.iccodemap[sc] = ic; });
   forcezero.slice(1).forEach(r => { const c = String(r[0]||'').trim(); if (c) data.forcezero[c] = true; });
@@ -2061,17 +2064,18 @@ function nameKeywords(s) {
 }
 function setIntersect(a, b) { let n=0; for (const v of a) if (b.has(v)) n++; return n; }
 
-function runMatch() {
+async function runMatch() {
   if (!sabData.length) { alert('사방넷 단품파일을 먼저 업로드하세요.'); return; }
   if (!Object.keys(icMap).length && !Object.keys(gpMap).length) {
     alert('이카운트 또는 김포재고 파일을 업로드하세요.'); return;
   }
+  await refreshSoldoutBeforeMatch();
   log('[INFO] 매칭 시작...', 'info');
   resultRows = []; nomapRows = [];
   let cM=0, cU=0, cZ=0, cIC=0, cGP=0, cNM=0;
 
   sabData.forEach(sab => {
-    const sc = sab.사방넷코드;
+    const sc = normCode(sab.사방넷코드);
     const icRes  = getIcountQty(sab);
     const gpRes  = getGimpoQty(sc, sab.옵션, sab.상품명, sab.자체코드);
     const kcfiQty = kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
@@ -2542,7 +2546,44 @@ function updateSoldoutCnt() {
 }
 
 function isSoldoutCode(sc) {
-  return !!soldoutMap[String(sc || '').trim()];
+  return !!soldoutMap[normCode(sc)];
+}
+
+function mergeSoldoutMap(incoming) {
+  const out = {};
+  Object.entries(incoming || {}).forEach(([sc, date]) => {
+    const code = normCode(sc);
+    if (code) out[code] = date || new Date().toLocaleDateString('ko-KR');
+  });
+  return out;
+}
+
+async function refreshSoldoutBeforeMatch() {
+  const localSoldout = mergeSoldoutMap(soldoutMap);
+  let latest = {};
+  try {
+    const rows = await fetchCsvRows('aspro_soldout');
+    rows.slice(1).forEach(r => {
+      const sc = normCode(r[0]);
+      if (sc) latest[sc] = String(r[1] || '').trim() || new Date().toLocaleDateString('ko-KR');
+    });
+    log(`[OK] 매칭 전 soldout CSV 최신조회: ${Object.keys(latest).length}건`, 'ok');
+  } catch(e) {
+    log(`[WARN] 매칭 전 soldout CSV 조회 실패: ${e.message}`, 'warn');
+  }
+  try {
+    const base = await loadBaseViaAppsScript();
+    if (base && base.soldout) {
+      latest = { ...latest, ...mergeSoldoutMap(base.soldout) };
+      log(`[OK] 매칭 전 soldout Apps Script 조회: ${Object.keys(base.soldout).length}건`, 'ok');
+    }
+  } catch(e) {
+    log(`[INFO] 매칭 전 soldout Apps Script 조회 생략: ${e.message}`, 'info');
+  }
+  soldoutMap = { ...latest, ...localSoldout };
+  try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e) {}
+  updateSoldoutCnt();
+  if (isSoldoutCode('102648-0007')) log('[OK] soldout 확인: 102648-0007', 'ok');
 }
 
 function pruneSoldoutNomapRows() {
@@ -2632,6 +2673,7 @@ function renderSoldoutTab() {
 }
 
 async function setSoldout(sc, idx) {
+  sc = normCode(sc);
   soldoutMap[sc] = new Date().toLocaleDateString('ko-KR');
   saveExtra();
   const synced = await syncSoldoutToSheets(`품절처리 ${sc}`);
@@ -2651,6 +2693,7 @@ async function setSoldout(sc, idx) {
 }
 
 async function cancelSoldout(sc) {
+  sc = normCode(sc);
   delete soldoutMap[sc];
   saveExtra();
   updateSoldoutCnt();
@@ -3361,7 +3404,7 @@ async function autoLoadFromSheets() {
   const lsSoldout = localStorage.getItem('aspro_soldout_v1');
   if (lsSoldout) {
     try {
-      soldoutMap = JSON.parse(lsSoldout);
+      soldoutMap = mergeSoldoutMap(JSON.parse(lsSoldout));
       updateSoldoutCnt();
     } catch(e) {}
   }
@@ -3418,7 +3461,7 @@ async function autoLoadFromSheets() {
         log(`[INFO] Apps Script soldout 최신조회 생략: ${eFresh.message}`, 'info');
       }
       if (Object.keys(sheetsSoldout).length > 0) {
-        soldoutMap = { ...sheetsSoldout, ...localSoldout };
+        soldoutMap = mergeSoldoutMap({ ...sheetsSoldout, ...localSoldout });
         try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
         const localOnlyCount = Object.keys(localSoldout).filter(sc => !sheetsSoldout[sc]).length;
         log(`[OK] Sheets soldout 복원: ${Object.keys(sheetsSoldout).length}건 / 로컬보호 ${localOnlyCount}건`, 'ok');
