@@ -772,6 +772,7 @@ let normOptMap = {};
 let soldoutMap = {};
 let kcfiMap = {};
 let kcfiMetaMap = {};
+let kcfiAuditRows = [];
 let forceZeroMap = {}; // 강제품절: 자체코드(prefix) → true
 
 const SKIP_GP = new Set(['nan','','슈컴퍼니-김포이관','확인요망','삭제요망']);
@@ -1286,6 +1287,7 @@ async function loadKCFIMultiblock(file, sheetInfo) {
   let currentProduct = null, currentPrefix = null, currentProductMatch = null;
   let matched = 0, unmatched = 0, productsSeen = 0, productsMapped = 0;
   const newMap = { ...kcfiMap };
+  const auditRows = [];
   const unmatchedSamples = [];
   const missingProducts = [];
 
@@ -1322,6 +1324,14 @@ async function loadKCFIMultiblock(file, sheetInfo) {
       }
       const optKey = `${color}:${size}`;
       const sabCode = sabByPrefix[currentPrefix]?.[optKey];
+      auditRows.push({
+        productName: currentProduct,
+        optKey,
+        qty,
+        prefix: currentPrefix || '',
+        method: currentProductMatch?.method || '',
+        sabCode: sabCode || ''
+      });
       if (sabCode) {
         newMap[sabCode] = qty;
         kcfiMetaMap[sabCode] = {
@@ -1341,6 +1351,7 @@ async function loadKCFIMultiblock(file, sheetInfo) {
   }
 
   kcfiMap = newMap;
+  kcfiAuditRows = auditRows;
   try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch (e2) {}
   updateKCFICnt();
 
@@ -1397,6 +1408,7 @@ async function loadKCFIFromSheetRaw() {
   let matched = 0, unmatched = 0, productsSeen = 0, productsMapped = 0;
   const newMap = {};
   const newMeta = {};
+  const auditRows = [];
   const unmatchedSamples = [], missingProducts = [];
 
   for (let i = 0; i < rows.length; i++) {
@@ -1422,9 +1434,17 @@ async function loadKCFIFromSheetRaw() {
       if (!color || !size) continue;
       const qty = (qtyRaw === '-' || qtyRaw === '') ? 0 : parseInt(qtyRaw.replace(/,/g, ''));
       if (isNaN(qty)) continue;
-      if (!currentPrefix) { unmatched++; continue; }
       const optKey = `${color}:${size}`;
-      const sabCode = sabByPrefix[currentPrefix]?.[optKey];
+      const sabCode = currentPrefix ? sabByPrefix[currentPrefix]?.[optKey] : '';
+      auditRows.push({
+        productName: currentProduct,
+        optKey,
+        qty,
+        prefix: currentPrefix || '',
+        method: currentProductMatch?.method || '',
+        sabCode: sabCode || ''
+      });
+      if (!currentPrefix) { unmatched++; continue; }
       if (sabCode) {
         newMap[sabCode] = qty;
         newMeta[sabCode] = {
@@ -1442,7 +1462,12 @@ async function loadKCFIFromSheetRaw() {
     }
   }
 
-  if (matched === 0) return; // 의미있는 결과 없으면 기존 kcfiMap 유지
+  kcfiAuditRows = auditRows;
+  if (matched === 0) {
+    log(`[WARN] Sheets kcfi_원본 파싱: 상품 ${productsSeen}개를 읽었지만 사방넷 매칭 0건`, 'warn');
+    if (missingProducts.length) log(`[WARN] KCFI_PRODUCT_MAP 누락: ${missingProducts.join(' / ')}`, 'warn');
+    return; // 의미있는 결과 없으면 기존 kcfiMap 유지
+  }
 
   kcfiMap = newMap;
   kcfiMetaMap = newMeta;
@@ -1534,11 +1559,23 @@ function isKcfiBlockHeader(rows, idx, productName) {
   const nextB = String(next[1] || '').trim();
   const nextC = String(next[2] || '').trim();
   const nextD = String(next[3] || '').trim();
-  return isKcfiColumnHeader(nextA) && nextB === '색상' && nextC === '사이즈' && nextD.includes('수량');
+  const hasExplicitHeaders = nextC === '사이즈' && nextD.includes('수량');
+  return isKcfiColumnHeader(nextA) && nextB === '색상' && (hasExplicitHeaders || isLikelyKcfiDataRow(rows[idx + 2]));
 }
 
 function isKcfiColumnHeader(value) {
   return String(value || '').trim().includes('이미지');
+}
+
+function isLikelyKcfiDataRow(row) {
+  if (!row) return false;
+  const a = String(row[0] || '').trim();
+  const b = String(row[1] || '').trim();
+  const c = String(row[2] || '').trim();
+  const d = String(row[3] || '').trim();
+  if (a || !b || !c || !d) return false;
+  const qty = parseInt(d.replace(/,/g, ''));
+  return !isNaN(qty) || d === '-';
 }
 
 function resolveKcfiProductPrefix(productName) {
@@ -2225,6 +2262,7 @@ function exportCurrentTab() {
   if (q) rows = rows.filter(r=>rowSearchText(r).includes(q));
   if (b) rows = rows.filter(r=>(r.자체코드||'').toUpperCase().includes(b)||(r.사방넷코드||'').toUpperCase().includes(b));
   rows = applyKcfiAuditFilter(rows, kf);
+  rows = appendKcfiAuditSearchRows(rows, q);
 
   const tabName = {all:'전체',matched:'매칭완료',unmatched:'미매칭',zero:'재고0'}[currentTab]||currentTab;
   const headers = ['사방넷코드','자체코드','상품명','옵션','소스','물류품번','재고','현가상재고','수정재고','상태','KCFI상품명','KCFI옵션','KCFI매칭방식'];
@@ -2251,6 +2289,7 @@ function applyFilter() {
   if (q) rows = rows.filter(r=>rowSearchText(r).includes(q));
   if (b) rows = rows.filter(r=>(r.자체코드||'').toUpperCase().startsWith(b));
   rows = applyKcfiAuditFilter(rows, kf);
+  rows = appendKcfiAuditSearchRows(rows, q);
   filteredRows = rows;
   document.getElementById('rowCnt').textContent = rows.length.toLocaleString()+'건';
   renderMain(rows);
@@ -2262,6 +2301,33 @@ function rowSearchText(r) {
     r._src, r._물류품번, r._kcfiProduct, r._kcfiOpt,
     r._kcfiPrefix, r._kcfiMethod
   ].map(v => String(v || '').toLowerCase()).join(' ');
+}
+
+function appendKcfiAuditSearchRows(rows, q) {
+  if (!q || !kcfiAuditRows.length || !['all','matched'].includes(currentTab)) return rows;
+  const exists = new Set(rows.map(r => String(r.사방넷코드 || '')));
+  const extra = kcfiAuditRows
+    .filter(r => [r.productName, r.optKey, r.prefix, r.method, r.sabCode].map(v => String(v || '').toLowerCase()).join(' ').includes(q))
+    .filter(r => !r.sabCode || !exists.has(r.sabCode))
+    .map(r => ({
+      사방넷코드: r.sabCode || 'KCFI',
+      자체코드: r.prefix || '매핑없음',
+      상품명: r.productName || '',
+      옵션: r.optKey || '',
+      가상재고: '—',
+      _status: r.sabCode ? (r.qty > 0 ? 'matched' : 'zero') : 'unmatched',
+      _qty: r.qty,
+      _src: r.sabCode ? 'KCFI원본' : 'KCFI미연결',
+      _물류품번: r.prefix || 'KCFI_PRODUCT_MAP 필요',
+      _modified: false,
+      _nomap: !r.sabCode,
+      _kcfiProduct: r.productName || '',
+      _kcfiOpt: r.optKey || '',
+      _kcfiPrefix: r.prefix || '',
+      _kcfiMethod: r.method || '미연결',
+      _readonly: true
+    }));
+  return extra.length ? rows.concat(extra) : rows;
 }
 
 function applyKcfiAuditFilter(rows, mode) {
@@ -2291,6 +2357,8 @@ function renderMain(rows) {
       ? `<span class="bdg b-no" style="font-size:9px">${r._src==='이카운트(세트품절)'?'🔗세트품절':'자동품절'}</span>`
       : r._src==='이카운트(컬러불일치)'
       ? `<span class="bdg b-z" style="font-size:9px">컬러?</span>`
+      : r._src==='KCFI원본'||r._src==='KCFI미연결'
+      ? `<span class="bdg b-pp" style="font-size:9px">${r._src}</span>`
       : r._src.startsWith('김포')||r._src==='KCFI'
       ? `<span class="bdg ${r._src==='KCFI'?'b-pp':'b-gp'}">${r._src}</span>`
       : `<span style="color:var(--text3)">—</span>`;
@@ -2302,17 +2370,23 @@ function renderMain(rows) {
       : `<span class="bdg b-no">미매칭</span>`;
 
     const nomapTag = r._nomap?`<span class="bdg b-pp" style="font-size:8px;margin-left:3px">매핑↑</span>`:'';
-    const kcfiInfo = r._src === 'KCFI' && r._kcfiProduct
+    const kcfiInfo = r._kcfiProduct
       ? `<div style="margin-top:2px;font-size:9px;color:var(--purple);max-width:210px;overflow:hidden;text-overflow:ellipsis" title="KCFI 원본: ${escAttr(r._kcfiProduct)} / ${escAttr(r._kcfiOpt)} / ${escAttr(r._kcfiMethod)}">
           KCFI: ${r._kcfiProduct} <span style="color:var(--text3)">(${r._kcfiMethod})</span>
         </div>`
       : '';
 
     const qDisp = editMode
-      ? `<input class="ii${r._modified?' mod':''}" type="number" min="0" value="${r._qty??''}" data-ri="${resultRows.indexOf(r)}" oninput="onEdit(this)">`
+      ? r._readonly
+      ? `<span style="color:var(--text3);font-family:var(--mono)">${r._qty??0}</span>`
+      : `<input class="ii${r._modified?' mod':''}" type="number" min="0" value="${r._qty??''}" data-ri="${resultRows.indexOf(r)}" oninput="onEdit(this)">`
       : r._status==='unmatched'
       ? `<span style="color:var(--danger);font-family:var(--mono)">0</span>`
       : `<span style="color:${(r._qty||0)>0?'var(--accent2)':'var(--warn)'};font-family:var(--mono)">${r._qty??0}</span>`;
+
+    const mpHtml = r._readonly
+      ? `<span style="color:var(--text3)">${r._물류품번}</span>`
+      : `<span class="mp-disp" id="mpd_${r.사방넷코드}" style="cursor:pointer;border-bottom:1px dashed var(--border2)" title="클릭하여 매핑 수정" onclick="openInlineMapEdit('${r.사방넷코드}','${r._물류품번||''}',this)">${r._물류품번}</span>`;
 
     return `<tr>
       <td style="color:var(--text3);font-family:var(--mono);font-size:10px">${i+1}</td>
@@ -2321,9 +2395,7 @@ function renderMain(rows) {
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${r.상품명}${kcfiInfo}</td>
       <td style="font-size:11px;color:var(--text3)">${r.옵션}</td>
       <td>${srcHtml}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis">
-        <span class="mp-disp" id="mpd_${r.사방넷코드}" style="cursor:pointer;border-bottom:1px dashed var(--border2)" title="클릭하여 매핑 수정" onclick="openInlineMapEdit('${r.사방넷코드}','${r._물류품번||''}',this)">${r._물류품번}</span>
-      </td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis">${mpHtml}</td>
       <td style="text-align:right;font-family:var(--mono);color:${(r._qty||0)>0?'var(--success)':'var(--warn)'}">${r._qty??'—'}</td>
       <td style="text-align:right;font-family:var(--mono);color:var(--text3)">${r.가상재고??'—'}</td>
       <td style="text-align:right">${qDisp}</td>
@@ -2333,7 +2405,6 @@ function renderMain(rows) {
   if (!rows.length) tbody.innerHTML=`<tr class="erow"><td colspan="11">데이터 없음</td></tr>`;
   if (rows.length>MAX) tbody.innerHTML+=`<tr><td colspan="11" style="text-align:center;padding:7px;color:var(--text3);font-size:11px">상위 ${MAX}건 표시 (전체 ${rows.length}건)</td></tr>`;
 }
-
 
 // ── 전체/매칭완료 탭 인라인 매핑 수정 ──
 function openInlineMapEdit(sc, currentGp, spanEl) {
