@@ -2370,11 +2370,17 @@ function renderMain(rows) {
       : `<span class="bdg b-no">미매칭</span>`;
 
     const nomapTag = r._nomap?`<span class="bdg b-pp" style="font-size:8px;margin-left:3px">매핑↑</span>`:'';
-    const kcfiInfo = r._kcfiProduct
-      ? `<div style="margin-top:2px;font-size:9px;color:var(--purple);max-width:210px;overflow:hidden;text-overflow:ellipsis" title="KCFI 원본: ${escAttr(r._kcfiProduct)} / ${escAttr(r._kcfiOpt)} / ${escAttr(r._kcfiMethod)}">
-          KCFI: ${r._kcfiProduct} <span style="color:var(--text3)">(${r._kcfiMethod})</span>
+    const productHtml = r._kcfiProduct
+      ? `<div title="물류상품명: ${escAttr(r._kcfiProduct)} / 사방넷상품명: ${escAttr(r._src==='KCFI미연결' ? '매핑 필요' : r.상품명)} / ${escAttr(r._kcfiOpt)} / ${escAttr(r._kcfiMethod)}">
+          <div style="font-size:11px;color:var(--purple);max-width:260px;overflow:hidden;text-overflow:ellipsis">
+            <span style="color:var(--text3);font-size:9px">물류</span> ${r._kcfiProduct}
+          </div>
+          <div style="margin-top:2px;font-size:10px;color:var(--text2);max-width:260px;overflow:hidden;text-overflow:ellipsis">
+            <span style="color:var(--text3);font-size:9px">사방넷</span> ${r._src==='KCFI미연결' ? 'KCFI_PRODUCT_MAP 필요' : r.상품명}
+            <span style="color:var(--text3);font-size:9px">(${r._kcfiMethod})</span>
+          </div>
         </div>`
-      : '';
+      : r.상품명;
 
     const qDisp = editMode
       ? r._readonly
@@ -2392,7 +2398,7 @@ function renderMain(rows) {
       <td style="color:var(--text3);font-family:var(--mono);font-size:10px">${i+1}</td>
       <td style="font-family:var(--mono);font-size:10px">${r.사방넷코드}</td>
       <td style="font-family:var(--mono);font-size:10px">${r.자체코드}${nomapTag}</td>
-      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${r.상품명}${kcfiInfo}</td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${productHtml}</td>
       <td style="font-size:11px;color:var(--text3)">${r.옵션}</td>
       <td>${srcHtml}</td>
       <td style="font-family:var(--mono);font-size:10px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis">${mpHtml}</td>
