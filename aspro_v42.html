@@ -704,7 +704,7 @@ const DEFAULT_SHEETS_URL = '';
 // 시트가 "링크 있는 모든 사용자: 뷰어" 공유면 어느 PC에서든 추가 설정 없이 읽힘
 const SHEET_ID = '1cl-uZ9s0_VNF_YwagnujAhPTdREuzfcaPisWRRp7zwY';
 function csvUrl(sheetName) {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheetName)}`;
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheetName)}&cb=${Date.now()}`;
 }
 function csvToRows(csvText) {
   const wb = XLSX.read(csvText, { type: 'string' });
@@ -3312,7 +3312,7 @@ async function fetchWithTimeout(url, ms = 15000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   try {
-    const res = await fetch(url, { signal: ctrl.signal });
+    const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
     clearTimeout(timer);
     return res;
   } catch(e) {
@@ -3375,10 +3375,15 @@ async function autoLoadFromSheets() {
 
       // soldout: Sheets 데이터가 있으면 우선, 없으면 localStorage 유지
       const sheetsSoldout = data.soldout || {};
+      const localSoldout = { ...soldoutMap };
       if (Object.keys(sheetsSoldout).length > 0) {
-        soldoutMap = { ...sheetsSoldout };
+        soldoutMap = { ...sheetsSoldout, ...localSoldout };
         try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e2) {}
-        log(`[OK] Sheets soldout 복원: ${Object.keys(soldoutMap).length}건`, 'ok');
+        const localOnlyCount = Object.keys(localSoldout).filter(sc => !sheetsSoldout[sc]).length;
+        log(`[OK] Sheets soldout 복원: ${Object.keys(sheetsSoldout).length}건 / 로컬보호 ${localOnlyCount}건`, 'ok');
+        if (localOnlyCount > 0) {
+          await syncSoldoutToSheets('localStorage 품절 병합백업');
+        }
       } else {
         const localSoldoutCount = Object.keys(soldoutMap).length;
         log(`[INFO] Sheets soldout 비어있음 → localStorage 유지 (${localSoldoutCount}건)`, 'info');
