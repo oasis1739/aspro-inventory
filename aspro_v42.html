@@ -1406,8 +1406,8 @@ async function loadKCFIFromSheetRaw() {
 
   let currentProduct = null, currentPrefix = null, currentProductMatch = null;
   let matched = 0, unmatched = 0, productsSeen = 0, productsMapped = 0;
-  const newMap = {};
-  const newMeta = {};
+  const parsedMap = {};
+  const parsedMeta = {};
   const auditRows = [];
   const unmatchedSamples = [], missingProducts = [];
 
@@ -1446,8 +1446,8 @@ async function loadKCFIFromSheetRaw() {
       });
       if (!currentPrefix) { unmatched++; continue; }
       if (sabCode) {
-        newMap[sabCode] = qty;
-        newMeta[sabCode] = {
+        parsedMap[sabCode] = qty;
+        parsedMeta[sabCode] = {
           productName: currentProduct,
           optKey,
           prefix: currentPrefix,
@@ -1469,8 +1469,8 @@ async function loadKCFIFromSheetRaw() {
     return; // 의미있는 결과 없으면 기존 kcfiMap 유지
   }
 
-  kcfiMap = newMap;
-  kcfiMetaMap = newMeta;
+  kcfiMap = { ...kcfiMap, ...parsedMap };
+  kcfiMetaMap = { ...kcfiMetaMap, ...parsedMeta };
   try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
   try { localStorage.setItem('aspro_kcfi_meta_v1', JSON.stringify(kcfiMetaMap)); } catch(e2) {}
   updateKCFICnt();
