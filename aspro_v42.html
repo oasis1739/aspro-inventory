@@ -1221,7 +1221,7 @@ async function loadKCFI(e) {
 }
 
 // ── KCFI 물류별재고.xlsx 멀티블록 파서 ──
-// 구조: 상품헤더(A=상품명, C=날짜) → 컬럼헤더([이미지,색상,사이즈,실수량,비고]) → 데이터 → TTL → ...
+// 구조: 상품헤더(A=상품명, B/C=날짜 허용) → 컬럼헤더([이미지,색상,사이즈,실수량,비고]) → 데이터 → TTL → ...
 async function loadKCFIMultiblock(file, sheetInfo) {
   if (!sabData || sabData.length === 0) {
     log('[ERR] 사방넷 단품을 먼저 로드해주세요 (③번)', 'err');
@@ -1255,10 +1255,10 @@ async function loadKCFIMultiblock(file, sheetInfo) {
     const a = (r[0] === null || r[0] === undefined) ? '' : String(r[0]).trim();
     const b = (r[1] === null || r[1] === undefined) ? '' : String(r[1]).trim();
 
-    // 블록 헤더: A에 상품명, B는 비어있음 (그리고 '이미지'/'TTL' 아님)
-    if (a && a !== '이미지' && a !== 'TTL' && !b) {
+    // 블록 헤더: A에 상품명, 다음 행이 [이미지,색상,사이즈...]이면 날짜 위치와 무관하게 원본 그대로 인식
+    if (isKcfiBlockHeader(rows, i, a)) {
       currentProduct = a;
-      currentPrefix = KCFI_PRODUCT_MAP[a] || null;
+      currentPrefix = resolveKcfiProductPrefix(a);
       productsSeen++;
       if (currentPrefix) productsMapped++;
       else if (!missingProducts.includes(a)) missingProducts.push(a);
@@ -1328,7 +1328,7 @@ async function loadKCFIMultiblock(file, sheetInfo) {
 }
 
 // ── KCFI 구글시트(kcfi_원본) 자동 파싱 ──
-// kcfi_원본 시트에 물류별재고.xlsx KCFI 내용을 붙여넣으면 앱 시작 시 자동 파싱
+// kcfi_원본 시트에 물류별재고.xlsx KCFI 내용을 원본 그대로 붙여넣으면 앱 시작 시 자동 파싱
 // 시트가 없거나 비어있으면 조용히 skip (기존 aspro_kcfi 유지)
 async function loadKCFIFromSheetRaw() {
   if (!sabData || sabData.length === 0) return;
@@ -1356,10 +1356,10 @@ async function loadKCFIFromSheetRaw() {
     const r = rows[i] || [];
     const a = (r[0] === null || r[0] === undefined) ? '' : String(r[0]).trim();
     const b = (r[1] === null || r[1] === undefined) ? '' : String(r[1]).trim();
-    // 블록 헤더: A=상품명, B 비어있음
-    if (a && a !== '이미지' && a !== 'TTL' && !b) {
+    // 블록 헤더: A=상품명, 다음 행이 컬럼헤더면 B/C 날짜가 있어도 허용
+    if (isKcfiBlockHeader(rows, i, a)) {
       currentProduct = a;
-      currentPrefix = KCFI_PRODUCT_MAP[a] || null;
+      currentPrefix = resolveKcfiProductPrefix(a);
       productsSeen++;
       if (currentPrefix) productsMapped++;
       else if (!missingProducts.includes(a)) missingProducts.push(a);
@@ -1467,6 +1467,41 @@ const KCFI_PRODUCT_MAP = {
   '25SS 코튼 블렌딩 크로셰 가디건 2종 니트탑 블라우스': '101499',
   '25SS 후라밍고 크로셰 풀오버 3종+나시탑1종': '101500',
 };
+
+function isKcfiBlockHeader(rows, idx, productName) {
+  if (!productName || productName === '이미지' || productName === 'TTL') return false;
+  const next = rows[idx + 1] || [];
+  const nextA = String(next[0] || '').trim();
+  const nextB = String(next[1] || '').trim();
+  const nextC = String(next[2] || '').trim();
+  return nextA === '이미지' && nextB === '색상' && nextC === '사이즈';
+}
+
+function resolveKcfiProductPrefix(productName) {
+  if (KCFI_PRODUCT_MAP[productName]) return KCFI_PRODUCT_MAP[productName];
+  if (!sabData || sabData.length === 0) return null;
+
+  const targetNorm = normName(productName);
+  const targetKw = nameKeywords(productName);
+  const scores = {};
+
+  sabData.forEach(s => {
+    const sc = String(s.사방넷코드 || '').trim();
+    const sabName = String(s.상품명 || '').trim();
+    if (!sc || !sabName) return;
+    const prefix = sc.split('-')[0];
+    const sabNorm = normName(sabName);
+    const kwScore = setIntersect(targetKw, nameKeywords(sabName));
+    const normScore = targetNorm && sabNorm && (targetNorm.includes(sabNorm) || sabNorm.includes(targetNorm)) ? 3 : 0;
+    const score = normScore + kwScore;
+    if (score > (scores[prefix] || 0)) scores[prefix] = score;
+  });
+
+  const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  if (!ranked.length || ranked[0][1] < 2) return null;
+  if (ranked[1] && ranked[1][1] === ranked[0][1]) return null;
+  return ranked[0][0];
+}
 
 // ── 세트 규칙: 구글시트 aspro_setmap에서 로드 (앱 시작 시 자동 갱신) ──
 // 형식: { '자체코드prefix': { gpPrefix: '김포prefix', colorMap: { '한글색상': '코드' } } }
