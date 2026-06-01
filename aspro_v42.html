@@ -2081,6 +2081,11 @@ async function runMatch() {
     alert('이카운트 또는 김포재고 파일을 업로드하세요.'); return;
   }
   await refreshSoldoutBeforeMatch();
+  try {
+    await loadKCFIFromSheetRaw();
+  } catch(e) {
+    log(`[INFO] KCFI 원본상품명 재확인 생략: ${e.message}`, 'info');
+  }
   log('[INFO] 매칭 시작...', 'info');
   resultRows = []; nomapRows = [];
   let cM=0, cU=0, cZ=0, cIC=0, cGP=0, cNM=0;
