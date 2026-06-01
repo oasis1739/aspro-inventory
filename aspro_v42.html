@@ -908,6 +908,14 @@ function loadExtra() {
     }
   } catch(e) { kcfiMap = {}; }
   try {
+    const km = localStorage.getItem('aspro_kcfi_meta_v1');
+    if (km) {
+      kcfiMetaMap = JSON.parse(km);
+      const n = Object.keys(kcfiMetaMap).length;
+      if (n > 0) log(`[OK] 저장된 KCFI 상품명 메타 로드: ${n}건`, 'ok');
+    }
+  } catch(e) { kcfiMetaMap = {}; }
+  try {
     const fz = localStorage.getItem('aspro_forcezero_v1');
     if (fz) {
       forceZeroMap = JSON.parse(fz);
@@ -956,6 +964,7 @@ function clearKCFI() {
   kcfiMap = {};
   kcfiMetaMap = {};
   localStorage.removeItem('aspro_kcfi_v1');
+  localStorage.removeItem('aspro_kcfi_meta_v1');
   updateKCFICnt();
   const zone = document.getElementById('kcfiZone');
   if (zone) zone.classList.remove('ok');
@@ -1241,6 +1250,7 @@ async function loadKCFI(e) {
   }
   kcfiMap = newMap;
   try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
+  try { localStorage.setItem('aspro_kcfi_meta_v1', JSON.stringify(kcfiMetaMap)); } catch(e2) {}
   updateKCFICnt();
   log(`[OK] 신원재고 누적 총 ${Object.keys(kcfiMap).length}건 저장됨`, 'ok');
   const zone = document.getElementById('kcfiZone');
@@ -1437,6 +1447,7 @@ async function loadKCFIFromSheetRaw() {
   kcfiMap = newMap;
   kcfiMetaMap = newMeta;
   try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
+  try { localStorage.setItem('aspro_kcfi_meta_v1', JSON.stringify(kcfiMetaMap)); } catch(e2) {}
   updateKCFICnt();
 
   log(`[OK] Sheets kcfi_원본 파싱: 상품 ${productsSeen}개(매핑 ${productsMapped}개) → ${matched}건 매칭 / ${unmatched}건 미매칭`, 'ok');
