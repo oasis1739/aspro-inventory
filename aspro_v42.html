@@ -697,7 +697,8 @@ function doPost(e) {
 // ══════════════════════════════════════════════
 const LS_KEY = 'aspro_sab_gimpo_map_v2';
 const SHEETS_URL_KEY = 'aspro_sheets_url';
-const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
+const DEAD_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
+const DEFAULT_SHEETS_URL = '';
 
 // ── 읽기 전용 CSV 직접 연동 (Apps Script 배포 불필요) ──
 // 시트가 "링크 있는 모든 사용자: 뷰어" 공유면 어느 PC에서든 추가 설정 없이 읽힘
@@ -767,7 +768,8 @@ let nomapRows = [];
 let currentTab = 'all', editMode = false, expMode = 'all';
 
 function getSheetsUrl() {
-  return localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
+  const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
+  return saved === DEAD_SHEETS_URL ? '' : saved;
 }
 
 const SAB_IC_OVERRIDE = {
@@ -2531,6 +2533,7 @@ async function syncSoldoutToSheets(reason = '품절관리') {
   const sheetsUrl = getSheetsUrl();
   if (!sheetsUrl) {
     log(`[WARN] ${reason}: Sheets URL 없음 — localStorage에만 저장`, 'warn');
+    setSheetStatus(`${reason}: Apps Script URL 없음 — Sheets 저장 안됨`, 'var(--warn)');
     return false;
   }
   try {
@@ -2539,12 +2542,18 @@ async function syncSoldoutToSheets(reason = '품절관리') {
       body: JSON.stringify({ soldout: soldoutMap }),
       headers: { 'Content-Type': 'text/plain' }
     });
-    const data = await res.json();
+    const txt = await res.text();
+    if (!txt.trim().startsWith('{')) {
+      throw new Error('Apps Script URL 응답이 JSON이 아님 — 배포 URL 만료/삭제 가능');
+    }
+    const data = JSON.parse(txt);
     if (!data.ok) throw new Error(data.error || '서버 오류');
     log(`[OK] ${reason} Sheets 백업: ${Object.keys(soldoutMap).length}건`, 'ok');
+    setSheetStatus(`✅ ${reason} Sheets 백업 완료 (${Object.keys(soldoutMap).length}건)`, 'var(--success)');
     return true;
   } catch (e) {
     log(`[WARN] ${reason} Sheets 저장 실패: ${e.message}`, 'warn');
+    setSheetStatus(`⚠ ${reason} Sheets 저장 실패: ${e.message}`, 'var(--warn)');
     return false;
   }
 }
@@ -2591,10 +2600,11 @@ function renderSoldoutTab() {
   }).join('');
 }
 
-function setSoldout(sc, idx) {
+async function setSoldout(sc, idx) {
   soldoutMap[sc] = new Date().toLocaleDateString('ko-KR');
   saveExtra();
-  syncSoldoutToSheets(`품절처리 ${sc}`);
+  const synced = await syncSoldoutToSheets(`품절처리 ${sc}`);
+  if (!synced) alert('품절은 현재 브라우저에 저장됐지만 Google Sheets 저장은 실패했습니다. Google Sheets 연동 URL을 다시 확인하세요.');
   const row = document.querySelector(`tr[data-sc="${sc}"]`);
   if (row) row.style.opacity = '0.4';
   const st = document.getElementById(`nst_${idx}`);
@@ -2608,12 +2618,13 @@ function setSoldout(sc, idx) {
   }
 }
 
-function cancelSoldout(sc) {
+async function cancelSoldout(sc) {
   delete soldoutMap[sc];
   saveExtra();
   updateSoldoutCnt();
   log(`[OK] 품절해제: ${sc}`, 'ok');
-  syncSoldoutToSheets(`품절해제 ${sc}`);
+  const synced = await syncSoldoutToSheets(`품절해제 ${sc}`);
+  if (!synced) alert('품절해제는 현재 브라우저에 저장됐지만 Google Sheets 저장은 실패했습니다. Google Sheets 연동 URL을 다시 확인하세요.');
 }
 
 function autoMapAll() {
@@ -3154,15 +3165,17 @@ function cleanMatchMap(map) {
 }
 
 function showSheetsModal() {
-  const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
+  const rawSaved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
+  const saved = rawSaved === DEAD_SHEETS_URL ? '' : rawSaved;
   document.getElementById('sheetsUrl').value = saved;
-  if (saved) document.getElementById('sheetsUrlStatus').textContent = '✅ URL 설정됨';
+  document.getElementById('sheetsUrlStatus').textContent = saved ? '✅ URL 설정됨' : '⚠ Apps Script URL 재설정 필요';
   document.getElementById('sheetsModal').classList.add('show');
 }
 
 function saveSheetsUrlBtn() {
   const url = document.getElementById('sheetsUrl').value.trim();
   if (!url) { alert('URL을 입력하세요.'); return; }
+  if (url === DEAD_SHEETS_URL) { alert('이 Apps Script URL은 만료/삭제된 URL입니다. 새 배포 URL을 입력하세요.'); return; }
   localStorage.setItem(SHEETS_URL_KEY, url);
   document.getElementById('sheetsUrlStatus').textContent = '✅ URL 저장됨';
   document.getElementById('sheetsUrlStatus').style.color = 'var(--success)';
@@ -3170,6 +3183,7 @@ function saveSheetsUrlBtn() {
 
 function saveSheetsUrl() {
   const url = document.getElementById('sheetsUrl').value.trim();
+  if (url === DEAD_SHEETS_URL) return;
   if (url) localStorage.setItem(SHEETS_URL_KEY, url);
 }
 
