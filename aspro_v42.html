@@ -1639,7 +1639,43 @@ let setRuleMap = {
   '252JW10':  { gpPrefix: '252JW10', colorMap: { '화이트':'IV','블랙':'BK','블루':'BL','아이보리':'IV' } },
 };
 
+function findGimpoRuleForJache(jache) {
+  const clean = String(jache || '').replace(/_SET$/i, '').replace(/-SET$/i, '');
+  if (!clean) return null;
+  const candidates = [
+    clean,
+    clean.replace(/_AL(?:_\d+)?$/i, ''),
+    clean.replace(/_SET$/i, '').replace(/-SET$/i, ''),
+    clean.split('-')[0],
+    clean.split('_')[0],
+  ].filter(Boolean);
+  for (const key of candidates) {
+    if (setRuleMap[key]) return { key, rule: setRuleMap[key] };
+  }
+  return null;
+}
+
 function getGimpoQty(sabCode, opt, sabName, jacheOpt) {
+  // ── 김포 규칙 매핑 최우선 ──
+  // 예: MS25S-GL-CAP_AL / 플럼:55 → 252MX05-BU-55
+  // 이카운트와 김포가 같이 있으면 실제 출고 기준인 김포 재고를 우선한다.
+  if (jacheOpt && opt && opt.includes(':') && !opt.includes('+')) {
+    const ruleInfo = findGimpoRuleForJache(jacheOpt);
+    if (ruleInfo) {
+      const { color, sz } = parseColorSz(opt);
+      const colorMap = ruleInfo.rule.colorMap || {};
+      const colorCode = colorMap[color] || COLOR_MAP[color] || COLOR_MAP[color?.toUpperCase()] || color;
+      if (colorCode && sz) {
+        const gpKey = `${ruleInfo.rule.gpPrefix}-${colorCode}-${sz}`;
+        if (gpMap[gpKey] !== undefined) {
+          return { qty: gpMap[gpKey], src: '김포(규칙)', 물류품번: gpKey };
+        }
+        log(`[WARN] 김포규칙 gpMap 없음: ${gpKey} (${jacheOpt} / ${opt})`, 'warn');
+        return { qty: 0, src: '김포(규칙)', 물류품번: gpKey };
+      }
+    }
+  }
+
   // ── 세트 옵션 처리 최우선 (예: 화이트+블랙+블루:55) ──
   // EXTRA_STATIC_MAP/extraMap/matchMap 하드코딩보다 먼저 체크
   if (opt && opt.includes('+') && opt.includes(':')) {
@@ -1650,12 +1686,10 @@ function getGimpoQty(sabCode, opt, sabName, jacheOpt) {
       jache = sabRow?.자체코드 || '';
     }
     if (jache) {
-      const jacheClean = jache.replace(/_SET$/i, '').replace(/-SET$/i, '');
-      const prefix = setRuleMap[jacheClean] ? jacheClean : jacheClean.split('-')[0];
-      const colorOvr = setRuleMap[prefix];
-      if (colorOvr) {
-        const gpPrefix = colorOvr.gpPrefix;
-        const colorMap = colorOvr.colorMap;
+      const ruleInfo = findGimpoRuleForJache(jache);
+      if (ruleInfo) {
+        const gpPrefix = ruleInfo.rule.gpPrefix;
+        const colorMap = ruleInfo.rule.colorMap;
         const sz = opt.split(':').pop().trim();
         const colorPart = opt.slice(0, opt.lastIndexOf(':'));
         const colors = colorPart.split('+').map(c => {
@@ -2163,16 +2197,15 @@ async function runMatch() {
     if (forceZeroMap[jache] || forceZeroMap[fzPrefix] || forceZeroMap[sc]) {
       finalQty = 0; src = '강제품절'; 물류품번 = extraMap[sc] || matchMap[sc] || '—'; cZ++;
     }
-    // 우선순위: KCFI(재고>0) > 김포(재고>0) > 이카운트 > 김포(재고0) > KCFI(재고0)
+    // 우선순위: KCFI(재고>0) > 김포(재고 유무 무관) > 이카운트 > KCFI(재고0)
+    // 김포와 이카운트가 둘 다 잡히면 실제 물류 출고 기준인 김포 수량을 우선한다.
     else if (kcfiQty !== null && kcfiQty > 0) {
       finalQty = kcfiQty; src = 'KCFI';
       물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
-    } else if (gpRes !== null && gpRes.qty > 0) {
+    } else if (gpRes !== null) {
       finalQty = gpRes.qty; src = gpRes.src; 물류품번 = gpRes.물류품번 || '—'; cGP++;
     } else if (icRes !== null) {
       finalQty = icRes.qty; src = icRes.src; 물류품번 = icRes.품목코드 || '—'; cIC++;
-    } else if (gpRes !== null) {
-      finalQty = gpRes.qty; src = gpRes.src; 물류품번 = gpRes.물류품번 || '—'; cGP++;
     } else if (kcfiQty !== null) {
       finalQty = kcfiQty; src = 'KCFI';
       물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
