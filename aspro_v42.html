@@ -313,6 +313,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
       <select class="fi" id="qKcfiAudit" onchange="applyFilter()">
         <option value="">전체 소스</option>
         <option value="kcfi">KCFI만</option>
+        <option value="icgp">이카운트+김포후보</option>
         <option value="diff">상품명 상이</option>
         <option value="auto">자동추정</option>
         <option value="manual">수동맵</option>
@@ -1809,6 +1810,37 @@ function getGimpoQty(sabCode, opt, sabName, jacheOpt) {
   return { qty: finalQty, src, 물류품번: 물류 };
 }
 
+function getGimpoAuditCandidate(sab, icRes, gpRes) {
+  if (gpRes !== null || !icRes) return null;
+  const opt = sab.옵션 || '';
+  const jache = sab.자체코드 || '';
+  const ruleInfo = findGimpoRuleForJache(jache);
+  if (ruleInfo && opt.includes(':') && !opt.includes('+')) {
+    const { color, sz } = parseColorSz(opt);
+    const colorCode = ruleInfo.rule.colorMap?.[color] || COLOR_MAP[color] || COLOR_MAP[color?.toUpperCase()] || color;
+    if (colorCode && sz) {
+      const gpKey = `${ruleInfo.rule.gpPrefix}-${colorCode}-${sz}`;
+      return {
+        gpKey,
+        qty: gpMap[gpKey],
+        reason: gpMap[gpKey] !== undefined ? '자체코드 규칙' : '자체코드 규칙 후보'
+      };
+    }
+  }
+  const icCode = String(icRes.품목코드 || '');
+  const parts = icCode.split('-');
+  let prefix = parts.slice(0, -1).join('-') || parts[0];
+  if (/^\d+$/.test(parts[parts.length - 1] || '') && parts[0]) prefix = parts[0];
+  if (!prefix || prefix.length < 5) return null;
+  const gpKeys = Object.keys(gpMap).filter(k => k === prefix || k.startsWith(prefix + '-'));
+  if (!gpKeys.length) return null;
+  return {
+    gpKey: gpKeys.slice(0, 3).join(', '),
+    qty: gpKeys.length === 1 ? gpMap[gpKeys[0]] : null,
+    reason: `같은 김포 prefix ${prefix}`
+  };
+}
+
 const COLOR_MAP = {
   'BLACK':'BK','NAVY':'NA','WHITE':'WH','IVORY':'IV','GRAY':'GR','GREY':'GR',
   'DARK GRAY':'DG','DARK GREY':'DG','DARKGRAY':'DG','LIGHT GRAY':'LG','LIGHT GREY':'LG',
@@ -2187,6 +2219,7 @@ async function runMatch() {
     const sc = normCode(sab.사방넷코드);
     const icRes  = getIcountQty(sab);
     const gpRes  = getGimpoQty(sc, sab.옵션, sab.상품명, sab.자체코드);
+    const gpAudit = getGimpoAuditCandidate(sab, icRes, gpRes);
     const kcfiQty = kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
     const kcfiMeta = kcfiMetaMap[sc] || null;
     let finalQty = null, src = '—', 물류품번 = '—';
@@ -2228,7 +2261,8 @@ async function runMatch() {
       _kcfiProduct: kcfiMeta?.productName || '',
       _kcfiOpt: kcfiMeta?.optKey || '',
       _kcfiPrefix: kcfiMeta?.prefix || '',
-      _kcfiMethod: kcfiMeta?.method || ''
+      _kcfiMethod: kcfiMeta?.method || '',
+      _gpAudit: gpAudit
     });
   });
 
@@ -2354,7 +2388,7 @@ function rowSearchText(r) {
   return [
     r.사방넷코드, r.자체코드, r.상품명, r.옵션,
     r._src, r._물류품번, r._kcfiProduct, r._kcfiOpt,
-    r._kcfiPrefix, r._kcfiMethod
+    r._kcfiPrefix, r._kcfiMethod, r._gpAudit?.gpKey, r._gpAudit?.reason
   ].map(v => String(v || '').toLowerCase()).join(' ');
 }
 
@@ -2392,6 +2426,7 @@ function appendKcfiAuditSearchRows(rows, q) {
 function applyKcfiAuditFilter(rows, mode) {
   if (!mode) return rows;
   if (mode === 'kcfi') return rows.filter(r => r._src === 'KCFI');
+  if (mode === 'icgp') return rows.filter(r => String(r._src || '').startsWith('이카운트') && r._gpAudit);
   if (mode === 'auto') return rows.filter(r => r._src === 'KCFI' && r._kcfiMethod === '자동추정');
   if (mode === 'manual') return rows.filter(r => r._src === 'KCFI' && r._kcfiMethod === '수동맵');
   if (mode === 'diff') {
@@ -2448,6 +2483,11 @@ function renderMain(rows) {
           </div>
         </div>`
       : r.상품명;
+    const auditInfo = r._gpAudit
+      ? `<div style="margin-top:2px;font-size:9px;color:var(--warn);max-width:260px;overflow:hidden;text-overflow:ellipsis" title="김포 후보: ${escAttr(r._gpAudit.gpKey)} / ${escAttr(r._gpAudit.reason)}">
+          김포후보 ${r._gpAudit.gpKey} <span style="color:var(--text3)">(${r._gpAudit.reason})</span>
+        </div>`
+      : '';
 
     const qDisp = editMode
       ? r._readonly
@@ -2467,7 +2507,7 @@ function renderMain(rows) {
       <td style="color:var(--text3);font-family:var(--mono);font-size:10px">${i+1}</td>
       <td style="font-family:var(--mono);font-size:10px">${r.사방넷코드}</td>
       <td style="font-family:var(--mono);font-size:10px">${r.자체코드}${nomapTag}</td>
-      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${productHtml}</td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${productHtml}${auditInfo}</td>
       <td style="font-size:11px;color:var(--text3)">${r.옵션}</td>
       <td>${srcHtml}</td>
       <td style="font-family:var(--mono);font-size:10px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis">${mpHtml}</td>
