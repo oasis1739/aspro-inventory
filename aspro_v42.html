@@ -1640,6 +1640,19 @@ let setRuleMap = {
   '252JW10':  { gpPrefix: '252JW10', colorMap: { '화이트':'IV','블랙':'BK','블루':'BL','아이보리':'IV' } },
 };
 
+function mergeSetRuleMap(base, extra) {
+  const merged = { ...base };
+  Object.entries(extra || {}).forEach(([key, rule]) => {
+    if (!rule) return;
+    const prev = merged[key] || {};
+    merged[key] = {
+      gpPrefix: rule.gpPrefix || prev.gpPrefix,
+      colorMap: { ...(prev.colorMap || {}), ...(rule.colorMap || {}) }
+    };
+  });
+  return merged;
+}
+
 function findGimpoRuleForJache(jache) {
   const clean = String(jache || '').replace(/_SET$/i, '').replace(/-SET$/i, '').replace(/_\d+set$/i, '');
   if (!clean) return null;
@@ -1690,6 +1703,7 @@ function getGimpoQty(sabCode, opt, sabName, jacheOpt) {
     if (jache) {
       const ruleInfo = findGimpoRuleForJache(jache);
       if (ruleInfo) {
+        log(`[INFO] 세트규칙 적용: ${jache} → ${ruleInfo.key}/${ruleInfo.rule.gpPrefix}`, 'info');
         const gpPrefix = ruleInfo.rule.gpPrefix;
         const colorMap = ruleInfo.rule.colorMap;
         const sz = opt.split(':').pop().trim();
@@ -1711,6 +1725,8 @@ function getGimpoQty(sabCode, opt, sabName, jacheOpt) {
         const setQty = Math.min(...qtys);
         log(`[OK] 세트매핑: ${jache} → ${gpCodes.join('+')} 가능수량=${setQty}`, 'info');
         return { qty: setQty, src: '김포(세트)', 물류품번: gpCodes.join('+') };
+      } else {
+        log(`[WARN] 세트규칙 없음: ${jache}`, 'warn');
       }
     }
   }
@@ -3731,12 +3747,12 @@ async function autoLoadFromSheets() {
       }
       // setmap: aspro_setmap 시트에서 세트 규칙 로드 (기존 하드코딩에 merge)
       if (data.setmap && Object.keys(data.setmap).length > 0) {
-        setRuleMap = { ...setRuleMap, ...data.setmap };
+        setRuleMap = mergeSetRuleMap(setRuleMap, data.setmap);
         try { localStorage.setItem('aspro_setmap_v1', JSON.stringify(data.setmap)); } catch(e2) {}
         log(`[OK] 세트규칙 로드: ${Object.keys(data.setmap).length}건`, 'ok');
       } else {
         const smRaw = localStorage.getItem('aspro_setmap_v1');
-        if (smRaw) { try { setRuleMap = { ...setRuleMap, ...JSON.parse(smRaw) }; } catch(e2) {} }
+        if (smRaw) { try { setRuleMap = mergeSetRuleMap(setRuleMap, JSON.parse(smRaw)); } catch(e2) {} }
       }
       try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
       updateSavedMapCnt();
