@@ -1041,13 +1041,12 @@ async function loadGimpo(e) {
     log(`[INFO] 김포 시트: "${usedSheet}"${sheetIdx < 0 ? ' (김포창고 재고현황 없음, 첫번째 시트 사용)' : ''}`, 'info');
 
     // 시트별 컬럼 구조 판별
-    // 김포창고 재고현황: col[0]=품번, col[8]=총수량, 헤더=Row3, 데이터=Row4~
-    // 반품창고 입출고: col[2]=ERP CODE, col[28]=재고, 헤더=Row4, 데이터=Row5~
-    let codeCol, qtyCol, startRow;
+    // 김포창고 재고현황은 파일마다 "관리코드/물류품번/상품명/..."처럼 앞 컬럼이 달라질 수 있어 자동 감지한다.
+    let startRow;
     if (usedSheet === TARGET_SHEET) {
-      codeCol = 0; qtyCol = 8; startRow = 3; // Row4 = index 3
+      startRow = 3; // Row4 = index 3
     } else {
-      codeCol = 2; qtyCol = 28; startRow = 4; // Row5 = index 4
+      startRow = 4; // Row5 = index 4
     }
 
     gpMap = {};
@@ -1055,10 +1054,9 @@ async function loadGimpo(e) {
     for (let i = startRow; i < rows.length; i++) {
       const r = rows[i];
       if (!r) continue;
-      const code = String(r[codeCol]||'').trim();
-      const qty  = parseInt(r[qtyCol]) || 0;
-      if (!code || code === 'null' || code === '품목코드') continue;
-      gpMap[code] = (gpMap[code]||0) + qty;
+      const parsed = parseGimpoStockRow(r);
+      if (!parsed) continue;
+      gpMap[parsed.code] = (gpMap[parsed.code]||0) + parsed.qty;
       n++;
     }
     let setCount = 0;
@@ -1076,6 +1074,7 @@ async function loadGimpo(e) {
     updFI('gpList', file.name, 'ok', n+'품목');
     const hasStock = Object.values(gpMap).filter(v=>v>0).length;
     log(`[OK] 김포재고 → ${n}품목 (재고>0: ${hasStock}건)${setCount>0?' / 셋업자동계산: '+setCount+'건':''}`, 'ok');
+    log(`[INFO] 김포 품번 샘플: ${Object.keys(gpMap).slice(0,5).join(', ')}`, 'info');
   } catch(ex) {
     updFI('gpList', file.name, 'err', '오류');
     log(`[ERR] 김포: ${ex.message}`, 'err');
@@ -2218,6 +2217,40 @@ function nameKeywords(s) {
   return new Set(s.split(/\s+/).filter(w => w.length >= 2 && !stop.has(w) && !/^\d+$/.test(w)));
 }
 function setIntersect(a, b) { let n=0; for (const v of a) if (b.has(v)) n++; return n; }
+
+function looksLikeGimpoCode(v) {
+  const s = String(v || '').trim();
+  if (!s || !s.includes('-')) return false;
+  if (/^\d+$/.test(s)) return false;
+  return /^[A-Z0-9]+-[A-Z0-9]{1,4}-[A-Z0-9]{1,4}(?:-.+)?$/i.test(s);
+}
+
+function parseStrictInt(v) {
+  const s = String(v ?? '').replace(/,/g, '').trim();
+  if (!/^-?\d+$/.test(s)) return null;
+  return parseInt(s, 10);
+}
+
+function parseGimpoStockRow(row) {
+  if (!row) return null;
+  let codeIdx = -1, code = '';
+  for (let i = 0; i < Math.min(row.length, 8); i++) {
+    const cell = String(row[i] || '').trim();
+    if (looksLikeGimpoCode(cell)) {
+      codeIdx = i;
+      code = cell;
+      break;
+    }
+  }
+  if (codeIdx < 0) return null;
+  let qty = null;
+  for (let i = row.length - 1; i > codeIdx; i--) {
+    const n = parseStrictInt(row[i]);
+    if (n !== null) { qty = n; break; }
+  }
+  if (qty === null) qty = 0;
+  return { code, qty };
+}
 
 async function runMatch() {
   if (!sabData.length) { alert('사방넷 단품파일을 먼저 업로드하세요.'); return; }
@@ -3762,26 +3795,11 @@ async function autoLoadFromSheets() {
       let gpCnt = 0;
       if (data.gpRaw && data.gpRaw.length > 3) {
         gpMap = {};
-        // 헤더: Row0=날짜, Row1=헤더(품목코드,품목명,...), Row2~=데이터
-        // 구조: col[0]=품목코드, col[2~]=각 창고 재고 (총수량 = 합계)
-        const gpHeader = data.gpRaw[1] || [];
-        // 총수량 컬럼 찾기 (없으면 col[2]~끝 합산)
-        const totalIdx = gpHeader.findIndex(h => String(h).includes('총'));
         for (let i = 2; i < data.gpRaw.length; i++) {
           const r = data.gpRaw[i];
-          if (!r || !r[0]) continue;
-          const code = String(r[0]).trim();
-          if (!code || code === '품목코드') continue;
-          let qty = 0;
-          if (totalIdx >= 0) {
-            qty = parseInt(r[totalIdx]) || 0;
-          } else {
-            // col[2]부터 숫자인 컬럼 모두 합산
-            for (let j = 2; j < r.length; j++) {
-              qty += parseInt(r[j]) || 0;
-            }
-          }
-          gpMap[code] = (gpMap[code]||0) + qty;
+          const parsed = parseGimpoStockRow(r);
+          if (!parsed) continue;
+          gpMap[parsed.code] = (gpMap[parsed.code]||0) + parsed.qty;
           gpCnt++;
         }
         // 세트 자동계산
@@ -3797,6 +3815,7 @@ async function autoLoadFromSheets() {
         const gpList = document.getElementById('gpList');
         if (gpList) gpList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 김포원본</div><div class="fcnt">${gpCnt}품목</div></div>`;
         log(`[OK] Sheets 김포원본 → ${gpCnt}품목${setCount>0?' / 세트: '+setCount+'건':''}`, 'ok');
+        log(`[INFO] 김포 품번 샘플: ${Object.keys(gpMap).slice(0,5).join(', ')}`, 'info');
       }
 
       const cnt = Object.keys(matchMap).length;
@@ -3860,19 +3879,9 @@ async function autoLoadFromSheets() {
             gpMap = {};
             for (let i = 2; i < data2.gpRaw.length; i++) {
               const r = data2.gpRaw[i];
-              if (!r || !r[0]) continue;
-              const code = String(r[0]).trim();
-              if (!code || code === '품목코드') continue;
-              // 창고 컬럼(2~)만 합산, 단위(SET/EA) 같은 텍스트 만나면 중단 → 총수량 중복합산 방지
-              let qty = 0;
-              for (let j = 2; j < r.length; j++) {
-                const cell = String(r[j]||'').replace(/,/g,'').trim();
-                if (cell === '') continue;
-                const n = parseInt(cell);
-                if (isNaN(n)) break;
-                qty += n;
-              }
-              gpMap[code] = (gpMap[code]||0) + qty;
+              const parsed = parseGimpoStockRow(r);
+              if (!parsed) continue;
+              gpMap[parsed.code] = (gpMap[parsed.code]||0) + parsed.qty;
               gpCnt++;
             }
             let setCount = 0;
@@ -3882,6 +3891,7 @@ async function autoLoadFromSheets() {
             document.getElementById('gpZone').classList.add('ok');
             const gpList = document.getElementById('gpList');
             if (gpList) gpList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 김포원본</div><div class="fcnt">${gpCnt}품목</div></div>`;
+            log(`[INFO] 김포 품번 샘플: ${Object.keys(gpMap).slice(0,5).join(', ')}`, 'info');
           }
 
           log(`[OK] 원본 로드 완료: 사방넷 ${sabCnt}단품 / 이카운트 ${icCnt}SKU / 김포 ${gpCnt}품목`, 'ok');
