@@ -1641,12 +1641,13 @@ let setRuleMap = {
 };
 
 function findGimpoRuleForJache(jache) {
-  const clean = String(jache || '').replace(/_SET$/i, '').replace(/-SET$/i, '');
+  const clean = String(jache || '').replace(/_SET$/i, '').replace(/-SET$/i, '').replace(/_\d+set$/i, '');
   if (!clean) return null;
   const candidates = [
     clean,
     clean.replace(/_AL(?:_\d+)?$/i, ''),
     clean.replace(/_SET$/i, '').replace(/-SET$/i, ''),
+    clean.replace(/_\d+set$/i, ''),
     clean.split('-')[0],
     clean.split('_')[0],
   ].filter(Boolean);
@@ -1697,16 +1698,18 @@ function getGimpoQty(sabCode, opt, sabName, jacheOpt) {
           const trimmed = c.trim();
           return colorMap[trimmed] || COLOR_MAP[trimmed] || COLOR_MAP[trimmed.toUpperCase()] || trimmed.slice(0,2).toUpperCase();
         });
-        const qtys = colors.map((c, idx) => {
+        const needByColor = {};
+        colors.forEach(c => { needByColor[c] = (needByColor[c] || 0) + 1; });
+        const gpCodes = colors.map(c => `${gpPrefix}-${c}-${sz}`);
+        const qtys = Object.entries(needByColor).map(([c, need]) => {
           const gpKey = `${gpPrefix}-${c}-${sz}`;
           const qty = gpMap[gpKey] !== undefined ? gpMap[gpKey] : null;
-          if (qty === null) log(`[WARN] 세트매핑 gpMap 없음: ${gpKey} (색상원본: ${colorPart.split('+')[idx]?.trim()})`, 'warn');
-          return qty;
+          if (qty === null) log(`[WARN] 세트매핑 gpMap 없음: ${gpKey} (필요수량 ${need})`, 'warn');
+          return qty === null ? null : Math.floor(qty / need);
         });
         if (qtys.some(q => q === null)) return null;
         const setQty = Math.min(...qtys);
-        const gpCodes = colors.map(c => `${gpPrefix}-${c}-${sz}`);
-        log(`[OK] 세트매핑: ${jache} → ${gpCodes.join('+')} 최솟값=${setQty}`, 'info');
+        log(`[OK] 세트매핑: ${jache} → ${gpCodes.join('+')} 가능수량=${setQty}`, 'info');
         return { qty: setQty, src: '김포(세트)', 물류품번: gpCodes.join('+') };
       }
     }
