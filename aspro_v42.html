@@ -943,6 +943,7 @@ function loadExtra() {
 }
 
 function saveExtra() {
+  normalizeSavedLogisticsCodes();
   try { localStorage.setItem(LS_KEY, JSON.stringify(extraMap)); } catch(e) {}
   try { localStorage.setItem('aspro_soldout_v1', JSON.stringify(soldoutMap)); } catch(e) {}
   try { localStorage.setItem('aspro_iccodemap_v1', JSON.stringify(icCodeMap)); } catch(e) {}
@@ -1743,7 +1744,12 @@ function getGimpoQty(sabCode, opt, sabName, jacheOpt) {
   // 물류품번 순서 변환 fallback: 구패턴(사이즈-색상) → 신패턴(색상-사이즈)
   // 예: 253JW02-55-BK → 253JW02-BK-55
   let 물류resolved = 물류;
-  if (gpMap[물류] === undefined) {
+  const codeResolved = resolveLogisticsCode(물류resolved);
+  if (codeResolved !== 물류resolved) {
+    물류resolved = codeResolved;
+    log(`[INFO] 물류품번 변경 자동변환: ${물류} → ${물류resolved}`, 'info');
+  }
+  if (gpMap[물류resolved] === undefined) {
     const m = 물류.match(/^(.+?)-(\d{2,3})-([A-Z]{2,3})(-.*)?$/);
     if (m) {
       const converted = m[4] ? `${m[1]}-${m[3]}-${m[2]}${m[4]}` : `${m[1]}-${m[3]}-${m[2]}`;
@@ -2146,10 +2152,7 @@ function autoMapTaek1() {
   // Sheets 반영
   const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
   if (sheetsUrl && Object.keys(matchMap).length > 100) {
-    const saveMap = {};
-    Object.entries({ ...matchMap, ...extraMap }).forEach(([k,v]) => {
-      if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = v;
-    });
+    const saveMap = buildNormalizedSaveMap();
     try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(saveMap)); } catch(e) {}
     fetch(sheetsUrl, {
       method: 'POST',
@@ -2252,6 +2255,30 @@ function parseGimpoStockRow(row) {
   return { code, qty };
 }
 
+function resolveLogisticsCode(code) {
+  let resolved = String(code || '').trim();
+  const mx18 = resolved.match(/^252MX18-(\d{3})$/i);
+  if (mx18) resolved = `252MX18CD-${mx18[1]}`;
+  return resolved;
+}
+
+function normalizeSavedLogisticsCodes() {
+  Object.keys(extraMap).forEach(sc => {
+    if (extraMap[sc] && extraMap[sc] !== '__DELETED__') {
+      extraMap[sc] = resolveLogisticsCode(extraMap[sc]);
+    }
+  });
+}
+
+function buildNormalizedSaveMap() {
+  const allMap = { ...matchMap, ...extraMap };
+  const saveMap = {};
+  Object.entries(allMap).forEach(([k, v]) => {
+    if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = resolveLogisticsCode(v);
+  });
+  return saveMap;
+}
+
 async function runMatch() {
   if (!sabData.length) { alert('사방넷 단품파일을 먼저 업로드하세요.'); return; }
   if (!Object.keys(icMap).length && !Object.keys(gpMap).length) {
@@ -2280,20 +2307,20 @@ async function runMatch() {
     const jache = String(sab.자체코드 || '').trim();
     const fzPrefix = jache.split('-')[0] || jache;
     if (forceZeroMap[jache] || forceZeroMap[fzPrefix] || forceZeroMap[sc]) {
-      finalQty = 0; src = '강제품절'; 물류품번 = extraMap[sc] || matchMap[sc] || '—'; cZ++;
+      finalQty = 0; src = '강제품절'; 물류품번 = resolveLogisticsCode(extraMap[sc] || matchMap[sc] || '—'); cZ++;
     }
     // 우선순위: KCFI(재고>0) > 김포(재고 유무 무관) > 이카운트 > KCFI(재고0)
     // 김포와 이카운트가 둘 다 잡히면 실제 물류 출고 기준인 김포 수량을 우선한다.
     else if (kcfiQty !== null && kcfiQty > 0) {
       finalQty = kcfiQty; src = 'KCFI';
-      물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
+      물류품번 = resolveLogisticsCode(extraMap[sc] || matchMap[sc] || '—'); cGP++;
     } else if (gpRes !== null) {
       finalQty = gpRes.qty; src = gpRes.src; 물류품번 = gpRes.물류품번 || '—'; cGP++;
     } else if (icRes !== null) {
       finalQty = icRes.qty; src = icRes.src; 물류품번 = icRes.품목코드 || '—'; cIC++;
     } else if (kcfiQty !== null) {
       finalQty = kcfiQty; src = 'KCFI';
-      물류품번 = extraMap[sc] || matchMap[sc] || '—'; cGP++;
+      물류품번 = resolveLogisticsCode(extraMap[sc] || matchMap[sc] || '—'); cGP++;
     }
     if (finalQty === null && isSoldoutCode(sc)) {
       finalQty = 0; src = '품절처리'; 물류품번 = '—'; cZ++;
@@ -2620,15 +2647,13 @@ function openInlineMapEdit(sc, currentGp, spanEl) {
   saveBtn.style.cssText = 'padding:2px 7px;font-size:10px';
   saveBtn.textContent = '저장';
   saveBtn.onclick = () => {
-    const newGp = input.value.trim();
+    const newGp = resolveLogisticsCode(input.value.trim());
     if (!newGp) { alert('물류품번을 입력하세요.'); return; }
     if (!isValidGp(newGp)) { alert('유효하지 않은 물류품번입니다.'); return; }
+    input.value = newGp;
     extraMap[sc] = newGp;
     saveExtra();
-    const saveMap = {};
-    Object.entries({ ...matchMap, ...extraMap }).forEach(([k, v]) => {
-      if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = v;
-    });
+    const saveMap = buildNormalizedSaveMap();
     try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(saveMap)); } catch(e) {}
     spanEl.textContent = newGp;
     spanEl.style.display = '';
@@ -2932,7 +2957,8 @@ function renderSoldoutTab() {
     const ja   = s ? s.자체코드 : '—';
     const opt  = s ? s.옵션     : '—';
     const gpCode = extraMap[sc] || matchMap[sc] || '';
-    const gpQty  = gpCode ? (gpMap[gpCode] ?? '—') : '—';
+    const gpResolved = resolveLogisticsCode(gpCode);
+    const gpQty  = gpResolved ? (gpMap[gpResolved] ?? '—') : '—';
     const icRes  = s ? getIcountQty(s) : null;
     const curQty = icRes ? icRes.qty : (gpQty !== '—' ? gpQty : '—');
     return `<tr>
@@ -3116,7 +3142,7 @@ function saveNomapEntries() {
   // 매핑없음 탭에서 입력된 것
   nomapRows.forEach((r, i) => {
     const el = document.getElementById(`ngp_${i}`);
-    const val = el ? el.value.trim() : r._manualGimpo;
+    const val = resolveLogisticsCode(el ? el.value.trim() : r._manualGimpo);
     if (val) { extraMap[r.사방넷코드] = val; saved++; const st = document.getElementById(`nst_${i}`); if (st) st.textContent = '✅'; }
   });
   // 매핑 마스터 탭에서 수정된 것
@@ -3127,7 +3153,7 @@ function saveNomapEntries() {
     if (!row) return;
     const newSc  = el.value.trim();
     const gpEl   = row.querySelector('.mv-gp');
-    const newGp  = gpEl ? gpEl.value.trim() : '';
+    const newGp  = resolveLogisticsCode(gpEl ? gpEl.value.trim() : '');
 
     if (src === '매칭파일') {
       // 매칭파일 항목: 값이 원본과 다르면 extraMap에 오버라이드
@@ -3167,9 +3193,7 @@ function saveNomapEntries() {
     updateSavedMapCnt();
     const sheetsUrl = localStorage.getItem(SHEETS_URL_KEY);
     if (sheetsUrl) {
-      const allMap = { ...matchMap, ...extraMap };
-      const saveMap = {};
-      Object.entries(allMap).forEach(([k,v]) => { if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = v; });
+      const saveMap = buildNormalizedSaveMap();
       // 로컬 먼저 저장
       try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(saveMap)); } catch(e2) {}
 
@@ -3251,7 +3275,9 @@ function renderMapview() {
   const MAX_MV = 1000;
   tbody.innerHTML = filtered.slice(0, MAX_MV).map(([sc, {gp, src}], i) => {
     const srcColor = src === '추가매핑' ? 'var(--purple)' : src === '수정됨' ? 'var(--warn)' : 'var(--accent2)';
-    const stockQty = gpMap[gp] !== undefined ? gpMap[gp] : '—';
+    const resolvedGp = resolveLogisticsCode(gp);
+    const stockQty = gpMap[resolvedGp] !== undefined ? gpMap[resolvedGp] : '—';
+    const gpTitle = resolvedGp !== gp ? `변경전 ${gp} → 변경후 ${resolvedGp}` : gp;
     const stockColor = stockQty > 0 ? 'var(--success)' : stockQty === 0 ? 'var(--warn)' : 'var(--text3)';
     const icCode = icCodeMap[sc] || '';
     const icColor = icCode ? 'var(--accent)' : 'var(--border)';
@@ -3262,7 +3288,7 @@ function renderMapview() {
           onchange="onMVsc(this,'${gp}','${src}')">
         <span style="font-size:9px;color:${srcColor};margin-left:4px">${src}</span>
       </td>
-      <td><input class="mi mv-gp" value="${gp}" style="width:170px" onchange="onMVgp(this,'${sc}','${src}')"></td>
+      <td><input class="mi mv-gp" value="${resolvedGp}" title="${gpTitle}" style="width:170px" onchange="onMVgp(this,'${sc}','${src}')"></td>
       <td>
         <input class="mi mv-ic" value="${icCode}" data-sc="${sc}" style="width:140px;border-color:${icColor}"
           placeholder="이카운트코드(선택)"
@@ -3356,17 +3382,19 @@ function onMVsc(el, oldGp, src) {
 }
 
 function onMVgp(el, sc, src) {
-  const newGp = el.value.trim();
+  const newGp = resolveLogisticsCode(el.value.trim());
   if (!newGp) return;
+  if (newGp !== el.value.trim()) el.value = newGp;
   if (src === '추가매핑' || src === '수정됨') {
     extraMap[sc] = newGp;
   }
   // 매칭파일 항목: 실시간 반영은 저장 시 처리
   // 재고 표시 업데이트
   const td = el.closest('tr')?.cells[4];
-  if (td && gpMap[newGp] !== undefined) {
-    td.textContent = gpMap[newGp];
-    td.style.color = gpMap[newGp] > 0 ? 'var(--success)' : 'var(--warn)';
+  const resolvedGp = resolveLogisticsCode(newGp);
+  if (td && gpMap[resolvedGp] !== undefined) {
+    td.textContent = gpMap[resolvedGp];
+    td.style.color = gpMap[resolvedGp] > 0 ? 'var(--success)' : 'var(--warn)';
   } else if (td) {
     td.textContent = '—';
     td.style.color = 'var(--text3)';
@@ -3460,7 +3488,7 @@ function exportMapExcel(){
   for (const [sc, gp] of Object.entries(matchMap)) {
     const overrideGp = extraMap[sc];
     if (overrideGp === '__DELETED__') continue;
-    const finalGp = overrideGp || gp;
+    const finalGp = resolveLogisticsCode(overrideGp || gp);
     const src = overrideGp ? '수정됨' : '매칭파일';
     const s = sabLookup[sc] || {};
     const stock = gpMap[finalGp] !== undefined ? gpMap[finalGp] : '';
@@ -3470,8 +3498,9 @@ function exportMapExcel(){
   for (const [sc, gp] of Object.entries(extraMap)) {
     if (matchMap[sc] || gp === '__DELETED__') continue;
     const s = sabLookup[sc] || {};
-    const stock = gpMap[gp] !== undefined ? gpMap[gp] : '';
-    rows.push([sc, s.nm||'', s.opt||'', gp, '추가매핑', stock]);
+    const finalGp = resolveLogisticsCode(gp);
+    const stock = gpMap[finalGp] !== undefined ? gpMap[finalGp] : '';
+    rows.push([sc, s.nm||'', s.opt||'', finalGp, '추가매핑', stock]);
   }
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [{wch:16},{wch:35},{wch:15},{wch:25},{wch:10},{wch:10}];
@@ -3620,9 +3649,7 @@ async function saveToSheets() {
   const url = document.getElementById('sheetsUrl').value.trim();
   if (!url) { alert('Apps Script URL을 먼저 입력하세요.'); return; }
 
-  const allMap = { ...matchMap, ...extraMap };
-  const saveMap = {};
-  Object.entries(allMap).forEach(([k,v]) => { if (v !== '__DELETED__' && isValidGp(v)) saveMap[k] = v; });
+  const saveMap = buildNormalizedSaveMap();
   const total = Object.keys(saveMap).length;
 
   // ★ 안전장치: matchMap이 로드 안 된 상태면 저장 차단
