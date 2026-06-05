@@ -1292,10 +1292,10 @@ async function loadKCFIMultiblock(file, sheetInfo) {
     if (!sc || !opt) return;
     const pfx = sc.split('-')[0];
     if (!sabByPrefix[pfx]) sabByPrefix[pfx] = {};
-    sabByPrefix[pfx][opt] = sc;
+    sabByPrefix[pfx][makeKcfiOptKeyFromSabang(opt)] = sc;
   });
 
-  let currentProduct = null, currentPrefix = null, currentProductMatch = null;
+  let currentProduct = null, currentPrefix = null, currentProductMatch = null, currentHeaderCols = null;
   let matched = 0, unmatched = 0, productsSeen = 0, productsMapped = 0;
   const newMap = { ...kcfiMap };
   const auditRows = [];
@@ -1312,29 +1312,25 @@ async function loadKCFIMultiblock(file, sheetInfo) {
       currentProduct = a;
       currentProductMatch = resolveKcfiProductMatch(a);
       currentPrefix = currentProductMatch?.prefix || null;
+      currentHeaderCols = findKcfiHeaderColsAfter(rows, i) || { color: 1, size: 2, qty: 3 };
       productsSeen++;
       if (currentPrefix) productsMapped++;
       else if (!missingProducts.includes(a)) missingProducts.push(a);
       continue;
     }
-    if (isKcfiColumnHeader(a) || a === 'TTL') continue;
+    const headerCols = detectKcfiHeaderCols(r);
+    if (headerCols) { currentHeaderCols = headerCols; continue; }
+    if (a === 'TTL') continue;
 
-    // 데이터 행: A 비어있고 B=색상, C=사이즈, D=수량
-    if (!a && b && r[2] !== null && r[2] !== undefined && r[3] !== null && r[3] !== undefined) {
-      // 색상 정규화: "블랙(공통)" → "블랙" (괄호 안 (공통) 만 제거)
-      const color = b.replace(/\s*\(공통\)\s*$/, '').trim();
-      const size = String(r[2]).trim();
-      const qtyRaw = String(r[3]).trim();
-      if (!color || !size) continue;
-      const qty = (qtyRaw === '-' || qtyRaw === '') ? 0 : parseInt(qtyRaw.replace(/,/g, ''));
-      if (isNaN(qty)) continue;
-
+    const parsed = parseKcfiDataRow(r, currentHeaderCols);
+    if (parsed) {
+      const { color, size, qty } = parsed;
       if (!currentPrefix) {
         unmatched++;
         continue;
       }
       const optKey = `${color}:${size}`;
-      const sabCode = sabByPrefix[currentPrefix]?.[optKey];
+      const sabCode = findSabCodeByKcfiOpt(sabByPrefix[currentPrefix], color, size);
       auditRows.push({
         productName: currentProduct,
         optKey,
@@ -1412,10 +1408,10 @@ async function loadKCFIFromSheetRaw() {
     if (!sc || !opt) return;
     const pfx = sc.split('-')[0];
     if (!sabByPrefix[pfx]) sabByPrefix[pfx] = {};
-    sabByPrefix[pfx][opt] = sc;
+    sabByPrefix[pfx][makeKcfiOptKeyFromSabang(opt)] = sc;
   });
 
-  let currentProduct = null, currentPrefix = null, currentProductMatch = null;
+  let currentProduct = null, currentPrefix = null, currentProductMatch = null, currentHeaderCols = null;
   let matched = 0, unmatched = 0, productsSeen = 0, productsMapped = 0;
   const parsedMap = {};
   const parsedMeta = {};
@@ -1431,22 +1427,21 @@ async function loadKCFIFromSheetRaw() {
       currentProduct = a;
       currentProductMatch = resolveKcfiProductMatch(a);
       currentPrefix = currentProductMatch?.prefix || null;
+      currentHeaderCols = findKcfiHeaderColsAfter(rows, i) || { color: 1, size: 2, qty: 3 };
       productsSeen++;
       if (currentPrefix) productsMapped++;
       else if (!missingProducts.includes(a)) missingProducts.push(a);
       continue;
     }
-    if (isKcfiColumnHeader(a) || a === 'TTL') continue;
-    // 데이터 행: A 비어있고 B=색상, C=사이즈, D=수량
-    if (!a && b && r[2] !== null && r[2] !== undefined && r[3] !== null && r[3] !== undefined) {
-      const color = b.replace(/\s*\(공통\)\s*$/, '').trim();
-      const size = String(r[2]).trim();
-      const qtyRaw = String(r[3]).trim();
-      if (!color || !size) continue;
-      const qty = (qtyRaw === '-' || qtyRaw === '') ? 0 : parseInt(qtyRaw.replace(/,/g, ''));
-      if (isNaN(qty)) continue;
+    const headerCols = detectKcfiHeaderCols(r);
+    if (headerCols) { currentHeaderCols = headerCols; continue; }
+    if (a === 'TTL') continue;
+
+    const parsed = parseKcfiDataRow(r, currentHeaderCols);
+    if (parsed) {
+      const { color, size, qty } = parsed;
       const optKey = `${color}:${size}`;
-      const sabCode = currentPrefix ? sabByPrefix[currentPrefix]?.[optKey] : '';
+      const sabCode = currentPrefix ? findSabCodeByKcfiOpt(sabByPrefix[currentPrefix], color, size) : '';
       auditRows.push({
         productName: currentProduct,
         optKey,
@@ -1565,28 +1560,102 @@ const KCFI_PRODUCT_MAP = {
 
 function isKcfiBlockHeader(rows, idx, productName) {
   if (!productName || isKcfiColumnHeader(productName) || productName === 'TTL') return false;
-  const next = rows[idx + 1] || [];
-  const nextA = String(next[0] || '').trim();
-  const nextB = String(next[1] || '').trim();
-  const nextC = String(next[2] || '').trim();
-  const nextD = String(next[3] || '').trim();
-  const hasExplicitHeaders = nextC === '사이즈' && nextD.includes('수량');
-  return isKcfiColumnHeader(nextA) && nextB === '색상' && (hasExplicitHeaders || isLikelyKcfiDataRow(rows[idx + 2]));
+  const headerCols = findKcfiHeaderColsAfter(rows, idx);
+  return !!headerCols && isLikelyKcfiDataRow(rows[idx + 2], headerCols);
 }
 
 function isKcfiColumnHeader(value) {
   return String(value || '').trim().includes('이미지');
 }
 
-function isLikelyKcfiDataRow(row) {
+function detectKcfiHeaderCols(row) {
   if (!row) return false;
-  const a = String(row[0] || '').trim();
-  const b = String(row[1] || '').trim();
-  const c = String(row[2] || '').trim();
-  const d = String(row[3] || '').trim();
-  if (a || !b || !c || !d) return false;
-  const qty = parseInt(d.replace(/,/g, ''));
-  return !isNaN(qty) || d === '-';
+  const cells = row.map(v => String(v || '').trim());
+  const color = cells.findIndex(v => v === '색상' || v.includes('색상'));
+  const size = cells.findIndex(v => v === '사이즈' || v.includes('사이즈'));
+  const qty = cells.findIndex(v => /^(전산수량|실수량|수량)$/.test(v) || v.includes('수량'));
+  const image = cells.findIndex(v => v.includes('이미지'));
+  if (color >= 0 && size >= 0 && qty >= 0 && (image >= 0 || color <= 2)) return { color, size, qty };
+  if (image >= 0 && color >= 0) return { color, size: color + 1, qty: color + 2 };
+  return null;
+}
+
+function findKcfiHeaderColsAfter(rows, idx) {
+  for (let j = idx + 1; j <= idx + 3 && j < rows.length; j++) {
+    const cols = detectKcfiHeaderCols(rows[j] || []);
+    if (cols) return cols;
+  }
+  return null;
+}
+
+function parseKcfiQty(v) {
+  const raw = String(v ?? '').trim();
+  if (raw === '-' || raw === '') return 0;
+  const qty = parseInt(raw.replace(/,/g, ''), 10);
+  return isNaN(qty) ? null : qty;
+}
+
+function normalizeKcfiColor(color) {
+  return String(color || '')
+    .replace(/\s*\([^)]*\)\s*/g, '')
+    .replace(/\s+/g, '')
+    .trim();
+}
+
+function normalizeKcfiSize(size) {
+  return String(size || '').trim().toUpperCase();
+}
+
+function makeKcfiOptKey(color, size) {
+  return `${normalizeKcfiColor(color)}:${normalizeKcfiSize(size)}`;
+}
+
+function makeKcfiOptKeyFromSabang(opt) {
+  const parsed = parseColorSz(opt);
+  return makeKcfiOptKey(parsed.color, parsed.sz);
+}
+
+function kcfiColorCandidates(color) {
+  const c = normalizeKcfiColor(color);
+  const aliases = {
+    '블루': ['블루', '틸블루', '스카이블루', '라이트블루'],
+    '그레이': ['그레이', '라이트그레이', '차콜'],
+    '화이트': ['화이트', '아이보리', '크림'],
+    '아이보리': ['아이보리', '화이트', '크림'],
+  };
+  return [...new Set([c, ...(aliases[c] || [])])];
+}
+
+function findSabCodeByKcfiOpt(prefixIndex, color, size) {
+  if (!prefixIndex) return '';
+  const sz = normalizeKcfiSize(size);
+  const exact = makeKcfiOptKey(color, sz);
+  if (prefixIndex[exact]) return prefixIndex[exact];
+  for (const c of kcfiColorCandidates(color)) {
+    const key = makeKcfiOptKey(c, sz);
+    if (prefixIndex[key]) return prefixIndex[key];
+  }
+  const containsColor = Object.keys(prefixIndex).filter(key => {
+    const [c, s] = key.split(':');
+    return s === sz && kcfiColorCandidates(color).some(alias => c.includes(alias) || alias.includes(c));
+  });
+  if (containsColor.length === 1) return prefixIndex[containsColor[0]];
+  return '';
+}
+
+function isLikelyKcfiDataRow(row, cols) {
+  return !!parseKcfiDataRow(row, cols || { color: 1, size: 2, qty: 3 });
+}
+
+function parseKcfiDataRow(row, cols) {
+  if (!row || !cols) return null;
+  const first = String(row[0] || '').trim();
+  if (first === 'TTL' || isKcfiColumnHeader(first)) return null;
+  const color = normalizeKcfiColor(row[cols.color]);
+  const size = normalizeKcfiSize(row[cols.size]);
+  const qty = parseKcfiQty(row[cols.qty]);
+  if (!color || !size || qty === null) return null;
+  return { color, size, qty };
 }
 
 function resolveKcfiProductPrefix(productName) {
