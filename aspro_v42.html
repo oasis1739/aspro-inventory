@@ -477,12 +477,20 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
         <input type="checkbox" id="expSafetyApply" onchange="document.getElementById('expSafetyBox').style.display=this.checked?'flex':'none'" style="width:14px;height:14px">
         <b>안전재고 적용</b> <span style="color:var(--text3)">(가상재고를 실재고의 N%로 축소)</span>
       </label>
-      <div id="expSafetyBox" style="display:none;align-items:center;gap:6px;margin-top:7px">
-        <span style="font-size:11px;color:var(--text2)">가상재고 =</span>
-        <span style="font-size:11px;color:var(--text2)">실재고 ×</span>
-        <input class="fi" id="expSafetyPct" type="number" min="1" max="100" value="70" style="width:60px;text-align:center">
-        <span style="font-size:11px;color:var(--text2)">%</span>
-        <span style="font-size:10px;color:var(--text3)">(내림 처리)</span>
+      <div id="expSafetyBox" style="display:none;flex-direction:column;gap:7px;margin-top:7px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;color:var(--text2)">가상재고 =</span>
+          <span style="font-size:11px;color:var(--text2)">실재고 ×</span>
+          <input class="fi" id="expSafetyPct" type="number" min="1" max="100" value="70" style="width:60px;text-align:center">
+          <span style="font-size:11px;color:var(--text2)">%</span>
+          <span style="font-size:10px;color:var(--text3)">(내림 처리)</span>
+        </div>
+        <label style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="expSafetyZero" style="width:14px;height:14px" checked>
+          <span>N개 미만이면 <b>0</b>으로 처리</span>
+          <input class="fi" id="expSafetyZeroMin" type="number" min="1" value="5" style="width:44px;text-align:center">
+          <span>개 미만 → 0</span>
+        </label>
       </div>
     </div>
     <div class="modal-acts">
@@ -3567,10 +3575,13 @@ function doExport(){
   let pct = parseFloat(document.getElementById('expSafetyPct')?.value);
   if (!applySafety || isNaN(pct) || pct <= 0 || pct > 100) pct = 100;
   const ratio = pct / 100;
+  const applyZero = applySafety && document.getElementById('expSafetyZero')?.checked;
+  const zeroMin = applyZero ? (parseInt(document.getElementById('expSafetyZeroMin')?.value) || 5) : 0;
   targets.forEach(r=>{
     const row=[...r._raw];
     const rawQty = r._status==='matched' ? Math.max(0, r._qty||0) : 0;
-    const qty = ratio < 1 ? Math.floor(rawQty * ratio) : rawQty;
+    let qty = ratio < 1 ? Math.floor(rawQty * ratio) : rawQty;
+    if (applyZero && qty > 0 && qty < zeroMin) qty = 0;
     row[5] = qty;
     row[6] = qty > 0 ? 1 : 2;
     out.push(row);
@@ -3581,7 +3592,7 @@ function doExport(){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '사방넷단품대량수정_수정파일');
   XLSX.writeFile(wb, fname+'.xlsx');
-  const safetyMsg = ratio < 1 ? ` (안전재고 ${pct}% 적용)` : '';
+  const safetyMsg = ratio < 1 ? ` (안전재고 ${pct}%${applyZero?` / ${zeroMin}개 미만→0`:''}  적용)` : '';
   log(`[OK] 내보내기: ${fname}.xlsx (${targets.length}행)${safetyMsg}`, 'ok');
   closeM('expModal');
 }
