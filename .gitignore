@@ -1,0 +1,17 @@
+# clasp 인증 (절대 커밋 금지)
+.clasprc.json
+~/.clasprc.json
+
+# 실제 clasp 설정 (scriptId 포함)
+.clasp.json
+
+# 환경 변수
+.env
+.env.local
+
+# macOS
+.DS_Store
+
+# 에디터
+.vscode/
+.idea/

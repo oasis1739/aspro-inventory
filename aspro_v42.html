@@ -1051,15 +1051,20 @@ async function loadGimpo(e) {
     }
 
     gpMap = {};
-    let n = 0;
+    let n = 0, skippedInactive = 0;
+    const headerRow = rows[startRow - 1] || [];
+    const saleStatusIdx = findSaleStatusIdx(headerRow);
+    if (saleStatusIdx >= 0) log(`[INFO] 김포 판매상태 컬럼 감지: ${saleStatusIdx+1}열`, 'info');
     for (let i = startRow; i < rows.length; i++) {
       const r = rows[i];
       if (!r) continue;
+      if (!isGimpoRowActive(r, saleStatusIdx)) { skippedInactive++; continue; }
       const parsed = parseGimpoStockRow(r);
       if (!parsed) continue;
       gpMap[parsed.code] = (gpMap[parsed.code]||0) + parsed.qty;
       n++;
     }
+    if (skippedInactive > 0) log(`[INFO] 판매상태 비활성 제외: ${skippedInactive}건`, 'info');
     let setCount = 0;
     for (const [code, qty] of Object.entries(gpMap)) {
       if (code.endsWith('-CD')) {
@@ -2301,6 +2306,24 @@ function parseStrictInt(v) {
   const s = String(v ?? '').replace(/,/g, '').trim();
   if (!/^-?\d+$/.test(s)) return null;
   return parseInt(s, 10);
+}
+
+// 헤더 행에서 판매상태 컬럼 인덱스 반환 (-1이면 없음)
+function findSaleStatusIdx(headerRow) {
+  if (!headerRow) return -1;
+  for (let i = 0; i < headerRow.length; i++) {
+    if (String(headerRow[i]||'').trim() === '판매상태') return i;
+  }
+  return -1;
+}
+
+// 판매상태 컬럼 기준으로 활성 여부 판단 (컬럼 없으면 항상 true)
+function isGimpoRowActive(row, saleStatusIdx) {
+  if (saleStatusIdx < 0) return true;
+  const v = String(row[saleStatusIdx]||'').trim().replace(/\s/g,'').toUpperCase();
+  if (!v) return true;
+  const INACTIVE = new Set(['판매중지','중지','N','STOP','정지','비활성','INACTIVE','판매불가']);
+  return !INACTIVE.has(v);
 }
 
 function parseGimpoStockRow(row) {
@@ -3891,13 +3914,19 @@ async function autoLoadFromSheets() {
       let gpCnt = 0;
       if (data.gpRaw && data.gpRaw.length > 3) {
         gpMap = {};
+        const gpHeader = data.gpRaw[0] || [];
+        const gpSaleIdx = findSaleStatusIdx(gpHeader);
+        if (gpSaleIdx >= 0) log(`[INFO] Sheets 김포 판매상태 컬럼: ${gpSaleIdx+1}열`, 'info');
+        let gpSkipped = 0;
         for (let i = 2; i < data.gpRaw.length; i++) {
           const r = data.gpRaw[i];
+          if (!isGimpoRowActive(r, gpSaleIdx)) { gpSkipped++; continue; }
           const parsed = parseGimpoStockRow(r);
           if (!parsed) continue;
           gpMap[parsed.code] = (gpMap[parsed.code]||0) + parsed.qty;
           gpCnt++;
         }
+        if (gpSkipped > 0) log(`[INFO] 판매상태 비활성 제외: ${gpSkipped}건`, 'info');
         // 세트 자동계산
         let setCount = 0;
         for (const [code, qty] of Object.entries(gpMap)) {
@@ -3973,13 +4002,19 @@ async function autoLoadFromSheets() {
           // 김포원본
           if (data2.gpRaw && data2.gpRaw.length > 2) {
             gpMap = {};
+            const gpHeader2 = data2.gpRaw[0] || [];
+            const gpSaleIdx2 = findSaleStatusIdx(gpHeader2);
+            if (gpSaleIdx2 >= 0) log(`[INFO] CSV 김포 판매상태 컬럼: ${gpSaleIdx2+1}열`, 'info');
+            let gpSkipped2 = 0;
             for (let i = 2; i < data2.gpRaw.length; i++) {
               const r = data2.gpRaw[i];
+              if (!isGimpoRowActive(r, gpSaleIdx2)) { gpSkipped2++; continue; }
               const parsed = parseGimpoStockRow(r);
               if (!parsed) continue;
               gpMap[parsed.code] = (gpMap[parsed.code]||0) + parsed.qty;
               gpCnt++;
             }
+            if (gpSkipped2 > 0) log(`[INFO] 판매상태 비활성 제외: ${gpSkipped2}건`, 'info');
             let setCount = 0;
             for (const [code, qty] of Object.entries(gpMap)) {
               if (code.endsWith('-CD')) { const base=code.slice(0,-3); const skQty=gpMap[base+'-SK']; if (skQty!==undefined){gpMap[base+'-SET']=Math.min(qty,skQty);setCount++;} }
