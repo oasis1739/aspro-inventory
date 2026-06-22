@@ -21,6 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
 const DRY_RUN = process.argv.includes('--dry-run');
+const UPLOAD_ONLY = process.argv.includes('--upload-only'); // 백업 JSON으로 시트 업로드만
 const LIMIT_ARG = process.argv.find(a => a.startsWith('--limit='));
 const LIMIT = LIMIT_ARG ? parseInt(LIMIT_ARG.split('=')[1]) : 0; // 0=전체
 
@@ -154,9 +155,51 @@ async function fetchSingleStock(zone, sid, prodCd, baseDate, retries = 3) {
   return { error: '재시도 한도 초과' };
 }
 
+// ── 시트 업로드 (재시도 + HTML 응답 감지) ──
+async function uploadWithRetry(rows, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    log(`Apps Script로 시트 업로드 중 (시도 ${attempt}/${retries})...`);
+    try {
+      const res = await fetch(SHEETS_WEBAPP_URL, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ icRawUpload: { rows } }),
+        redirect: 'follow',
+      });
+      const txt = await res.text();
+      if (txt.trim().startsWith('<')) {
+        log(`업로드 응답이 HTML (Apps Script 배포가 "Anyone" 미설정?) ─ 응답앞 200자: ${txt.slice(0,200)}`, 'warn');
+        if (attempt < retries) { await sleep(3000); continue; }
+        die('업로드 실패 — Apps Script Web App 배포 권한이 "모든 사용자"로 되어있는지 확인');
+      }
+      const json = JSON.parse(txt);
+      if (!json?.ok) {
+        if (attempt < retries) { await sleep(3000); continue; }
+        die(`업로드 실패: ${JSON.stringify(json)}`);
+      }
+      log(`✅ 시트 업로드 완료: ${json.saved}행`);
+      return;
+    } catch(e) {
+      if (attempt < retries) { log(`업로드 예외: ${e.message} — 재시도`, 'warn'); await sleep(3000); continue; }
+      die(`업로드 예외 최종: ${e.message}`);
+    }
+  }
+}
+
 // ── 4. 메인 ──
 (async () => {
   try {
+    // upload-only: 백업 JSON으로 시트 업로드만 재시도
+    if (UPLOAD_ONLY) {
+      requireEnv('SHEETS_WEBAPP_URL', SHEETS_WEBAPP_URL);
+      const backupPath = path.join(LOG_DIR, 'last_collected.json');
+      if (!fs.existsSync(backupPath)) die(`백업 파일 없음: ${backupPath}`);
+      const rows = JSON.parse(fs.readFileSync(backupPath, 'utf-8'));
+      log(`=== UPLOAD-ONLY 모드: ${rows.length}행 ===`);
+      await uploadWithRetry(rows);
+      log('=== 완료 ===');
+      return;
+    }
+
     requireEnv('ECOUNT_COM_CODE', ECOUNT_COM_CODE);
     requireEnv('ECOUNT_USER_ID',  ECOUNT_USER_ID);
     requireEnv('ECOUNT_API_CERT_KEY', ECOUNT_API_CERT_KEY);
@@ -221,22 +264,18 @@ async function fetchSingleStock(zone, sid, prodCd, baseDate, retries = 3) {
 
     log(`수집 완료: 재고>0 ${okCnt} / 재고0 ${zeroCnt} / 실패 ${failCnt}`);
 
+    // ★ 수집 즉시 백업 (업로드 실패해도 데이터 손실 방지)
+    const backupPath = path.join(LOG_DIR, 'last_collected.json');
+    fs.writeFileSync(backupPath, JSON.stringify(updated));
+    log(`✅ 수집 데이터 백업: ${backupPath}`);
+
     if (DRY_RUN) {
       fs.writeFileSync(path.join(LOG_DIR, 'rows_preview.json'), JSON.stringify(updated.slice(0, 15), null, 2));
       log(`[DRY-RUN] 업로드 생략. 미리보기: logs/rows_preview.json`);
       return;
     }
 
-    // 업로드
-    log('Apps Script로 시트 업로드 중...');
-    const up = await fetch(SHEETS_WEBAPP_URL, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ icRawUpload: { rows: updated } }),
-      redirect: 'follow',
-    });
-    const upJson = await up.json();
-    if (!upJson?.ok) die(`업로드 실패: ${JSON.stringify(upJson)}`);
-    log(`✅ 시트 업로드 완료: ${upJson.saved}행`);
+    await uploadWithRetry(updated);
     log('=== 동기화 완료 ===');
   } catch (e) {
     die(`예외: ${e.stack || e.message}`);
