@@ -1,15 +1,16 @@
 // ASPRO 이카운트 재고 → 구글시트 이카운트원본 매일 동기화
 // 실행: node sync.js   (dry-run: node sync.js --dry-run)
 //
-// 흐름:
-//   1) Zone 조회 (회사코드로 어느 zone 서버 쓰는지 확인)
-//   2) OAPI 로그인 (SESSION_ID 발급)
-//   3) 재고 조회 API 호출
-//   4) [품목코드, 품번, 브랜드, 진행시즌, 품목명, 재고, ...] 행 빌드
-//   5) Apps Script web app으로 POST → 「이카운트원본」 시트 통째 덮어쓰기
+// 이카운트 OAPI 제약:
+//   - 재고현황(단건) API만 검증됨 → 품목 1개씩 호출 필요
+//   - 1초/호출 (실서버), 1일 5000건, 시간당 오류 30건
 //
-// 이카운트 API 응답 필드명은 회사별/계약별로 다를 수 있어
-// 첫 실행 시 응답 샘플을 dry-run으로 확인 후 mapping 조정 필요.
+// 흐름:
+//   1) Zone 조회 → 로그인 → SESSION_ID
+//   2) 「이카운트원본」 시트에서 기존 PROD_CD 목록 추출 (마스터데이터 유지용)
+//   3) 각 PROD_CD에 대해 단건 API 호출 → BAL_QTY 수집 (1.2초 간격)
+//   4) 기존 행의 재고 컬럼(F)만 업데이트, 다른 컬럼은 보존
+//   5) Apps Script로 시트 업로드
 
 import 'dotenv/config';
 import fs from 'fs';
@@ -20,6 +21,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
 const DRY_RUN = process.argv.includes('--dry-run');
+const LIMIT_ARG = process.argv.find(a => a.startsWith('--limit='));
+const LIMIT = LIMIT_ARG ? parseInt(LIMIT_ARG.split('=')[1]) : 0; // 0=전체
+
 const LOG_DIR = path.join(__dirname, 'logs');
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR);
 
@@ -29,8 +33,16 @@ const {
   ECOUNT_API_CERT_KEY,
   ECOUNT_PASSWORD,
   SHEETS_WEBAPP_URL,
-  ECOUNT_INVENTORY_API_PATH = '/OAPI/V2/InventoryBasic/ViewInventoryBalanceStatusByLocation',
+  ECOUNT_INVENTORY_API_PATH = '/OAPI/V2/InventoryBalance/ViewInventoryBalanceStatus',
+  ECOUNT_TEST_MODE = 'false',
+  ECOUNT_RATE_MS = '1200',  // 호출 간격 (ms)
+  SHEET_ID = '1cl-uZ9s0_VNF_YwagnujAhPTdREuzfcaPisWRRp7zwY',
 } = process.env;
+
+const IS_TEST = String(ECOUNT_TEST_MODE).toLowerCase() === 'true';
+const apiHost = (zone) => `https://${IS_TEST ? 'sboapi' : 'oapi'}${zone}.ecount.com`;
+const ZONE_HOST = IS_TEST ? 'https://sboapi.ecount.com' : 'https://oapi.ecount.com';
+const RATE_MS = parseInt(ECOUNT_RATE_MS);
 
 function log(msg, level = 'info') {
   const ts = new Date().toISOString();
@@ -39,121 +51,88 @@ function log(msg, level = 'info') {
   fs.appendFileSync(path.join(LOG_DIR, 'sync.log'), line + '\n');
 }
 
-function die(msg) {
-  log(msg, 'error');
-  process.exit(1);
-}
+function die(msg) { log(msg, 'error'); process.exit(1); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function requireEnv(name, val) {
-  if (!val || val.includes('여기에_')) die(`.env 누락 또는 미입력: ${name}`);
+  if (!val || String(val).includes('여기에_')) die(`.env 누락 또는 미입력: ${name}`);
+}
+
+// ── 0. 기존 시트 읽기 ──
+async function loadExistingSheet() {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent('이카운트원본')}&cb=${Date.now()}`;
+  const res = await fetch(url);
+  if (!res.ok) die(`시트 읽기 실패: ${res.status}`);
+  const csv = await res.text();
+  // CSV → 2D array (간단 파서, 쉼표/따옴표 처리)
+  const rows = [];
+  const lines = csv.split(/\r?\n/);
+  for (const line of lines) {
+    if (line === '') { rows.push([]); continue; }
+    const cells = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inQ) {
+        if (c === '"' && line[i+1] === '"') { cur += '"'; i++; }
+        else if (c === '"') inQ = false;
+        else cur += c;
+      } else {
+        if (c === '"') inQ = true;
+        else if (c === ',') { cells.push(cur); cur = ''; }
+        else cur += c;
+      }
+    }
+    cells.push(cur);
+    rows.push(cells);
+  }
+  log(`기존 시트 ${rows.length}행 로드`);
+  return rows;
 }
 
 // ── 1. Zone 조회 ──
 async function fetchZone() {
-  const res = await fetch('https://oapi.ecount.com/OAPI/V2/Zone', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ COM_CODE: ECOUNT_COM_CODE }),
+  const res = await fetch(`${ZONE_HOST}/OAPI/V2/Zone`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({COM_CODE: ECOUNT_COM_CODE}),
   });
-  const data = await res.json();
-  if (!data?.Data?.ZONE) {
-    die(`Zone 조회 실패: ${JSON.stringify(data)}`);
-  }
-  log(`Zone: ${data.Data.ZONE} / Domain: ${data.Data.DOMAIN}`);
-  return data.Data; // { ZONE, DOMAIN, ... }
+  const d = await res.json();
+  if (!d?.Data?.ZONE) die(`Zone 조회 실패: ${JSON.stringify(d)}`);
+  log(`Zone: ${d.Data.ZONE}`);
+  return d.Data;
 }
 
-// ── 2. OAPI 로그인 ──
+// ── 2. 로그인 ──
 async function login(zone) {
-  const url = `https://oapi${zone.ZONE}.ecount.com/OAPI/V2/OAPILogin`;
+  const url = `${apiHost(zone.ZONE)}/OAPI/V2/OAPILogin`;
   const body = {
-    COM_CODE: ECOUNT_COM_CODE,
-    USER_ID:  ECOUNT_USER_ID,
-    API_CERT_KEY: ECOUNT_API_CERT_KEY,
-    LAN_TYPE: 'ko-KR',
-    ZONE: zone.ZONE,
-    PASSWORD: ECOUNT_PASSWORD,
+    COM_CODE: ECOUNT_COM_CODE, USER_ID: ECOUNT_USER_ID,
+    API_CERT_KEY: ECOUNT_API_CERT_KEY, LAN_TYPE: 'ko-KR',
+    ZONE: zone.ZONE, PASSWORD: ECOUNT_PASSWORD,
   };
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  const sid = data?.Data?.Datas?.SESSION_ID;
-  if (!sid) die(`로그인 실패: ${JSON.stringify(data)}`);
-  log(`로그인 성공 (SESSION 만료: ${data.Data?.Datas?.EXPIRE_DATE || '?'})`);
+  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const d = await res.json();
+  const sid = d?.Data?.Datas?.SESSION_ID;
+  if (!sid) die(`로그인 실패: ${JSON.stringify(d)}`);
+  log(`로그인 성공`);
   return sid;
 }
 
-// ── 3. 재고 조회 ──
-async function fetchInventory(zone, sid) {
-  const url = `https://oapi${zone.ZONE}.ecount.com${ECOUNT_INVENTORY_API_PATH}?SESSION_ID=${sid}`;
-  // 검색 조건 — 이카운트 API매뉴얼 참고하여 필요 필드 추가
-  const body = {
-    BASE_DATE: new Date().toISOString().slice(0,10).replace(/-/g,''), // YYYYMMDD
-    PROD_CD: '',
-    WH_CD: '',
-  };
+// ── 3. 재고 단건 조회 ──
+async function fetchSingleStock(zone, sid, prodCd, baseDate) {
+  const url = `${apiHost(zone.ZONE)}${ECOUNT_INVENTORY_API_PATH}?SESSION_ID=${sid}`;
   const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({BASE_DATE: baseDate, PROD_CD: prodCd}),
   });
-  const data = await res.json();
-  // 디버그용 원본 저장
-  fs.writeFileSync(
-    path.join(LOG_DIR, `inventory_raw_${Date.now()}.json`),
-    JSON.stringify(data, null, 2),
-  );
-  const result = data?.Data?.Result || data?.Data?.Datas || [];
-  if (!Array.isArray(result)) die(`재고 응답 구조 예상과 다름: ${JSON.stringify(data).slice(0,500)}`);
-  log(`재고 ${result.length}건 조회`);
-  return result;
+  const d = await res.json();
+  if (d?.Errors) return { error: d.Errors[0]?.Message };
+  const result = d?.Data?.Result || [];
+  if (result.length === 0) return { qty: 0, found: false };
+  return { qty: Number(result[0].BAL_QTY || 0), found: true };
 }
 
-// ── 4. 시트 행 빌드 ──
-// 「이카운트원본」 시트 컬럼 순서:
-//   A:품목코드  B:품번  C:브랜드  D:진행시즌  E:품목명[규격]  F:재고  G:진행채널  H:송장출력명
-// 이카운트 응답 필드명에 맞춰 매핑 — API매뉴얼 확인 후 PROD_CD/PROD_DES 등 보정
-function buildSheetRows(inventoryList) {
-  const today = new Date().toLocaleDateString('ko-KR');
-  const rows = [
-    [`회사명 : 주식회사 아스프로 / ${today} / 재고현황 (OAPI 자동)`, '', '', '', '', '', '', ''],
-    ['품목코드','품번','브랜드','진행시즌','품목명[규격]','재고','진행채널','송장출력명'],
-  ];
-  for (const item of inventoryList) {
-    const code  = item.PROD_CD || item.ITEM_CD || '';
-    const name  = item.PROD_DES || item.ITEM_NM || item.PROD_NM || '';
-    const qty   = Number(item.BAL_QTY || item.QTY || item.BALANCE_QTY || 0);
-    const brand = item.CLASS_CD3 || item.CLASS_NM3 || '';
-    const season = item.CLASS_CD2 || item.CLASS_NM2 || '';
-    // 품번 = 품목코드의 prefix (하이픈 앞)
-    const prodPrefix = code.split('-')[0];
-    rows.push([code, prodPrefix, brand, season, name, qty, '', '']);
-  }
-  return rows;
-}
-
-// ── 5. Apps Script로 업로드 ──
-async function uploadToSheet(rows) {
-  if (DRY_RUN) {
-    log(`[DRY-RUN] 업로드 생략, ${rows.length}행 준비됨`);
-    fs.writeFileSync(path.join(LOG_DIR, 'rows_preview.json'), JSON.stringify(rows.slice(0,10), null, 2));
-    return;
-  }
-  const res = await fetch(SHEETS_WEBAPP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ icRawUpload: { rows } }),
-    redirect: 'follow',
-  });
-  const data = await res.json();
-  if (!data?.ok) die(`시트 업로드 실패: ${JSON.stringify(data)}`);
-  log(`시트 업로드 완료: ${data.saved}행`);
-}
-
-// ── main ──
+// ── 4. 메인 ──
 (async () => {
   try {
     requireEnv('ECOUNT_COM_CODE', ECOUNT_COM_CODE);
@@ -162,12 +141,80 @@ async function uploadToSheet(rows) {
     requireEnv('ECOUNT_PASSWORD', ECOUNT_PASSWORD);
     requireEnv('SHEETS_WEBAPP_URL', SHEETS_WEBAPP_URL);
 
-    log(`=== 동기화 시작 ${DRY_RUN ? '(DRY-RUN)' : ''} ===`);
+    log(`=== 동기화 시작 ${DRY_RUN ? '(DRY-RUN)' : ''} ${IS_TEST ? '[TEST MODE]' : '[PROD]'} ${LIMIT?'limit='+LIMIT:''} ===`);
+
+    // 기존 시트 로드
+    const sheetRows = await loadExistingSheet();
+    if (sheetRows.length < 3) die('시트가 비어있음 (헤더만 있거나 데이터 없음)');
+
+    // 헤더 2행은 그대로, 데이터는 row index 2부터
+    const dataStart = 2;
+    let prodCds = [];
+    for (let i = dataStart; i < sheetRows.length; i++) {
+      const code = (sheetRows[i][0] || '').trim();
+      if (code && !code.includes('계') && !code.includes('회사명')) {
+        prodCds.push({ rowIdx: i, code });
+      }
+    }
+    if (LIMIT > 0) prodCds = prodCds.slice(0, LIMIT);
+    log(`조회 대상 ${prodCds.length}개 품목 (예상 소요: ${Math.ceil(prodCds.length * RATE_MS / 60000)}분)`);
+
+    // 1일 한도 체크
+    if (prodCds.length > 4800) {
+      log(`경고: ${prodCds.length}개 > 1일 5000건 한도 근접. 분할 권장`, 'warn');
+    }
+
+    // 인증
     const zone = await fetchZone();
     const sid  = await login(zone);
-    const inv  = await fetchInventory(zone, sid);
-    const rows = buildSheetRows(inv);
-    await uploadToSheet(rows);
+    const baseDate = new Date().toISOString().slice(0,10).replace(/-/g,'');
+
+    // 루프
+    let okCnt = 0, failCnt = 0, zeroCnt = 0;
+    const updated = [...sheetRows.map(r => [...r])];
+    const startTs = Date.now();
+    for (let i = 0; i < prodCds.length; i++) {
+      const { rowIdx, code } = prodCds[i];
+      const res = await fetchSingleStock(zone, sid, code, baseDate);
+      if (res.error) {
+        failCnt++;
+        log(`  ❌ ${code}: ${res.error}`, 'warn');
+        if (failCnt >= 25) die('오류 누적 25건 — 중단 (시간당 30건 한도 보호)');
+      } else {
+        // F열(인덱스 5)에 재고 업데이트
+        while (updated[rowIdx].length <= 5) updated[rowIdx].push('');
+        updated[rowIdx][5] = res.qty;
+        if (res.qty > 0) okCnt++; else zeroCnt++;
+      }
+      if ((i+1) % 100 === 0) {
+        const elapsed = Math.round((Date.now() - startTs) / 1000);
+        log(`  진행: ${i+1}/${prodCds.length} (재고>0: ${okCnt} / 재고0: ${zeroCnt} / 실패: ${failCnt} / ${elapsed}초 경과)`);
+      }
+      if (i < prodCds.length - 1) await sleep(RATE_MS);
+    }
+
+    // 헤더 첫 행 업데이트 (날짜)
+    const today = new Date().toLocaleDateString('ko-KR');
+    updated[0] = [`회사명 : 주식회사 아스프로 / ${today} / 재고현황 (OAPI 자동 동기화)`, '', '', '', '', '', '', '', '', '', ''];
+
+    log(`수집 완료: 재고>0 ${okCnt} / 재고0 ${zeroCnt} / 실패 ${failCnt}`);
+
+    if (DRY_RUN) {
+      fs.writeFileSync(path.join(LOG_DIR, 'rows_preview.json'), JSON.stringify(updated.slice(0, 15), null, 2));
+      log(`[DRY-RUN] 업로드 생략. 미리보기: logs/rows_preview.json`);
+      return;
+    }
+
+    // 업로드
+    log('Apps Script로 시트 업로드 중...');
+    const up = await fetch(SHEETS_WEBAPP_URL, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ icRawUpload: { rows: updated } }),
+      redirect: 'follow',
+    });
+    const upJson = await up.json();
+    if (!upJson?.ok) die(`업로드 실패: ${JSON.stringify(upJson)}`);
+    log(`✅ 시트 업로드 완료: ${upJson.saved}행`);
     log('=== 동기화 완료 ===');
   } catch (e) {
     die(`예외: ${e.stack || e.message}`);
