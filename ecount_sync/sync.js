@@ -118,18 +118,40 @@ async function login(zone) {
   return sid;
 }
 
-// ── 3. 재고 단건 조회 ──
-async function fetchSingleStock(zone, sid, prodCd, baseDate) {
+// ── 3. 재고 단건 조회 (재시도 포함) ──
+async function fetchSingleStock(zone, sid, prodCd, baseDate, retries = 3) {
   const url = `${apiHost(zone.ZONE)}${ECOUNT_INVENTORY_API_PATH}?SESSION_ID=${sid}`;
-  const res = await fetch(url, {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({BASE_DATE: baseDate, PROD_CD: prodCd}),
-  });
-  const d = await res.json();
-  if (d?.Errors) return { error: d.Errors[0]?.Message };
-  const result = d?.Data?.Result || [];
-  if (result.length === 0) return { qty: 0, found: false };
-  return { qty: Number(result[0].BAL_QTY || 0), found: true };
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({BASE_DATE: baseDate, PROD_CD: prodCd}),
+      });
+      const txt = await res.text();
+      // HTML 응답 (rate limit / 서버에러) 감지
+      if (txt.trim().startsWith('<')) {
+        if (attempt < retries) {
+          await sleep(3000 * attempt); // 지수 백오프
+          continue;
+        }
+        return { error: `HTML 응답 (${res.status})` };
+      }
+      let d;
+      try { d = JSON.parse(txt); }
+      catch(e) {
+        if (attempt < retries) { await sleep(2000); continue; }
+        return { error: `JSON 파싱 실패: ${txt.slice(0,80)}` };
+      }
+      if (d?.Errors) return { error: d.Errors[0]?.Message };
+      const result = d?.Data?.Result || [];
+      if (result.length === 0) return { qty: 0, found: false };
+      return { qty: Number(result[0].BAL_QTY || 0), found: true };
+    } catch(e) {
+      if (attempt < retries) { await sleep(2000); continue; }
+      return { error: `fetch 실패: ${e.message}` };
+    }
+  }
+  return { error: '재시도 한도 초과' };
 }
 
 // ── 4. 메인 ──
