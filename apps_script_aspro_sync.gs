@@ -181,6 +181,25 @@ function doPost(e) {
       icSh.getRange(1, 1, icRows.length, 3).setValues(icRows);
     }
 
+    // 이카운트 OAPI에서 자동 업로드되는 재고 원본 (이카운트원본 시트 통째 덮어쓰기)
+    if (data.icRawUpload && Array.isArray(data.icRawUpload.rows)) {
+      var icRawSh = ensureSheet_(ss, '이카운트원본');
+      icRawSh.clearContents();
+      var rows = data.icRawUpload.rows;
+      if (rows.length > 0) {
+        var maxCols = 0;
+        for (var r = 0; r < rows.length; r++) {
+          if (rows[r].length > maxCols) maxCols = rows[r].length;
+        }
+        // 모든 행 길이 통일
+        for (var r2 = 0; r2 < rows.length; r2++) {
+          while (rows[r2].length < maxCols) rows[r2].push('');
+        }
+        icRawSh.getRange(1, 1, rows.length, maxCols).setValues(rows);
+      }
+      savedCount = rows.length;
+    }
+
     SpreadsheetApp.flush();
     return json_({ ok: true, saved: savedCount });
   } catch (err) {

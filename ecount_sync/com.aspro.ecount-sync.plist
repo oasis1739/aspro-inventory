@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  매일 오전 7시 이카운트 → 구글시트 자동 동기화
+  설치:
+    cp com.aspro.ecount-sync.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.aspro.ecount-sync.plist
+  제거:
+    launchctl unload ~/Library/LaunchAgents/com.aspro.ecount-sync.plist
+    rm ~/Library/LaunchAgents/com.aspro.ecount-sync.plist
+  수동 즉시 실행:
+    launchctl start com.aspro.ecount-sync
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.aspro.ecount-sync</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/junghakjun/ai_work/codex/재고_inventory-dashboard/ecount_sync/sync.js</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/junghakjun/ai_work/codex/재고_inventory-dashboard/ecount_sync</string>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>7</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/junghakjun/ai_work/codex/재고_inventory-dashboard/ecount_sync/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/junghakjun/ai_work/codex/재고_inventory-dashboard/ecount_sync/logs/launchd.err.log</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

@@ -1,0 +1,14 @@
+{
+  "name": "aspro-ecount-sync",
+  "version": "1.0.0",
+  "description": "이카운트 OAPI에서 재고 가져와서 Google Sheets 이카운트원본 시트로 매일 동기화",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node sync.js",
+    "test": "node sync.js --dry-run"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  }
+}

@@ -8,6 +8,9 @@
 # 환경 변수
 .env
 .env.local
+ecount_sync/.env
+ecount_sync/logs/
+ecount_sync/node_modules/
 
 # macOS
 .DS_Store

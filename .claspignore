@@ -8,3 +8,5 @@ backups/**
 .claspignore
 deploy.sh
 main
+ecount_sync/**
+node_modules/**
