@@ -730,12 +730,21 @@ async function fetchCsvRows(sheetName) {
 }
 // 기본 데이터(매핑/품절/kcfi 등) — Apps Script doGet 응답과 동일 구조로 빌드
 async function loadBaseViaCSV() {
-  const [match, soldout, kcfi, iccodemap, forcezero, setmap] = await Promise.all([
+  const [match, soldout, kcfi, iccodemap, forcezero, setmap, soldoutLog] = await Promise.all([
     fetchCsvRows('aspro_match'), fetchCsvRows('aspro_soldout'),
     fetchCsvRows('aspro_kcfi'), fetchCsvRows('aspro_iccodemap'),
     fetchCsvRows('aspro_forcezero'), fetchCsvRows('aspro_setmap'),
+    fetchCsvRows('aspro_soldout_logistics').catch(()=>[]),
   ]);
-  const data = { ok: true, map: {}, nameMap: {}, soldout: {}, kcfi: {}, iccodemap: {}, forcezero: {}, setmap: {} };
+  const data = { ok: true, map: {}, nameMap: {}, soldout: {}, kcfi: {}, iccodemap: {}, forcezero: {}, setmap: {}, soldoutLogistics: {} };
+  (soldoutLog || []).slice(1).forEach(r => {
+    const code = String(r[0]||'').trim();
+    if (code) data.soldoutLogistics[code] = {
+      color: String(r[1]||''), size: String(r[2]||''),
+      name: String(r[3]||''), source: String(r[4]||''),
+      date: String(r[5]||''), memo: String(r[6]||'')
+    };
+  });
   match.slice(1).forEach(r => {
     const sc = String(r[0]||'').trim(), gp = String(r[1]||'').trim(), nm = String(r[2]||'').trim();
     if (sc && gp) data.map[sc] = gp;
@@ -784,6 +793,7 @@ let kcfiMetaMap = {};
 let kcfiAuditRows = [];
 let kcfiProductMapExtra = {};
 let forceZeroMap = {}; // 강제품절: 자체코드(prefix) → true
+let soldoutLogisticsMap = {}; // 물류품번 영구품절: 물류품번 → {color,size,name,source,date,memo}
 
 const SKIP_GP = new Set(['nan','','슈컴퍼니-김포이관','확인요망','삭제요망']);
 let extraMap = {};
@@ -2445,6 +2455,11 @@ async function runMatch() {
       nomapRows.push({ ...sab, _manualGimpo: '' });
     }
 
+    // ★ 물류품번 영구품절 (발주서 누적): 최종 산출 물류품번이 차단 목록에 있으면 강제 0
+    if (finalQty !== null && finalQty > 0 && 물류품번 && 물류품번 !== '—' && soldoutLogisticsMap[물류품번]) {
+      finalQty = 0; src = '발주서품절'; cZ++;
+    }
+
     let status;
     if (finalQty === null)  { status='unmatched'; cU++; }
     else if (finalQty===0)  { status='zero';      cZ++; }
@@ -2656,6 +2671,8 @@ function renderMain(rows) {
       ? `<span class="bdg b-z" style="font-size:9px">컬러?</span>`
       : r._src==='KCFI원본'||r._src==='KCFI미연결'
       ? `<span class="bdg b-pp" style="font-size:9px">${r._src}</span>`
+      : r._src==='발주서품절'
+      ? `<span class="bdg b-z" style="font-size:9px">발주서품절</span>`
       : r._src.startsWith('김포')||r._src==='KCFI'
       ? `<span class="bdg ${r._src==='KCFI'?'b-pp':'b-gp'}">${r._src}</span>`
       : `<span style="color:var(--text3)">—</span>`;
@@ -3932,6 +3949,15 @@ async function autoLoadFromSheets() {
       } else {
         const smRaw = localStorage.getItem('aspro_setmap_v1');
         if (smRaw) { try { setRuleMap = mergeSetRuleMap(setRuleMap, JSON.parse(smRaw)); } catch(e2) {} }
+      }
+      // 물류품번 영구품절 (발주서 누적 관리)
+      if (data.soldoutLogistics && Object.keys(data.soldoutLogistics).length > 0) {
+        soldoutLogisticsMap = { ...data.soldoutLogistics };
+        try { localStorage.setItem('aspro_soldout_logistics_v1', JSON.stringify(soldoutLogisticsMap)); } catch(e2) {}
+        log(`[OK] 물류품번 영구품절 로드: ${Object.keys(soldoutLogisticsMap).length}건`, 'ok');
+      } else {
+        const slRaw = localStorage.getItem('aspro_soldout_logistics_v1');
+        if (slRaw) { try { soldoutLogisticsMap = JSON.parse(slRaw); } catch(e2) {} }
       }
       try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
       updateSavedMapCnt();

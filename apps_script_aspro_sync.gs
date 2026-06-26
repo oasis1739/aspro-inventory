@@ -49,11 +49,25 @@ function doGet(e) {
       if (sc) soldout[sc] = String(r[1] || '');
     });
 
+    // 물류품번 기반 영구 품절 (발주서 비고 "판매종료" 누적 관리)
+    var soldoutLogSh = ensureSheet_(ss, 'aspro_soldout_logistics', ['물류품번','색상','사이즈','상품명','출처','등록일','메모']);
+    var soldoutLogData = soldoutLogSh.getDataRange().getValues();
+    var soldoutLog = {};
+    soldoutLogData.slice(1).forEach(function(r) {
+      var code = String(r[0] || '').trim();
+      if (code) soldoutLog[code] = {
+        color: String(r[1]||''), size: String(r[2]||''),
+        name: String(r[3]||''), source: String(r[4]||''),
+        date: String(r[5]||''), memo: String(r[6]||'')
+      };
+    });
+
     return json_({
       ok: true,
       matchCount: Object.keys(map).length,
       map: type === 'base' ? map : undefined,
-      soldout: type === 'base' ? soldout : undefined
+      soldout: type === 'base' ? soldout : undefined,
+      soldoutLogistics: type === 'base' ? soldoutLog : undefined
     });
   } catch (err) {
     return json_({ ok: false, error: err.message });
@@ -179,6 +193,36 @@ function doPost(e) {
         if (sc) icRows.push([sc, data.iccodemap[sc], now]);
       });
       icSh.getRange(1, 1, icRows.length, 3).setValues(icRows);
+    }
+
+    // 물류품번 기반 영구 품절 관리 (발주서 누적)
+    // data.soldoutLogistics: { mode: 'merge'|'replace', items: [{code, color, size, name, source, memo}, ...] }
+    if (data.soldoutLogistics && Array.isArray(data.soldoutLogistics.items)) {
+      var slSh = ensureSheet_(ss, 'aspro_soldout_logistics', ['물류품번','색상','사이즈','상품명','출처','등록일','메모']);
+      var mode = data.soldoutLogistics.mode || 'merge';
+      var existing = {};
+      if (mode === 'merge') {
+        var existData = slSh.getDataRange().getValues();
+        existData.slice(1).forEach(function(r) {
+          var c = String(r[0]||'').trim();
+          if (c) existing[c] = r;
+        });
+      }
+      var newItems = {};
+      data.soldoutLogistics.items.forEach(function(it) {
+        var code = String(it.code||'').trim();
+        if (!code) return;
+        newItems[code] = [code, it.color||'', it.size||'', it.name||'', it.source||'', it.date || new Date(), it.memo||''];
+      });
+      var merged = mode === 'merge' ? Object.assign({}, existing, newItems) : newItems;
+      var keys = Object.keys(merged);
+      slSh.clearContents();
+      slSh.getRange(1,1,1,7).setValues([['물류품번','색상','사이즈','상품명','출처','등록일','메모']]);
+      if (keys.length > 0) {
+        var rows = keys.map(function(k) { return merged[k]; });
+        slSh.getRange(2,1,rows.length,7).setValues(rows);
+      }
+      savedCount = keys.length;
     }
 
     // 이카운트 OAPI에서 자동 업로드되는 재고 원본 (이카운트원본 시트 통째 덮어쓰기)
