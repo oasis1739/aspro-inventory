@@ -16,10 +16,17 @@ const payload = {
     }))
   }
 };
-const res = await fetch(process.env.SHEETS_WEBAPP_URL, {
-  method: 'POST', headers: {'Content-Type':'application/json'},
-  body: JSON.stringify(payload), redirect: 'follow'
-});
-const txt = await res.text();
+async function postWebApp(url, body) {
+  const res = await fetch(url, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body), redirect: 'manual',
+  });
+  if (res.status === 302 || res.status === 303) {
+    const loc = res.headers.get('location');
+    return await (await fetch(loc)).text();
+  }
+  return await res.text();
+}
+const txt = await postWebApp(process.env.SHEETS_WEBAPP_URL, payload);
 if (txt.trim().startsWith('<')) { console.error('HTML 응답 — 배포 권한 확인'); process.exit(1); }
 console.log(JSON.parse(txt));

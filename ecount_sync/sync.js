@@ -155,17 +155,26 @@ async function fetchSingleStock(zone, sid, prodCd, baseDate, retries = 3) {
   return { error: '재시도 한도 초과' };
 }
 
+// Apps Script Web App POST 호출 (302 redirect 수동 처리 — fetch follow는 body 손실)
+async function postToAppsScript(payload) {
+  const res = await fetch(SHEETS_WEBAPP_URL, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload), redirect: 'manual',
+  });
+  if (res.status === 302 || res.status === 303) {
+    const loc = res.headers.get('location');
+    const followup = await fetch(loc);
+    return await followup.text();
+  }
+  return await res.text();
+}
+
 // ── 시트 업로드 (재시도 + HTML 응답 감지) ──
 async function uploadWithRetry(rows, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     log(`Apps Script로 시트 업로드 중 (시도 ${attempt}/${retries})...`);
     try {
-      const res = await fetch(SHEETS_WEBAPP_URL, {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ icRawUpload: { rows } }),
-        redirect: 'follow',
-      });
-      const txt = await res.text();
+      const txt = await postToAppsScript({ icRawUpload: { rows } });
       if (txt.trim().startsWith('<')) {
         log(`업로드 응답이 HTML (Apps Script 배포가 "Anyone" 미설정?) ─ 응답앞 200자: ${txt.slice(0,200)}`, 'warn');
         if (attempt < retries) { await sleep(3000); continue; }
