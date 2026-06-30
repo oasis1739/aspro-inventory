@@ -2444,6 +2444,13 @@ async function runMatch() {
     if (forceZeroMap[jache] || forceZeroMap[fzPrefix] || forceZeroMap[sc]) {
       finalQty = 0; src = '강제품절'; 물류품번 = resolveLogisticsCode(extraMap[sc] || matchMap[sc] || '—'); cZ++;
     }
+    // ★ 강제재고 (리오더 신상품) — 강제품절 다음 두 번째 우선순위
+    // 매칭/재고 무관하게 사방넷코드 기준 고정값 적용
+    else if (forceStockMap[sc]) {
+      finalQty = forceStockMap[sc].qty;
+      src = '강제재고';
+      물류품번 = resolveLogisticsCode(extraMap[sc] || matchMap[sc] || '—');
+    }
     // 우선순위: KCFI(재고>0) > 김포(재고 유무 무관) > 이카운트 > KCFI(재고0)
     // 김포와 이카운트가 둘 다 잡히면 실제 물류 출고 기준인 김포 수량을 우선한다.
     else if (kcfiQty !== null && kcfiQty > 0) {
@@ -2465,18 +2472,9 @@ async function runMatch() {
     }
 
     // ★ 물류품번 영구품절 (발주서 누적): 최종 산출 물류품번이 차단 목록에 있으면 강제 0
-    if (finalQty !== null && finalQty > 0 && 물류품번 && 물류품번 !== '—' && soldoutLogisticsMap[물류품번]) {
+    // 단 강제재고(src='강제재고')는 리오더 상품이므로 발주서품절보다 우선 유지
+    if (src !== '강제재고' && finalQty !== null && finalQty > 0 && 물류품번 && 물류품번 !== '—' && soldoutLogisticsMap[물류품번]) {
       finalQty = 0; src = '발주서품절'; cZ++;
-    }
-
-    // ★ 강제재고 (리오더 신상품): 사방넷코드가 등록되어 있으면 실재고 무시하고 고정값
-    // 품절 처리들보다 뒤에 적용 — 리오더 상품은 영구 품절이 아니므로 우선 적용
-    if (forceStockMap[sc]) {
-      finalQty = forceStockMap[sc].qty;
-      src = '강제재고';
-      if (!물류품번 || 물류품번 === '—') {
-        물류품번 = resolveLogisticsCode(extraMap[sc] || matchMap[sc] || '—');
-      }
     }
 
     let status;
