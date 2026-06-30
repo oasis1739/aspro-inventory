@@ -62,12 +62,26 @@ function doGet(e) {
       };
     });
 
+    // 사방넷코드 기반 강제재고 (리오더 가능 신상품 — 실재고 무시하고 고정값 표시)
+    var forceStockSh = ensureSheet_(ss, 'aspro_forcestock', ['사방넷코드','강제재고','상품명','등록일','메모']);
+    var forceStockData = forceStockSh.getDataRange().getValues();
+    var forceStock = {};
+    forceStockData.slice(1).forEach(function(r) {
+      var sc = String(r[0]||'').trim();
+      var qty = parseInt(String(r[1]||'').replace(/,/g,''));
+      if (sc && !isNaN(qty)) forceStock[sc] = {
+        qty: qty, name: String(r[2]||''),
+        date: String(r[3]||''), memo: String(r[4]||'')
+      };
+    });
+
     return json_({
       ok: true,
       matchCount: Object.keys(map).length,
       map: type === 'base' ? map : undefined,
       soldout: type === 'base' ? soldout : undefined,
-      soldoutLogistics: type === 'base' ? soldoutLog : undefined
+      soldoutLogistics: type === 'base' ? soldoutLog : undefined,
+      forceStock: type === 'base' ? forceStock : undefined
     });
   } catch (err) {
     return json_({ ok: false, error: err.message });
@@ -99,6 +113,15 @@ function processFromTemp() {
   }
   ss.deleteSheet(tempSh);
   SpreadsheetApp.getUi().alert(toAdd.length + '건 추가 완료, ' + skipped + '건 기존유지(구글시트 우선)');
+}
+
+// clasp run / Apps Script API 호출용 — 권한 우회 (webapp 권한 재설정 영구 면제)
+// 사용: clasp run --function runFromJson --params '["JSON문자열"]'
+function runFromJson(jsonStr) {
+  var body = typeof jsonStr === 'string' ? jsonStr : JSON.stringify(jsonStr);
+  var fakeE = { postData: { contents: body } };
+  var resp = doPost(fakeE);
+  return resp.getContent ? resp.getContent() : String(resp);
 }
 
 function doPost(e) {
@@ -221,6 +244,35 @@ function doPost(e) {
       if (keys.length > 0) {
         var rows = keys.map(function(k) { return merged[k]; });
         slSh.getRange(2,1,rows.length,7).setValues(rows);
+      }
+      savedCount = keys.length;
+    }
+
+    // 강제재고 (리오더 신상품) - merge/replace 모드
+    if (data.forceStock && Array.isArray(data.forceStock.items)) {
+      var fsSh = ensureSheet_(ss, 'aspro_forcestock', ['사방넷코드','강제재고','상품명','등록일','메모']);
+      var mode = data.forceStock.mode || 'merge';
+      var existing = {};
+      if (mode === 'merge') {
+        var existData = fsSh.getDataRange().getValues();
+        existData.slice(1).forEach(function(r) {
+          var c = String(r[0]||'').trim();
+          if (c) existing[c] = r;
+        });
+      }
+      var newItems = {};
+      data.forceStock.items.forEach(function(it) {
+        var sc = String(it.code||'').trim();
+        if (!sc) return;
+        newItems[sc] = [sc, it.qty || 0, it.name||'', it.date || new Date(), it.memo||''];
+      });
+      var merged = mode === 'merge' ? Object.assign({}, existing, newItems) : newItems;
+      var keys = Object.keys(merged);
+      fsSh.clearContents();
+      fsSh.getRange(1,1,1,5).setValues([['사방넷코드','강제재고','상품명','등록일','메모']]);
+      if (keys.length > 0) {
+        var rows = keys.map(function(k) { return merged[k]; });
+        fsSh.getRange(2,1,rows.length,5).setValues(rows);
       }
       savedCount = keys.length;
     }

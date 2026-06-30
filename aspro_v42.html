@@ -730,19 +730,27 @@ async function fetchCsvRows(sheetName) {
 }
 // 기본 데이터(매핑/품절/kcfi 등) — Apps Script doGet 응답과 동일 구조로 빌드
 async function loadBaseViaCSV() {
-  const [match, soldout, kcfi, iccodemap, forcezero, setmap, soldoutLog] = await Promise.all([
+  const [match, soldout, kcfi, iccodemap, forcezero, setmap, soldoutLog, forceStock] = await Promise.all([
     fetchCsvRows('aspro_match'), fetchCsvRows('aspro_soldout'),
     fetchCsvRows('aspro_kcfi'), fetchCsvRows('aspro_iccodemap'),
     fetchCsvRows('aspro_forcezero'), fetchCsvRows('aspro_setmap'),
     fetchCsvRows('aspro_soldout_logistics').catch(()=>[]),
+    fetchCsvRows('aspro_forcestock').catch(()=>[]),
   ]);
-  const data = { ok: true, map: {}, nameMap: {}, soldout: {}, kcfi: {}, iccodemap: {}, forcezero: {}, setmap: {}, soldoutLogistics: {} };
+  const data = { ok: true, map: {}, nameMap: {}, soldout: {}, kcfi: {}, iccodemap: {}, forcezero: {}, setmap: {}, soldoutLogistics: {}, forceStock: {} };
   (soldoutLog || []).slice(1).forEach(r => {
     const code = String(r[0]||'').trim();
     if (code) data.soldoutLogistics[code] = {
       color: String(r[1]||''), size: String(r[2]||''),
       name: String(r[3]||''), source: String(r[4]||''),
       date: String(r[5]||''), memo: String(r[6]||'')
+    };
+  });
+  (forceStock || []).slice(1).forEach(r => {
+    const sc = normCode(r[0]);
+    const qty = parseInt(String(r[1]||'').replace(/,/g,''));
+    if (sc && !isNaN(qty)) data.forceStock[sc] = {
+      qty, name: String(r[2]||''), date: String(r[3]||''), memo: String(r[4]||'')
     };
   });
   match.slice(1).forEach(r => {
@@ -794,6 +802,7 @@ let kcfiAuditRows = [];
 let kcfiProductMapExtra = {};
 let forceZeroMap = {}; // 강제품절: 자체코드(prefix) → true
 let soldoutLogisticsMap = {}; // 물류품번 영구품절: 물류품번 → {color,size,name,source,date,memo}
+let forceStockMap = {}; // 강제재고: 사방넷코드 → {qty, name, date, memo} (리오더 신상품)
 
 const SKIP_GP = new Set(['nan','','슈컴퍼니-김포이관','확인요망','삭제요망']);
 let extraMap = {};
@@ -2460,6 +2469,16 @@ async function runMatch() {
       finalQty = 0; src = '발주서품절'; cZ++;
     }
 
+    // ★ 강제재고 (리오더 신상품): 사방넷코드가 등록되어 있으면 실재고 무시하고 고정값
+    // 품절 처리들보다 뒤에 적용 — 리오더 상품은 영구 품절이 아니므로 우선 적용
+    if (forceStockMap[sc]) {
+      finalQty = forceStockMap[sc].qty;
+      src = '강제재고';
+      if (!물류품번 || 물류품번 === '—') {
+        물류품번 = resolveLogisticsCode(extraMap[sc] || matchMap[sc] || '—');
+      }
+    }
+
     let status;
     if (finalQty === null)  { status='unmatched'; cU++; }
     else if (finalQty===0)  { status='zero';      cZ++; }
@@ -2673,6 +2692,8 @@ function renderMain(rows) {
       ? `<span class="bdg b-pp" style="font-size:9px">${r._src}</span>`
       : r._src==='발주서품절'
       ? `<span class="bdg b-z" style="font-size:9px">발주서품절</span>`
+      : r._src==='강제재고'
+      ? `<span class="bdg b-ok" style="font-size:9px;background:#0ea5e9">강제재고</span>`
       : r._src.startsWith('김포')||r._src==='KCFI'
       ? `<span class="bdg ${r._src==='KCFI'?'b-pp':'b-gp'}">${r._src}</span>`
       : `<span style="color:var(--text3)">—</span>`;
@@ -3958,6 +3979,15 @@ async function autoLoadFromSheets() {
       } else {
         const slRaw = localStorage.getItem('aspro_soldout_logistics_v1');
         if (slRaw) { try { soldoutLogisticsMap = JSON.parse(slRaw); } catch(e2) {} }
+      }
+      // 강제재고 (리오더 신상품)
+      if (data.forceStock && Object.keys(data.forceStock).length > 0) {
+        forceStockMap = { ...data.forceStock };
+        try { localStorage.setItem('aspro_forcestock_v1', JSON.stringify(forceStockMap)); } catch(e2) {}
+        log(`[OK] 강제재고(리오더) 로드: ${Object.keys(forceStockMap).length}건`, 'ok');
+      } else {
+        const fsRaw = localStorage.getItem('aspro_forcestock_v1');
+        if (fsRaw) { try { forceStockMap = JSON.parse(fsRaw); } catch(e2) {} }
       }
       try { localStorage.setItem('aspro_matchfile_v2', JSON.stringify(matchMap)); } catch(e2) {}
       updateSavedMapCnt();
