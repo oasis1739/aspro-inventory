@@ -812,8 +812,22 @@ let nomapRows = [];
 let currentTab = 'all', editMode = false, expMode = 'all';
 
 function getSheetsUrl() {
-  const saved = localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL || '';
-  return saved === DEAD_SHEETS_URL ? '' : saved;
+  const saved = localStorage.getItem(SHEETS_URL_KEY);
+  // 옛 webapp URL이 localStorage에 박혀있으면 DEFAULT_SHEETS_URL (최신)로 자동 교체
+  // 보관처리된 옛 배포본들 → 404 응답 방지
+  const OLD_URLS = new Set([
+    DEAD_SHEETS_URL,
+    'https://script.google.com/macros/s/AKfycbxn_yuxbci4MW3JQla3NPf0TFYapNiR7M7w9pznkQVu6KTqlKxIm8MPOayRjdLTNH-0/exec',
+    'https://script.google.com/macros/s/AKfycby0Rprvew769n4-2GZz_aQjgOJzs371H0fO64grPO6ieMvBJMqTbvtwJ-yamFhnx-64/exec',
+  ]);
+  if (saved && OLD_URLS.has(saved)) {
+    if (DEFAULT_SHEETS_URL) {
+      localStorage.setItem(SHEETS_URL_KEY, DEFAULT_SHEETS_URL);
+      return DEFAULT_SHEETS_URL;
+    }
+    return '';
+  }
+  return saved || DEFAULT_SHEETS_URL || '';
 }
 
 const SAB_IC_OVERRIDE = {
