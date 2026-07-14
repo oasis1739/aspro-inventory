@@ -4089,9 +4089,19 @@ async function autoLoadFromSheets() {
             }
             document.getElementById('icZone').classList.add('ok');
             const icList = document.getElementById('icList');
-            if (icList) icList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 이카운트원본</div><div class="fcnt">${icCnt}SKU</div></div>`;
+            // 이카운트원본 시트 A1에서 마지막 sync 시각 추출
+            const icHeaderCell = String(data2.icRaw[0]?.[0] || '');
+            const syncMatch = icHeaderCell.match(/최종 동기화:\s*([^\/]+?)\s*\//) || icHeaderCell.match(/\/\s*(20\d{2}[.\s\-0-9:]+)\s*\//);
+            const lastSync = syncMatch ? syncMatch[1].trim() : '?';
+            // 신선도 계산 (오늘 대비 며칠 전)
+            const parseDate = s => { const m = s.match(/(20\d{2})[.\-\s]+(\d{1,2})[.\-\s]+(\d{1,2})/); return m ? new Date(+m[1], +m[2]-1, +m[3]) : null; };
+            const syncDate = parseDate(lastSync);
+            const daysAgo = syncDate ? Math.floor((Date.now() - syncDate.getTime())/86400000) : null;
+            const freshTag = daysAgo === null ? '' : daysAgo === 0 ? ' 🟢' : daysAgo === 1 ? ' 🟡 어제' : ` 🔴 ${daysAgo}일 전`;
+            if (icList) icList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 이카운트원본</div><div class="fcnt">${icCnt}SKU</div></div><div style="font-size:10px;color:var(--text3);padding:2px 6px">📅 ${lastSync}${freshTag}</div>`;
             document.getElementById('icInfo').style.display='block';
-            document.getElementById('icInfo').textContent=`Sheets 이카운트 ${icCnt}SKU`;
+            document.getElementById('icInfo').textContent=`Sheets 이카운트 ${icCnt}SKU · 최종sync: ${lastSync}${freshTag}`;
+            log(`[INFO] 이카운트 최종 동기화: ${lastSync}${freshTag}`, daysAgo && daysAgo >= 2 ? 'warn' : 'info');
           }
 
           // 김포원본

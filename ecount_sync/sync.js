@@ -267,9 +267,9 @@ async function uploadWithRetry(rows, retries = 3) {
       if (i < prodCds.length - 1) await sleep(RATE_MS);
     }
 
-    // 헤더 첫 행 업데이트 (날짜)
-    const today = new Date().toLocaleDateString('ko-KR');
-    updated[0] = [`회사명 : 주식회사 아스프로 / ${today} / 재고현황 (OAPI 자동 동기화)`, '', '', '', '', '', '', '', '', '', ''];
+    // 헤더 첫 행 업데이트 (날짜 + 시간, 육안 확인용)
+    const nowKr = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+    updated[0] = [`회사명 : 주식회사 아스프로 / 최종 동기화: ${nowKr} / 재고현황 (OAPI 자동)`, '', '', '', '', '', '', '', '', '', ''];
 
     log(`수집 완료: 재고>0 ${okCnt} / 재고0 ${zeroCnt} / 실패 ${failCnt}`);
 
