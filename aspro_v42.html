@@ -326,6 +326,7 @@ tbody td{padding:5px 9px;font-size:12px;white-space:nowrap;}
       </div>
       <span style="color:var(--text3);font-size:10px;margin-left:auto;font-family:var(--mono)" id="rowCnt"></span>
       <button class="btn btn-n" id="dlMatchedBtn" onclick="exportCurrentTab()" style="display:none;font-size:11px;padding:3px 8px">⬇ 현재탭 다운로드</button>
+      <button class="btn btn-n" id="dlHanaHubBtn" onclick="exportHanaHubStock()" style="display:none;font-size:11px;padding:3px 8px" title="ASPRO 옵션별 계산재고와 상품 합계를 하나허브 검증용 JSON으로 저장합니다">HUB 재고 JSON</button>
     </div>
 
     <!-- 메인 테이블 -->
@@ -2574,6 +2575,8 @@ function switchTab(tab) {
   // 다운로드 버튼: 메인탭에서만 표시
   const dlBtn = document.getElementById('dlMatchedBtn');
   if (dlBtn) dlBtn.style.display = showMain ? 'inline-block' : 'none';
+  const hubBtn = document.getElementById('dlHanaHubBtn');
+  if (hubBtn) hubBtn.style.display = showMain ? 'inline-block' : 'none';
   if (tab==='nomap') renderNomap();
   else if (tab==='soldout') renderSoldoutTab();
   else if (tab==='mapview') renderMapview();
@@ -2606,6 +2609,49 @@ function exportCurrentTab() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, tabName);
   XLSX.writeFile(wb, `aspro_${tabName}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// 하나허브는 옵션별 결과와 상품 합계가 같은 계산본인지 먼저 대조한다.
+// 이 파일은 검증 전용이며, 가져오기 도구가 --confirm 없이는 운영 재고를 바꾸지 않는다.
+function exportHanaHubStock() {
+  if (!resultRows.length) { alert('재고 매칭을 먼저 실행하세요.'); return; }
+  const aggregates = new Map();
+  const optionRows = resultRows
+    .filter(r => String(r.자체코드 || '').trim() && String(r.사방넷코드 || '').trim())
+    .map(r => {
+      const productCode = String(r.자체코드 || '').trim();
+      const stock = Math.max(0, Number(r._qty) || 0);
+      const status = r._status || (stock > 0 ? 'matched' : 'zero');
+      const summary = aggregates.get(productCode) || { code:productCode, stock:0, optionCount:0, matchedCount:0, zeroCount:0, unmatchedCount:0, sources:new Set() };
+      summary.stock += stock;
+      summary.optionCount += 1;
+      if (status === 'matched') summary.matchedCount += 1;
+      if (status === 'zero') summary.zeroCount += 1;
+      if (status === 'unmatched') summary.unmatchedCount += 1;
+      if (r._src && r._src !== '—') summary.sources.add(String(r._src));
+      aggregates.set(productCode, summary);
+      return {
+        productCode,
+        sabangCode: String(r.사방넷코드 || '').trim(),
+        option: String(r.옵션 || '').trim(),
+        stock,
+        status,
+        source: r._src && r._src !== '—' ? String(r._src) : '',
+        logisticsCode: r._물류품번 && r._물류품번 !== '—' ? String(r._물류품번) : ''
+      };
+    });
+  const rows = [...aggregates.values()]
+    .map(row => ({ ...row, sources:[...row.sources].sort() }))
+    .sort((a,b) => a.code.localeCompare(b.code));
+  const calculatedAt = new Date().toISOString();
+  const payload = { engine:'ASPRO v4.7', calculatedAt, sourceFile:'ASPRO v4.7 옵션 계산 결과', rows, optionRows };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `aspro_hana_hub_stock_${calculatedAt.slice(0,10)}.json`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+  log(`[OK] 하나허브 재고 JSON: 상품 ${rows.length.toLocaleString()}건 · 옵션 ${optionRows.length.toLocaleString()}건`, 'ok');
 }
 
 function applyFilter() {
