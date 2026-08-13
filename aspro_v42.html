@@ -1849,6 +1849,24 @@ function mergeSetRuleMap(base, extra) {
   return merged;
 }
 
+// 자체코드가 _SET인 이카운트 세트도 aspro_setmap 규칙을 재사용한다.
+// 예: N1008_SET | 24FWELTS01 | 블랙:BK,브라운:BR,베이지:BE
+function findInventorySetRule(jache) {
+  const original = String(jache || '').trim();
+  if (!original) return null;
+  const base = original.split('-')[0];
+  const candidates = [
+    original,
+    base,
+    original.replace(/_\d+set$/i, '_SET'),
+    base.replace(/_\d+set$/i, '_SET'),
+  ].filter(Boolean);
+  for (const key of [...new Set(candidates)]) {
+    if (setRuleMap[key]) return { key, rule: setRuleMap[key] };
+  }
+  return null;
+}
+
 function findGimpoRuleForJache(jache) {
   const clean = String(jache || '').replace(/_SET$/i, '').replace(/-SET$/i, '').replace(/_\d+set$/i, '');
   if (!clean) return null;
@@ -2122,6 +2140,17 @@ function getIcountQty(sabData_row) {
   const parsedOpt = parseOpt(옵션);
   let { cc, sz, isSet, setColors } = parsedOpt;
 
+  // 사이즈만 있는 세트 옵션(예: N1008_SET / 55)은 화면 문자열만으로 세트인지
+  // 알 수 없으므로 Google Sheets의 aspro_setmap 구성색상을 사용한다.
+  const inventorySetRule = findInventorySetRule(자체);
+  if (!isSet && inventorySetRule && /(?:^|[_-])SET(?:$|[_-])/i.test(자체) && sz) {
+    const configuredColors = [...new Set(Object.values(inventorySetRule.rule.colorMap || {}).filter(Boolean))];
+    if (configuredColors.length > 1) {
+      isSet = true;
+      setColors = configuredColors;
+    }
+  }
+
   if (!cc) {
     const m = 자체.match(/([A-Z]{2,3})\d?$/);
     if (m) cc = COLOR_MAP[m[1]] || m[1];
@@ -2130,7 +2159,8 @@ function getIcountQty(sabData_row) {
   // ── 1순위: icCodeMap 직접 매핑 (IC_STATIC_MAP 포함) ──
   const icDirect = icCodeMap[sc] || icCodeMap[자체]
                 || icCodeMap[sc.split('-')[0]] || icCodeMap[자체.split('-')[0]]
-                || IC_STATIC_MAP[자체] || IC_STATIC_MAP[자체.split('-')[0]];
+                || IC_STATIC_MAP[자체] || IC_STATIC_MAP[자체.split('-')[0]]
+                || (isSet ? inventorySetRule?.rule.gpPrefix : '');
   if (icDirect) {
     let directItems = icMap[icDirect] || [];
     if (!directItems.length) {
