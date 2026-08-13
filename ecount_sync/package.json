@@ -6,9 +6,12 @@
   "type": "module",
   "scripts": {
     "sync": "node sync.js",
-    "test": "node sync.js --dry-run"
+    "test": "node sync.js --dry-run",
+    "recalculate": "node daily-recalculate.mjs --force",
+    "recalculate:confirm": "node daily-recalculate.mjs --force --confirm"
   },
   "dependencies": {
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "playwright-core": "^1.62.1"
   }
 }
