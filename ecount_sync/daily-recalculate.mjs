@@ -100,8 +100,10 @@ try {
     ecountCodes: new Set(Object.values(icMap).flat().map((row) => row.품목코드).filter(Boolean)).size,
     ecountMeta: window.asproSourceMeta?.ecount || null,
     gimpoCodes: Object.keys(gpMap).length,
+    gimpoMeta: window.asproSourceMeta?.gimpo || null,
     kcfiOptions: Object.keys(kcfiMap).length,
-    kcfiRaw: window.asproSourceMeta?.kcfiRaw || null
+    kcfiRaw: window.asproSourceMeta?.kcfiRaw || null,
+    kcfiProducts: [...new Set((kcfiAuditRows || []).map((row) => row.productName).filter(Boolean))]
   }));
   if (sourceCounts.sabangOptions < 3000) throw new Error(`사방넷 원본이 부족합니다: ${sourceCounts.sabangOptions}행`);
   if (sourceCounts.ecountCodes < 1500) throw new Error(`이카운트 원본이 부족합니다: ${sourceCounts.ecountCodes}개`);
@@ -114,9 +116,19 @@ try {
     throw new Error(`이카운트 원본이 오래되어 반영을 중단합니다: ${sourceCounts.ecountMeta.lastSync}`);
   }
   if (sourceCounts.gimpoCodes < 500) throw new Error(`김포 원본이 부족합니다: ${sourceCounts.gimpoCodes}개`);
+  const manualSourceMaxDays = isWeekday ? 3 : 5;
+  if (sourceCounts.gimpoMeta?.status !== 'loaded' || sourceCounts.gimpoMeta.daysAgo === null) {
+    throw new Error(`이과장 김포재고장 날짜를 확인할 수 없습니다: ${JSON.stringify(sourceCounts.gimpoMeta)}`);
+  }
+  if (sourceCounts.gimpoMeta.daysAgo > manualSourceMaxDays) {
+    throw new Error(`이과장 김포재고장이 오래되어 반영을 중단합니다: ${sourceCounts.gimpoMeta.sourceDate}`);
+  }
   if (sourceCounts.kcfiOptions < 50) throw new Error(`KCFI 원본이 부족합니다: ${sourceCounts.kcfiOptions}개`);
   if (sourceCounts.kcfiRaw?.status !== 'loaded' || sourceCounts.kcfiRaw.matched < 50) {
-    throw new Error(`kcfi_원본 자동파싱을 확인해 주세요: ${JSON.stringify(sourceCounts.kcfiRaw)}`);
+    throw new Error(`이과장 KCFI 자동파싱을 확인해 주세요: ${JSON.stringify(sourceCounts.kcfiRaw)}`);
+  }
+  if (sourceCounts.kcfiRaw.daysAgo === null || sourceCounts.kcfiRaw.daysAgo > manualSourceMaxDays) {
+    throw new Error(`이과장 KCFI가 오래되어 반영을 중단합니다: ${sourceCounts.kcfiRaw.sourceDate || '날짜 미확인'}`);
   }
 
   await page.evaluate(() => runMatch());

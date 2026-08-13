@@ -713,8 +713,13 @@ const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyZ4EDOJOSJt
 // ── 읽기 전용 CSV 직접 연동 (Apps Script 배포 불필요) ──
 // 시트가 "링크 있는 모든 사용자: 뷰어" 공유면 어느 PC에서든 추가 설정 없이 읽힘
 const SHEET_ID = '1cl-uZ9s0_VNF_YwagnujAhPTdREuzfcaPisWRRp7zwY';
-function csvUrl(sheetName) {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheetName)}&cb=${Date.now()}`;
+const INVENTORY_MANAGER_SHEET_ID = '1iwZL8sVWvXG4G6lJQXnmHcx8DnHp60opjYxlequk5Us';
+const INVENTORY_MANAGER_GIMPO_SHEET = '김포재고장';
+const INVENTORY_MANAGER_GIMPO_GID = '462252528';
+const INVENTORY_MANAGER_KCFI_SHEET = 'KCFI';
+const INVENTORY_MANAGER_KCFI_GID = '492795649';
+function csvUrl(sheetName, spreadsheetId = SHEET_ID) {
+  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheetName)}&cb=${Date.now()}`;
 }
 function csvToRows(csvText) {
   const wb = XLSX.read(csvText, { type: 'string' });
@@ -724,8 +729,14 @@ function csvToRows(csvText) {
 function normCode(v) {
   return String(v || '').trim().replace(/^\uFEFF/, '').replace(/^'/, '').replace(/\u200B/g, '');
 }
-async function fetchCsvRows(sheetName) {
-  const res = await fetchWithTimeout(csvUrl(sheetName), 30000);
+async function fetchCsvRows(sheetName, spreadsheetId = SHEET_ID) {
+  const res = await fetchWithTimeout(csvUrl(sheetName, spreadsheetId), 30000);
+  const txt = await res.text();
+  return csvToRows(txt);
+}
+async function fetchExportCsvRows(spreadsheetId, sheetGid) {
+  const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${sheetGid}&cb=${Date.now()}`;
+  const res = await fetchWithTimeout(url, 30000);
   const txt = await res.text();
   return csvToRows(txt);
 }
@@ -786,7 +797,10 @@ async function loadBaseViaAppsScript() {
 // 원본 데이터(사방넷/이카운트/김포) — Apps Script type=raw 응답과 동일 구조
 async function loadRawViaCSV() {
   const [sabRawData, icRaw, gpRaw] = await Promise.all([
-    fetchCsvRows('사방넷단품원본'), fetchCsvRows('이카운트원본'), fetchCsvRows('김포원본'),
+    fetchCsvRows('사방넷단품원본'),
+    fetchCsvRows('이카운트원본'),
+    // GViz는 숫자·문자 코드가 섞인 열의 문자값을 빈칸으로 바꾸므로 원본 export를 쓴다.
+    fetchExportCsvRows(INVENTORY_MANAGER_SHEET_ID, INVENTORY_MANAGER_GIMPO_GID),
   ]);
   return { ok: true, sabRawData, icRaw, gpRaw };
 }
@@ -812,8 +826,49 @@ let resultRows = [], filteredRows = [];
 let nomapRows = [];
 window.asproSourceMeta = {
   ecount: { status:'pending', count:0, lastSync:'', daysAgo:null },
+  gimpo: { status:'pending', rows:0, mapped:0, sourceDate:'', daysAgo:null },
   kcfiRaw: { status:'pending', rows:0, matched:0, unmatched:0 }
 };
+
+function parseInventorySourceDate(value) {
+  const text = String(value || '').trim();
+  const yearFirst = text.match(/(20\d{2})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (yearFirst) return new Date(Number(yearFirst[1]), Number(yearFirst[2]) - 1, Number(yearFirst[3]));
+  const monthFirst = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|20\d{2})$/);
+  if (monthFirst) {
+    const year = Number(monthFirst[3]) < 100 ? 2000 + Number(monthFirst[3]) : Number(monthFirst[3]);
+    return new Date(year, Number(monthFirst[1]) - 1, Number(monthFirst[2]));
+  }
+  const serial = Number(text);
+  if (Number.isFinite(serial) && serial >= 30000 && serial <= 60000) {
+    const utc = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+    return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
+  }
+  return null;
+}
+
+function inventorySourceDaysAgo(value) {
+  const sourceDate = parseInventorySourceDate(value);
+  if (!sourceDate) return null;
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.max(0, Math.floor((todayStart.getTime() - sourceDate.getTime()) / 86400000));
+}
+
+function findInventorySourceDate(rows, maxRows = 5) {
+  for (const row of (rows || []).slice(0, maxRows)) {
+    for (const value of (row || [])) {
+      const parsed = parseInventorySourceDate(value);
+      if (parsed) {
+        const year = parsed.getFullYear();
+        const month = String(parsed.getMonth() + 1).padStart(2, '0');
+        const day = String(parsed.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    }
+  }
+  return '';
+}
 let currentTab = 'all', editMode = false, expMode = 'all';
 
 function getSheetsUrl() {
@@ -1444,16 +1499,16 @@ async function loadKCFIMultiblock(file, sheetInfo) {
   }
 }
 
-// ── KCFI 구글시트(kcfi_원본) 자동 파싱 ──
-// kcfi_원본 시트에 물류별재고.xlsx KCFI 내용을 원본 그대로 붙여넣으면 앱 시작 시 자동 파싱
-// 시트가 없거나 비어있으면 조용히 skip (기존 aspro_kcfi 유지)
+// ── 재고 관리 시트(KCFI) 자동 파싱 ──
+// 이과장 관리 통합문서의 KCFI 탭을 매일 직접 읽는다.
+// 시트가 없거나 비어있으면 조용히 skip (직전 정상 재고 유지)
 async function loadKCFIFromSheetRaw() {
   if (!sabData || sabData.length === 0) {
     window.asproSourceMeta.kcfiRaw = { status:'skipped', reason:'sabang-empty', rows:0, matched:0, unmatched:0 };
     return;
   }
   let rows;
-  try { rows = await fetchCsvRows('kcfi_원본'); }
+  try { rows = await fetchExportCsvRows(INVENTORY_MANAGER_SHEET_ID, INVENTORY_MANAGER_KCFI_GID); }
   catch(e) {
     window.asproSourceMeta.kcfiRaw = { status:'failed', reason:e.message, rows:0, matched:0, unmatched:0 };
     return;
@@ -1532,24 +1587,30 @@ async function loadKCFIFromSheetRaw() {
   }
 
   kcfiAuditRows = auditRows;
-  window.asproSourceMeta.kcfiRaw = { status:matched > 0 ? 'loaded' : 'unmatched', rows:rows.length, matched, unmatched, productsSeen, productsMapped };
+  const sourceDate = findInventorySourceDate(rows);
+  window.asproSourceMeta.kcfiRaw = {
+    status:matched > 0 ? 'loaded' : 'unmatched', rows:rows.length, matched, unmatched,
+    productsSeen, productsMapped, sourceDate, daysAgo:inventorySourceDaysAgo(sourceDate),
+    sheetName:INVENTORY_MANAGER_KCFI_SHEET
+  };
   if (matched === 0) {
     log(`[WARN] Sheets kcfi_원본 파싱: 상품 ${productsSeen}개를 읽었지만 사방넷 매칭 0건`, 'warn');
     if (missingProducts.length) log(`[WARN] KCFI_PRODUCT_MAP 누락: ${missingProducts.join(' / ')}`, 'warn');
     return; // 의미있는 결과 없으면 기존 kcfiMap 유지
   }
 
-  kcfiMap = { ...kcfiMap, ...parsedMap };
-  kcfiMetaMap = { ...kcfiMetaMap, ...parsedMeta };
+  // 현재 원본에서 사라진 옵션의 옛 재고가 남지 않도록 전체 교체한다.
+  kcfiMap = parsedMap;
+  kcfiMetaMap = parsedMeta;
   try { localStorage.setItem('aspro_kcfi_v1', JSON.stringify(kcfiMap)); } catch(e2) {}
   try { localStorage.setItem('aspro_kcfi_meta_v1', JSON.stringify(kcfiMetaMap)); } catch(e2) {}
   updateKCFICnt();
 
-  log(`[OK] Sheets kcfi_원본 파싱: 상품 ${productsSeen}개(매핑 ${productsMapped}개) → ${matched}건 매칭 / ${unmatched}건 미매칭`, 'ok');
+  log(`[OK] 이과장 KCFI 파싱: ${sourceDate || '날짜 미확인'} · 상품 ${productsSeen}개(매핑 ${productsMapped}개) → ${matched}건 매칭 / ${unmatched}건 미매칭`, 'ok');
   if (missingProducts.length) log(`[WARN] KCFI_PRODUCT_MAP 누락: ${missingProducts.join(' / ')}`, 'warn');
   if (unmatchedSamples.length) log(`     미매칭 샘플: ${unmatchedSamples.join(' / ')}`, 'warn');
   const list = document.getElementById('kcfiList');
-  if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets kcfi_원본 (자동파싱)</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
+  if (list) list.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ 이과장 KCFI (${sourceDate || '날짜 미확인'})</div><div class="fcnt">${Object.keys(kcfiMap).length}건</div></div>`;
 }
 
 function triggerBatchUpload() {
@@ -2660,7 +2721,7 @@ function buildHanaHubStockPayload() {
     .map(row => ({ ...row, sources:[...row.sources].sort() }))
     .sort((a,b) => a.code.localeCompare(b.code));
   const calculatedAt = new Date().toISOString();
-  return { engine:'ASPRO v4.7', calculatedAt, sourceFile:'Google Sheets 일일 자동계산', rows, optionRows };
+  return { engine:'ASPRO v4.7', calculatedAt, sourceFile:'이카운트 OAPI + 이과장 김포/KCFI 일일 자동계산', rows, optionRows };
 }
 
 function exportHanaHubStock() {
@@ -4113,7 +4174,7 @@ async function autoLoadFromSheets() {
       if (btn) { btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; btn.textContent='☁ Google Sheets 연동'; }
 
       // 2차: 원본 데이터 (사방넷/이카운트/김포) — CSV 직접
-      log('[INFO] 원본 데이터 로드 중... (이카운트/김포/사방넷)', 'info');
+      log('[INFO] 원본 데이터 로드 중... (이카운트 OAPI/이과장 김포/사방넷)', 'info');
       if (btn) btn.textContent = '☁ 원본 로드 중...';
       try {
         const data2 = await loadRawViaCSV();
@@ -4174,7 +4235,7 @@ async function autoLoadFromSheets() {
             log(`[INFO] 이카운트 최종 동기화: ${lastSync}${freshTag}`, daysAgo && daysAgo >= 2 ? 'warn' : 'info');
           }
 
-          // 김포원본
+          // 이과장 관리 시트 > 김포재고장
           if (data2.gpRaw && data2.gpRaw.length > 2) {
             gpMap = {};
             const gpHeaderInfo2 = findGimpoHeaderInfo(data2.gpRaw, 2);
@@ -4196,17 +4257,24 @@ async function autoLoadFromSheets() {
             }
             document.getElementById('gpZone').classList.add('ok');
             const gpList = document.getElementById('gpList');
-            if (gpList) gpList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 김포원본</div><div class="fcnt">${gpCnt}품목</div></div>`;
+            // 병합셀은 GViz CSV에서 빈 제목행이 생략될 수 있어 상단에서 날짜를 찾는다.
+            const gpSourceDate = findInventorySourceDate(data2.gpRaw);
+            window.asproSourceMeta.gimpo = {
+              status:'loaded', rows:data2.gpRaw.length, mapped:Object.keys(gpMap).length,
+              sourceDate:gpSourceDate, daysAgo:inventorySourceDaysAgo(gpSourceDate),
+              sheetName:INVENTORY_MANAGER_GIMPO_SHEET
+            };
+            if (gpList) gpList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ 이과장 김포재고장 (${gpSourceDate || '날짜 미확인'})</div><div class="fcnt">${gpCnt}품목</div></div>`;
             log(`[INFO] 김포 품번 샘플: ${Object.keys(gpMap).slice(0,5).join(', ')}`, 'info');
           }
 
-          log(`[OK] 원본 로드 완료: 사방넷 ${sabCnt}단품 / 이카운트 ${icCnt}SKU / 김포 ${gpCnt}품목`, 'ok');
+          log(`[OK] 원본 로드 완료: 사방넷 ${sabCnt}단품 / 이카운트 ${icCnt}SKU / 이과장 김포 ${gpCnt}품목`, 'ok');
 
-          // 3차: kcfi_원본 시트 자동 파싱 (시트가 있을 때만, 없으면 skip)
+          // 3차: 이과장 관리 시트 > KCFI 자동 파싱
           try {
             await loadKCFIFromSheetRaw();
           } catch(e3) {
-            log(`[INFO] kcfi_원본 시트 없음 — 파일 업로드 또는 aspro_kcfi 유지`, 'info');
+            log(`[INFO] 이과장 KCFI 시트 로드 실패 — 직전 정상 재고 유지`, 'info');
           }
 
           if (btn) btn.textContent = '☁ Google Sheets 연동';
