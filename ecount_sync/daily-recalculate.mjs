@@ -98,12 +98,21 @@ try {
     sabangOptions: sabData.length,
     ecountGroups: Object.keys(icMap).length,
     ecountCodes: new Set(Object.values(icMap).flat().map((row) => row.품목코드).filter(Boolean)).size,
+    ecountMeta: window.asproSourceMeta?.ecount || null,
     gimpoCodes: Object.keys(gpMap).length,
     kcfiOptions: Object.keys(kcfiMap).length,
     kcfiRaw: window.asproSourceMeta?.kcfiRaw || null
   }));
   if (sourceCounts.sabangOptions < 3000) throw new Error(`사방넷 원본이 부족합니다: ${sourceCounts.sabangOptions}행`);
   if (sourceCounts.ecountCodes < 1500) throw new Error(`이카운트 원본이 부족합니다: ${sourceCounts.ecountCodes}개`);
+  const koreaWeekday = new Intl.DateTimeFormat('en-US', { timeZone:'Asia/Seoul', weekday:'short' }).format(new Date());
+  const isWeekday = !['Sat', 'Sun'].includes(koreaWeekday);
+  if (sourceCounts.ecountMeta?.status !== 'loaded' || sourceCounts.ecountMeta.daysAgo === null) {
+    throw new Error(`이카운트 동기화 시각을 확인할 수 없습니다: ${JSON.stringify(sourceCounts.ecountMeta)}`);
+  }
+  if ((isWeekday && sourceCounts.ecountMeta.daysAgo !== 0) || (!isWeekday && sourceCounts.ecountMeta.daysAgo > 3)) {
+    throw new Error(`이카운트 원본이 오래되어 반영을 중단합니다: ${sourceCounts.ecountMeta.lastSync}`);
+  }
   if (sourceCounts.gimpoCodes < 500) throw new Error(`김포 원본이 부족합니다: ${sourceCounts.gimpoCodes}개`);
   if (sourceCounts.kcfiOptions < 50) throw new Error(`KCFI 원본이 부족합니다: ${sourceCounts.kcfiOptions}개`);
   if (sourceCounts.kcfiRaw?.status !== 'loaded' || sourceCounts.kcfiRaw.matched < 50) {
