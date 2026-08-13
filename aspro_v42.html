@@ -2247,14 +2247,14 @@ function resolveIcItems(items, cc, sz, isSet, setColors, 옵션, sabName, isDire
 
   // 세트 처리 (직접매핑 또는 이름매칭 모두 적용)
   if (isSet && setColors && setColors.length > 1 && sz) {
-    const qtys = setColors.map(col => {
+    const matchedItems = setColors.map(col => {
       for (const ic of items) {
         const { c, s } = extractIcCS(ic.name);
-        if (c === col && s === sz) return ic.qty;
+        if (c === col && s === sz) return ic;
       }
       return null;
     });
-    const anyNull = qtys.some(q => q === null);
+    const anyNull = matchedItems.some(item => item === null);
     if (anyNull) {
       if (isDirect) {
         log(`[WARN] 세트자동품절: "${sabName}" [${옵션}] — 구성단품 미존재`, 'warn');
@@ -2262,9 +2262,10 @@ function resolveIcItems(items, cc, sz, isSet, setColors, 옵션, sabName, isDire
       }
       return null; // 이름매칭은 오매칭 가능성 → null로 매핑없음 처리
     }
+    const qtys = matchedItems.map(item => item.qty);
     const setQty = Math.min(...qtys);
     log(`[INFO] 세트재고: [${옵션}] → 구성재고[${qtys.join(', ')}] → min=${setQty}`, 'info');
-    return { qty: setQty, src: '이카운트(세트)', 품목코드: items[0]?.품목코드||'—' };
+    return { qty: setQty, src: '이카운트(세트)', 품목코드: matchedItems.map(item => item.품목코드).join('+') };
   }
 
   // 일반 단품
