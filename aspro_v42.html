@@ -708,7 +708,7 @@ function doPost(e) {
 const LS_KEY = 'aspro_sab_gimpo_map_v2';
 const SHEETS_URL_KEY = 'aspro_sheets_url';
 const DEAD_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxFOSpzeYmWr-0KbAa6kui9A1HsjlDYrbcc8qh_IdoTnbJdBWt7dhn9cgAi_9_XWabb/exec';
-const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbw9HZ6j1EtdO4sjJbiRhIydLF7Qx3CEdyFQOKLdBkqdr-8cVstcI5M6MLEl7x0oSVgX/exec';
+const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyZ4EDOJOSJtVZ697S_eb2--wCNsWLbtYT1RZuBLLF7dmpZgE69vjagMSYrg2IaMJal/exec';
 
 // ── 읽기 전용 CSV 직접 연동 (Apps Script 배포 불필요) ──
 // 시트가 "링크 있는 모든 사용자: 뷰어" 공유면 어느 PC에서든 추가 설정 없이 읽힘
@@ -818,6 +818,7 @@ function getSheetsUrl() {
   // 보관처리된 옛 배포본들 → 404 응답 방지
   const OLD_URLS = new Set([
     DEAD_SHEETS_URL,
+    'https://script.google.com/macros/s/AKfycbw9HZ6j1EtdO4sjJbiRhIydLF7Qx3CEdyFQOKLdBkqdr-8cVstcI5M6MLEl7x0oSVgX/exec',
     'https://script.google.com/macros/s/AKfycbxn_yuxbci4MW3JQla3NPf0TFYapNiR7M7w9pznkQVu6KTqlKxIm8MPOayRjdLTNH-0/exec',
     'https://script.google.com/macros/s/AKfycby0Rprvew769n4-2GZz_aQjgOJzs371H0fO64grPO6ieMvBJMqTbvtwJ-yamFhnx-64/exec',
   ]);
