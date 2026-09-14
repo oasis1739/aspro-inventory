@@ -714,6 +714,8 @@ const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyZ4EDOJOSJt
 // 시트가 "링크 있는 모든 사용자: 뷰어" 공유면 어느 PC에서든 추가 설정 없이 읽힘
 const SHEET_ID = '1cl-uZ9s0_VNF_YwagnujAhPTdREuzfcaPisWRRp7zwY';
 const ECOUNT_ONLY = new URLSearchParams(location.search).get('stockSource') === 'ecount';
+// 2026-09-14 사용자 결정: 신원(KCFI) 재고는 매칭에 사용하지 않는다.
+const USE_KCFI = false;
 const INVENTORY_MANAGER_SHEET_ID = '1iwZL8sVWvXG4G6lJQXnmHcx8DnHp60opjYxlequk5Us';
 const INVENTORY_MANAGER_GIMPO_SHEET = '김포재고장';
 const INVENTORY_MANAGER_GIMPO_GID = '462252528';
@@ -2548,26 +2550,28 @@ async function runMatch() {
   }
   await refreshSoldoutBeforeMatch();
   try {
-    if (!ECOUNT_ONLY) await loadKCFIFromSheetRaw();
+    if (!ECOUNT_ONLY && USE_KCFI) await loadKCFIFromSheetRaw();
   } catch(e) {
     log(`[INFO] KCFI 원본상품명 재확인 생략: ${e.message}`, 'info');
   }
   log('[INFO] 매칭 시작...', 'info');
   resultRows = []; nomapRows = [];
   const ecountByCode = new Map(Object.values(icMap).flat().map(row => [row.품목코드, row]));
-  const savedLogistics = ECOUNT_ONLY ? buildNormalizedSaveMap() : {};
+  // 김포 원본이 없으면(2026-09-14 사용 중단) 저장 물류품번을 이카운트 코드로 직접 조회한다.
+  const NO_GIMPO = ECOUNT_ONLY || !Object.keys(gpMap).length;
+  const savedLogistics = NO_GIMPO ? buildNormalizedSaveMap() : {};
   let cM=0, cU=0, cZ=0, cIC=0, cGP=0, cNM=0;
 
   sabData.forEach(sab => {
     const sc = normCode(sab.사방넷코드);
     // 기존에 검수·저장한 옵션별 물류코드가 이카운트에 있으면 동일 옵션에 직접 연결한다.
     const savedItem = ecountByCode.get(String(savedLogistics[sc] || '').replace(/^IC:/, ''));
-    const icRes = ECOUNT_ONLY && savedItem
+    const icRes = NO_GIMPO && savedItem
       ? { qty:savedItem.qty, src:'이카운트(저장매핑)', 품목코드:savedItem.품목코드 }
       : getIcountQty(sab);
-    const gpRes  = ECOUNT_ONLY ? null : getGimpoQty(sc, sab.옵션, sab.상품명, sab.자체코드);
+    const gpRes  = NO_GIMPO ? null : getGimpoQty(sc, sab.옵션, sab.상품명, sab.자체코드);
     const gpAudit = getGimpoAuditCandidate(sab, icRes, gpRes);
-    const kcfiQty = !ECOUNT_ONLY && kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
+    const kcfiQty = !ECOUNT_ONLY && USE_KCFI && kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
     const kcfiMeta = kcfiMetaMap[sc] || null;
     let finalQty = null, src = '—', 물류품번 = '—';
 
@@ -2596,6 +2600,9 @@ async function runMatch() {
     } else if (kcfiQty !== null) {
       finalQty = kcfiQty; src = 'KCFI';
       물류품번 = resolveLogisticsCode(extraMap[sc] || matchMap[sc] || '—'); cGP++;
+    } else if (!ECOUNT_ONLY && NO_GIMPO && savedLogistics[sc]) {
+      // 예전 김포 매핑이 있지만 이카운트에 해당 코드가 없는 옵션 — 재고 원본 없음
+      finalQty = 0; src = '원본없음(구김포)'; 물류품번 = savedLogistics[sc];
     }
     if (finalQty === null && isSoldoutCode(sc)) {
       finalQty = 0; src = '품절처리'; 물류품번 = '—'; cZ++;
@@ -4311,7 +4318,7 @@ async function autoLoadFromSheets() {
 
           // 3차: 이과장 관리 시트 > KCFI 자동 파싱
           try {
-            if (!ECOUNT_ONLY) await loadKCFIFromSheetRaw();
+            if (!ECOUNT_ONLY && USE_KCFI) await loadKCFIFromSheetRaw();
           } catch(e3) {
             log(`[INFO] 이과장 KCFI 시트 로드 실패 — 직전 정상 재고 유지`, 'info');
           }
