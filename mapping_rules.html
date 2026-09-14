@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ASPRO 매핑 규칙집</title>
+<style>
+:root{--bg:#0b1020;--bg2:#121a2e;--bg3:#18213a;--line:#26314f;--text:#e6ebf5;--text2:#aab4ca;--text3:#76819b;--acc:#60a5fa;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--pp:#a78bfa}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;padding-inline:16px}
+header{position:sticky;top:0;z-index:5;background:rgba(11,16,32,.94);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);margin-inline:-16px;padding:12px 16px}
+.hwrap{max-width:1080px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.logo{font-weight:800;color:var(--acc)}.logo em{font-style:normal;color:var(--text2);font-weight:500}
+.back{margin-left:auto;color:var(--text);text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:12px}
+#q{flex:1 1 220px;min-width:0;background:var(--bg2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 10px}
+main{max-width:1080px;margin:0 auto;padding-block:20px 60px}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 18px}
+nav.toc a{font-size:12px;color:var(--text2);text-decoration:none;background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+nav.toc a:hover{color:var(--text);border-color:var(--acc)}
+section{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:16px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:0 0 12px;color:var(--acc)}h3{font-size:14px;margin:18px 0 8px;color:var(--text)}
+p,li{color:var(--text2)}b,strong{color:var(--text)}
+.sub{color:var(--text3);font-size:12px}
+.tw{overflow-x:auto;margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:520px}
+th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+th{color:var(--text3);font-weight:600;font-size:12px;background:var(--bg3)}
+td{color:var(--text2)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--bg3);border:1px solid var(--line);border-radius:4px;padding:0 4px;color:#cfe3ff}
+pre{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto;font-size:12px;color:#cfe3ff;margin:8px 0}
+.note{border-left:3px solid var(--warn);background:rgba(245,158,11,.08);padding:8px 12px;border-radius:6px;color:var(--text2);margin:10px 0}
+.danger{border-left-color:var(--bad);background:rgba(239,68,68,.08)}
+.bdg{display:inline-block;font-size:11px;border-radius:5px;padding:0 6px;font-weight:600;white-space:nowrap}
+.b-z{background:rgba(239,68,68,.18);color:#fca5a5}.b-ok{background:rgba(34,197,94,.18);color:#86efac}.b-gp{background:rgba(96,165,250,.18);color:#bfdbfe}.b-pp{background:rgba(167,139,250,.2);color:#ddd6fe}.b-y{background:rgba(245,158,11,.2);color:#fde68a}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}
+.flow span{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text)}
+.flow i{color:var(--text3);font-style:normal}
+.hide{display:none}
+mark{background:rgba(245,158,11,.35);color:inherit;border-radius:2px}
+</style>
+</head>
+<body>
+<header><div class="hwrap">
+  <div class="logo">ASPRO <em>/ 매핑 규칙집</em></div>
+  <input id="q" type="search" placeholder="검색 (예: 플림, 252JW07, 강제재고)">
+  <a class="back" href="aspro_v42.html">← 대시보드</a>
+</div></header>
+
+<main>
+<h1>재고 매핑 · 규칙 정리</h1>
+<p class="sub">기준일 2026-09-14 · 기준: <code>aspro_v42.html</code>, <code>ecount_sync/*.mjs</code>, 운영 Google Sheets · 코드와 다르면 코드가 정답</p>
+
+<nav class="toc">
+  <a href="#s0">요약</a><a href="#s1">용어</a><a href="#s2">원본 시트</a><a href="#s3">재고 우선순위</a>
+  <a href="#s4">김포 규칙</a><a href="#s5">이카운트 규칙</a><a href="#s6">색상 코드</a><a href="#s7">운영 흐름</a>
+  <a href="#s8">내보내기</a><a href="#s9">저장·검증</a><a href="#s10">상품별 규칙</a><a href="#s11">금지사항</a>
+</nav>
+
+<section id="s0"><h2>0. 한 줄 요약</h2>
+<p>사방넷 옵션마다 <b>물류품번</b>(재고 원본의 품목코드)을 찾아 재고를 가져오고, 운영 예외(강제품절·강제재고·품절처리·발주서품절)를 덮어쓴 뒤 사방넷/하나허브/시트로 내보낸다.</p>
+<div class="flow"><span>사방넷단품원본 (옵션 1행)</span><i>→</i><span>물류품번 결정</span><i>→</i><span>재고 원본 조회<br><small>이카운트 · 김포 · KCFI</small></span><i>→</i><span>운영 예외 적용</span><i>→</i><span>결과</span></div>
+</section>
+
+<section id="s1"><h2>1. 용어</h2>
+<div class="tw"><table>
+<tr><th>용어</th><th>뜻</th><th>예</th></tr>
+<tr><td>사방넷코드</td><td>사방넷 단품(옵션) 코드 <code>상품번호-순번</code></td><td><code>102675-0002</code></td></tr>
+<tr><td>자체코드</td><td>사방넷 자체상품코드. 색상·세트 접미사</td><td><code>26BLCD_GR</code> <code>JW25SS01_AL</code> <code>N1008_SET</code></td></tr>
+<tr><td>옵션</td><td>기본 <code>색상:사이즈</code>, 세트는 <code>+</code></td><td><code>플럼:55</code> <code>블랙+플럼:66</code> <code>55</code></td></tr>
+<tr><td>물류품번</td><td>이카운트·김포 SKU 코드</td><td><code>252JW07-PL-55</code></td></tr>
+<tr><td>prefix</td><td>물류품번 첫 <code>-</code> 앞 (상품군)</td><td><code>252JW07</code></td></tr>
+</table></div>
+<h3>물류품번 형식 (파서가 모두 처리)</h3>
+<ul>
+<li>신패턴 <code>prefix-색상-사이즈</code> : <code>252JW07-PL-55</code></li>
+<li>구패턴 <code>prefix-사이즈-색상</code> : <code>243NT05-55-BK</code> → 김포에 없으면 <code>243NT05-BK-55</code> 재시도</li>
+<li>순번형 <code>prefix-001</code> : <code>23FWNDTS-006</code> (색상/사이즈는 품목명 <code>[색상/사이즈]</code>)</li>
+<li>문자 사이즈 : <code>NT262GW07-BK-S</code>, <code>…-FREE</code></li>
+</ul>
+</section>
+
+<section id="s2"><h2>2. 원본 시트</h2>
+<p>운영 시트 <code>1cl-uZ9s0_VNF_YwagnujAhPTdREuzfcaPisWRRp7zwY</code></p>
+<h3>재고 원본</h3>
+<div class="tw"><table>
+<tr><th>탭</th><th>파싱 규칙</th></tr>
+<tr><td><code>사방넷단품원본</code></td><td>4행부터. A=사방넷코드, C=상품명, D=옵션, F=가상재고, T=자체코드</td></tr>
+<tr><td><code>이카운트원본</code></td><td>3행부터. A=품목코드, B=품번, E=품목명<code>[색상/사이즈]</code>, <b>F=재고</b>. A1 = 최종 동기화 시각</td></tr>
+<tr><td>김포재고장 (재고관리 시트)</td><td>export CSV로 읽음 (GViz는 문자 코드가 사라짐)</td></tr>
+<tr><td>KCFI (재고관리 시트)</td><td>상품 블록 구조</td></tr>
+</table></div>
+
+<h3>김포 파서</h3>
+<ul>
+<li>상단 10행 안에서 <code>품목코드</code> 또는 판매상태 헤더 행 자동 탐지</li>
+<li>판매상태 헤더: <code>판매상태</code> <code>판매 상태</code> <code>판매여부</code> <code>판매상태값</code></li>
+<li><b>제외 상태</b>: 판매중지 · 판매종료 · 종료 · 중지 · N · STOP · 정지 · 비활성 · INACTIVE · 판매불가 · 단종</li>
+<li>물류품번 = 앞 8칸 중 SKU 패턴 첫 셀 (숫자 관리코드 무시) · 수량 = 가장 오른쪽 정수 · 같은 품번 합산</li>
+<li><code>…-CD</code>와 <code>…-SK</code>가 있으면 <code>…-SET = min(CD, SK)</code></li>
+</ul>
+
+<h3>KCFI 파서</h3>
+<pre>상품명 행
+이미지 | 색상 | 사이즈 | 실수량(전산수량/수량)
+옵션행…   (A열 비어도 위 상품명 귀속)
+TTL</pre>
+<ul>
+<li>사이즈·수량 헤더가 비면 색상=B, 사이즈=C, 수량=D 추론 · <code>-</code>/빈칸 = 0</li>
+<li>색상 괄호 제거 <code>블랙(공통)→블랙</code> · 별칭 블루↔틸블루/스카이블루, 그레이↔라이트그레이/차콜, 화이트↔아이보리/크림</li>
+<li>상품명→사방넷 연결: ① 대시보드 <b>사방넷 매핑</b> 버튼 ② <code>KCFI_PRODUCT_MAP</code> ③ 키워드 자동추정(최고점≥2, 동점 없을 때만)</li>
+</ul>
+
+<h3>매핑·예외 시트 (사람이 관리)</h3>
+<div class="tw"><table>
+<tr><th>탭</th><th>키 → 값</th><th>의미</th><th>행수</th></tr>
+<tr><td><code>aspro_match</code></td><td>사방넷코드 → 물류품번</td><td><b>옵션별 매핑 마스터</b></td><td>~2,990</td></tr>
+<tr><td><code>aspro_iccodemap</code></td><td>사방넷코드 → 이카운트 prefix</td><td>이카운트 직접 지정</td><td>소수</td></tr>
+<tr><td><code>aspro_setmap</code></td><td>자체코드 → prefix + <code>한글:코드</code></td><td>색상 규칙 / 세트 구성</td><td>4</td></tr>
+<tr><td><code>aspro_soldout</code></td><td>사방넷코드</td><td>매핑 없는 옵션 <span class="bdg b-z">품절처리</span></td><td>~209</td></tr>
+<tr><td><code>aspro_forcezero</code></td><td>자체코드/prefix/사방넷코드</td><td><span class="bdg b-z">강제품절</span> 재고 무시 0</td><td>~22</td></tr>
+<tr><td><code>aspro_forcestock</code></td><td>사방넷코드 → 수량</td><td><span class="bdg b-gp">강제재고</span> 리오더 상품 고정값</td><td>~20</td></tr>
+<tr><td><code>aspro_soldout_logistics</code></td><td>물류품번(색상·사이즈 포함)</td><td><span class="bdg b-y">발주서품절</span> 해당 SKU만 0</td><td>~150</td></tr>
+</table></div>
+<pre>aspro_setmap
+MS25S      | 252MX05    | 플럼:BU,차콜:GR,그레이:GR,베이지:BE,블랙:BK
+JW25SS02   | 252JW19    | 아이보리:IV,스카이블루:BL,블랙:BK
+252JW10    | 252JW10    | 화이트:IV,블랙:BK,블루:BL,아이보리:IV
+N1008_SET  | 24FWELTS01 | 블랙:BK,브라운:BR,베이지:BE
+(코드 기본값) JW25SS01 | 252JW07 | 블랙:NA,네이비:NA,아이보리:IV,플럼:PL,플림:PL</pre>
+<p class="sub">시트 규칙은 코드 기본값에 병합됨 (시트에 일부만 있어도 기본 규칙이 사라지지 않음)</p>
+</section>
+
+<section id="s3"><h2>3. 재고 결정 우선순위 (runMatch)</h2>
+<p>옵션마다 위에서부터 처음 걸리는 것을 사용한다.</p>
+<div class="tw"><table>
+<tr><th>#</th><th>조건</th><th>소스</th><th>수량</th></tr>
+<tr><td>1</td><td>자체코드/prefix/사방넷코드 ∈ forcezero</td><td><span class="bdg b-z">강제품절</span></td><td>0</td></tr>
+<tr><td>2</td><td>사방넷코드 ∈ forcestock</td><td><span class="bdg b-gp">강제재고</span></td><td>지정값</td></tr>
+<tr><td>3</td><td>KCFI 재고 &gt; 0</td><td><span class="bdg b-pp">KCFI</span></td><td>KCFI</td></tr>
+<tr><td>4</td><td>김포에서 찾음 (0 포함)</td><td><span class="bdg b-gp">김포 / 김포(규칙) / 김포(세트) / 김포(÷N)</span></td><td>김포</td></tr>
+<tr><td>5</td><td>이카운트에서 찾음</td><td><span class="bdg b-gp">이카운트 / (세트) / (합산) / (자동품절) / (컬러불일치)</span></td><td>이카운트</td></tr>
+<tr><td>6</td><td>KCFI 재고 = 0</td><td><span class="bdg b-pp">KCFI</span></td><td>0</td></tr>
+<tr><td>7</td><td>없음 + 사방넷코드 ∈ soldout</td><td><span class="bdg b-z">품절처리</span></td><td>0</td></tr>
+<tr><td>8</td><td>없음</td><td>매핑없음 탭</td><td>unmatched</td></tr>
+<tr><td>후</td><td>수량&gt;0 · 강제재고 아님 · 최종 물류품번 ∈ soldout_logistics</td><td><span class="bdg b-y">발주서품절</span></td><td>0</td></tr>
+</table></div>
+<div class="note"><b>김포와 이카운트가 둘 다 잡히면 김포 우선</b> — 실제 출고가 김포 기준이라 이카운트 우선 시 오출고 사고.</div>
+<div class="note">자동 재계산은 2026-09-11부터 <b>이카운트 단독 모드</b>(<code>?stockSource=ecount</code>)가 기본 → 3·4·6 건너뜀. 김포·KCFI 혼합은 <code>--combined-sources</code>로만.</div>
+</section>
+
+<section id="s4"><h2>4. 김포 조회 규칙 (getGimpoQty)</h2>
+<h3>4-1. 자체코드 규칙 (단품)</h3>
+<ol>
+<li>규칙키 후보: 원본 → <code>_AL</code> 제거 → <code>_SET/-SET/_nSET</code> 제거 → <code>-</code> 앞 → <code>_</code> 앞</li>
+<li>setRuleMap 첫 일치 규칙 사용</li>
+<li>옵션 <code>색상:사이즈</code> 파싱 (<code>55:블랙</code>도 인식)</li>
+<li>색상코드 = 규칙 colorMap → 전역 COLOR_MAP → 원문</li>
+<li><code>gpPrefix-색상-사이즈</code> 조회. 없으면 <b>재고 0</b> (매핑없음으로 안 떨어짐)</li>
+</ol>
+<pre>JW25SS01_AL / 플림:55 → 규칙 JW25SS01 → 플림=PL → 252JW07-PL-55</pre>
+<h3>4-2. 세트 옵션 (<code>+</code>)</h3>
+<ul>
+<li>각 색상 코드화 → 구성 SKU들 · 같은 색 N개면 재고 ÷ N (내림)</li>
+<li>세트 재고 = 구성별 (재고÷필요수)의 <b>최솟값</b> · 구성 하나라도 없으면 매핑없음</li>
+</ul>
+<pre>플럼+베이지:55 → min(BU-55, BE-55)
+플럼+플럼:55   → floor(PL-55 / 2)</pre>
+<h3>4-3. 저장 매핑</h3>
+<ol>
+<li>물류품번 = 코드 고정맵 → 대시보드 수정분 → aspro_match (<code>__DELETED__</code>=삭제)</li>
+<li>없으면 정규화 상품명+옵션 이름매핑</li>
+<li>품번 변경 자동변환 <code>252MX18-001~016 → 252MX18CD-001~016</code></li>
+<li>없으면 구패턴→신패턴 재시도 → 그래도 없으면 이카운트 품목명 <code>[색상/사이즈]</code>로 찾기 → 없으면 김포 0</li>
+<li>같은 물류품번·같은 사이즈에 옵션 N개 매핑 → 재고 ÷ N <span class="bdg b-gp">김포(÷N)</span></li>
+</ol>
+</section>
+
+<section id="s5"><h2>5. 이카운트 조회 규칙 (getIcountQty)</h2>
+<p>색상/사이즈는 이카운트 <b>품목명의 <code>[색상/사이즈]</code></b>에서 읽음 (<code>-공통</code> 제거)</p>
+<div class="tw"><table>
+<tr><th>순위</th><th>방법</th></tr>
+<tr><td>0</td><td>고정값 <code>DIRECT_QTY_MAP</code> (102579-0001 → N1009-009 = 26)</td></tr>
+<tr><td>1</td><td>직접매핑: aspro_iccodemap → <code>IC_STATIC_MAP</code> → 세트면 setmap prefix</td></tr>
+<tr><td>2</td><td>자체코드 / <code>SAB_IC_OVERRIDE</code> / <code>-</code>앞 / 끝 색상코드 제거</td></tr>
+<tr><td>3</td><td>이름매칭: 정규화 상품명 일치 → 키워드 교집합</td></tr>
+</table></div>
+<h3>결과 판정</h3>
+<ul>
+<li>세트: 구성 모두 있으면 min → <span class="bdg b-gp">이카운트(세트)</span>, 없으면 직접매핑 <span class="bdg b-z">세트품절</span> / 이름매칭 매핑없음</li>
+<li>색상+사이즈 일치 → <span class="bdg b-gp">이카운트</span></li>
+<li>직접매핑인데 사이즈 없음 → <span class="bdg b-z">자동품절</span> · 사이즈 있고 색상 없음 → <span class="bdg b-z">컬러불일치</span></li>
+<li>이름매칭 불일치 → 매핑없음 (오매칭 방지)</li>
+<li>사이즈만 있는 옵션: 1건 그대로 / 여러 건 합산 <span class="bdg b-gp">이카운트(합산)</span></li>
+<li>사이즈만 있는 <code>_SET</code> (예 <code>N1008_SET / 55</code>): setmap 색상 전체를 구성으로 세트 계산</li>
+</ul>
+<p class="sub">IC_STATIC_MAP 예: JW25SS01*→252JW07 · JW25SS02*→252JW19 · H1014*→H1014 · 251JW_AL→251JW · 252JW10*→252JW10 · NT244G0069-73JK→244NT69</p>
+</section>
+
+<section id="s6"><h2>6. 색상 코드</h2>
+<div class="tw"><table>
+<tr><th>색상</th><th>코드</th><th>색상</th><th>코드</th><th>색상</th><th>코드</th></tr>
+<tr><td>블랙</td><td>BK</td><td>그린·딥그린</td><td>GN</td><td>퍼플</td><td>PU</td></tr>
+<tr><td>네이비 NV</td><td>NA</td><td>핑크</td><td>PK</td><td>플럼</td><td>PL</td></tr>
+<tr><td>화이트</td><td>WH</td><td>베이지 BG</td><td>BE</td><td>와인 WI</td><td>WN</td></tr>
+<tr><td>아이보리</td><td>IV</td><td>카키</td><td>KH</td><td>올리브</td><td>OL</td></tr>
+<tr><td>그레이 GY</td><td>GR</td><td>브라운</td><td>BR</td><td>민트</td><td>MT</td></tr>
+<tr><td>차콜 CC</td><td>CH</td><td>크림</td><td>CR</td><td>옐로우 YL</td><td>YE</td></tr>
+<tr><td>다크·딥그레이</td><td>DG</td><td>오트밀</td><td>OT</td><td>라벤더 LA</td><td>LV</td></tr>
+<tr><td>라이트그레이</td><td>LG</td><td>블루</td><td>BL</td><td>레드</td><td>RD</td></tr>
+<tr><td>모카</td><td>MO</td><td>오렌지</td><td>OR</td><td></td><td></td></tr>
+</table></div>
+<div class="note danger"><b>사방넷 색상명 ≠ 물류 색상인 상품이 많다.</b> 전역 표에 넣지 말고 상품별 규칙으로 명시.</div>
+<div class="tw"><table>
+<tr><th>자체코드 (물류)</th><th>사방넷 표기</th><th>실제 물류</th></tr>
+<tr><td>JW25SS01* (252JW07)</td><td>블랙 / 플림</td><td>NA / PL</td></tr>
+<tr><td>MS25S* (252MX05)</td><td>플럼 / 차콜</td><td>BU / GR</td></tr>
+<tr><td>252JW10, 252NT41</td><td>화이트</td><td>IV</td></tr>
+<tr><td>26BLCD_GR/NA/PK (NT261GW01)</td><td>애플그린 / 네이비 / 인디핑크</td><td>OL / BK / PK</td></tr>
+<tr><td>LN-KT-OV (NT262GW02)</td><td>올리브</td><td>GN</td></tr>
+<tr><td>EN-OP-WT, KN-PT-WT</td><td>화이트(WT)</td><td>WH</td></tr>
+<tr><td>N1009_AL/BW/SET</td><td>브라운·썸머브라운 / 리이트그레이</td><td>BW / LG</td></tr>
+<tr><td>AMWNT2504*</td><td>연핑크</td><td>핑크</td></tr>
+<tr><td>MX243G0001-6OPJK-SET (243MX01)</td><td>블루</td><td>틸블루, 원피스+자켓 2구성</td></tr>
+</table></div>
+</section>
+
+<section id="s7"><h2>7. 운영 흐름 (2026-09-14)</h2>
+<div class="flow"><span>① 이카운트 창고별 엑셀 수동 다운로드</span><i>→</i><span>② 본창고01 + 온라인02 합산 검증</span><i>→</i><span>③ 헤드리스 재계산</span><i>→</i><span>④ 매핑 복원 · 검증</span><i>→</i><span>⑤ 시트·하나허브 반영</span><i>→</i><span>⑥ 사방넷 대기 파일</span></div>
+<pre>node import-warehouse-xlsx.mjs --file=원본.xlsx [--confirm]
+node daily-recalculate.mjs --force [--confirm]</pre>
+<h3>창고 정책</h3>
+<ul>
+<li>포함 창고 <b>01, 02만</b> (쿠팡 06, 모모 09 등 제외) · 둘 중 하나 누락이면 거부</li>
+<li>중복·비정수·합산 불일치·3일 초과 원본 거부 · 음수는 합산 후 판매단에서 0</li>
+</ul>
+<h3>매핑 복원 (ecount-mapping.mjs)</h3>
+<div class="note"><b>저장된 상품 정체성만 재사용. 이름 유사도·같은 사이즈만으로 연결 금지.</b></div>
+<ol>
+<li>강제품절·강제재고·품절처리·발주서품절은 자동 판매 제외 → 검수</li>
+<li>prefix: iccodemap → 저장 물류품번 → IC_STATIC_MAP → override → setmap → 자체코드(접미사 제거) → 별칭</li>
+<li>색상: 옵션 → 상품명 끝 <code>[색상]</code> → 상품별 치환 → COLOR_MAP → setmap → 한글 포함관계가 <b>유일할 때만</b></li>
+<li>저장 물류품번이 원본에 있고 색상·사이즈 정확 일치 → 그대로</li>
+<li>그 외 prefix 안 <code>색상+사이즈</code> 일치가 <b>정확히 1건</b>일 때만 연결</li>
+</ol>
+<pre>prefix 별칭
+253NT20→253NT20SK   244NT46CD→244NT46   251NT10CD→251NT10CT   253NT351→253NT35
+253NT25→253NT25PT   253NT19L→253NT19PT  253NT24→253NT24OP     244NT50AC→244NT50</pre>
+<h3>최종 검증 · 안전장치</h3>
+<ul>
+<li>판매 인정 조건: 이카운트 소스 · 모든 코드가 원본 존재 · 재계산 수량과 정확히 일치 · 자동품절류 아님</li>
+<li>아니면 <b>unmatched → 사방넷 전송 제외</b> (0으로 보내지 않음)</li>
+<li>중단 조건: 사방넷 옵션 &lt;3,000 · 이카운트 코드 &lt;1,500 · 평일 당일 원본 아님 · 결과 상품 &lt;400</li>
+</ul>
+</section>
+
+<section id="s8"><h2>8. 사방넷 내보내기 (대시보드)</h2>
+<ul>
+<li>수량 = matched면 재고, 그 외 0</li>
+<li>안전재고: <code>floor(재고 × 70%)</code> → <code>0 &lt; 값 &lt; 5</code> 면 0 (둘 다 변경 가능)</li>
+<li>F열 가상재고 = 수량 · G열 공급상태 = 수량&gt;0 ? 1(판매) : 2(품절)</li>
+</ul>
+</section>
+
+<section id="s9"><h2>9. 매핑 저장 · 검증</h2>
+<ul>
+<li>무효 물류품번 제거: 빈값, 0, 5자리 숫자, #N/A, 품절, 확인요망, 슈컴퍼니…, 김포재고O…, 삭제요청…, ???, 중복, 위에</li>
+<li>사방넷에 없는 코드 매핑은 정리하되 <code>_SET</code> 코드는 보호</li>
+<li>저장 시 품번 변경 정규화 · 로컬과 Sheets 병합 복원</li>
+<li><b>택1 자동매핑</b>: 매핑없음 중 상품명 <code>택1</code> → 같은 상품명의 색상+사이즈 → 색상 → 사이즈 순으로 복사</li>
+</ul>
+</section>
+
+<section id="s10"><h2>10. 상품별 확정 규칙</h2>
+<div class="tw"><table>
+<tr><th>대상</th><th>규칙</th><th>저장 위치</th></tr>
+<tr><td>252MX18</td><td><code>252MX18-001~016 → 252MX18CD-*</code></td><td>코드</td></tr>
+<tr><td>MS25S-GL-CAP_2set</td><td>김포 252MX05 구성 계산</td><td>setmap</td></tr>
+<tr><td>JW25SS01_2SET / _AL</td><td>252JW07 · 플림→PL · 블랙→NA · 같은 색 ÷2</td><td>setRuleMap</td></tr>
+<tr><td>N1008_SET</td><td>사이즈만 옵션 → 24FWELTS01 BK+BR+BE</td><td>setmap</td></tr>
+<tr><td>102579-0001/0002</td><td>N1009-009/010 고정 26/28</td><td>코드</td></tr>
+<tr><td>26BLCD_GR/NA/PK</td><td>NT261GW01 OL/BK/PK</td><td>aspro_match</td></tr>
+<tr><td>EN-OP · KN-PT · LN-KT · ST-SLV · LN-CD · CD-SHR</td><td>NT262GW09 · 04 · 02 · 07 · 03 · 03</td><td>aspro_match</td></tr>
+<tr><td>102665~102674 (21옵션)</td><td>리오더 신상품 강제재고 300</td><td>forcestock</td></tr>
+<tr><td>크레송 엔니튜드/마리본 발주서</td><td>비고 판매종료 151 SKU</td><td>soldout_logistics</td></tr>
+<tr><td>AMWNT2504_AL</td><td>연핑크→핑크 16/16</td><td>ecount-mapping</td></tr>
+<tr><td>MX243G0001-6OPJK-SET</td><td>243MX01 원피스+자켓 · 블루→틸블루</td><td>ecount-mapping</td></tr>
+</table></div>
+<div class="note"><b>미해결</b>: Hair_* 헤어밴드 5종 · 26EMCP_YE 볼캡 · KN-HB 호보백 (원본 코드 없음) · LN-KT-BK (원본에 블랙 없음) · ST-SLV 사이즈 순서, CD-SHR-ST/LN-CD-ST 색상은 추정값</div>
+</section>
+
+<section id="s11"><h2>11. 금지사항</h2>
+<ol>
+<li>이름 유사도·같은 사이즈·재고 있는 쪽으로 자동 연결 금지 — 근거가 유일하지 않으면 검수</li>
+<li>미연결 옵션을 <b>0으로 사방넷 전송 금지</b></li>
+<li>이카운트 <b>단건 재고 API 반복 호출 금지</b> (부하 문의 발생) · 자동수집 재개는 사용자 승인 후</li>
+<li>당일/유효 원본 없이 반영 금지</li>
+<li>상품별 색상 예외를 전역 COLOR_MAP에 넣지 않기</li>
+<li>API 키·비밀번호를 코드·문서에 남기지 않기</li>
+</ol>
+</section>
+</main>
+
+<script>
+const q=document.getElementById('q');
+q.addEventListener('input',()=>{
+  const v=q.value.trim().toLowerCase();
+  document.querySelectorAll('mark').forEach(m=>m.replaceWith(m.textContent));
+  document.querySelectorAll('section').forEach(s=>{
+    if(!v){s.classList.remove('hide');return;}
+    s.classList.toggle('hide',!s.textContent.toLowerCase().includes(v));
+  });
+});
+</script>
+</body>
+</html>
