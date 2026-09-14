@@ -713,6 +713,7 @@ const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyZ4EDOJOSJt
 // ── 읽기 전용 CSV 직접 연동 (Apps Script 배포 불필요) ──
 // 시트가 "링크 있는 모든 사용자: 뷰어" 공유면 어느 PC에서든 추가 설정 없이 읽힘
 const SHEET_ID = '1cl-uZ9s0_VNF_YwagnujAhPTdREuzfcaPisWRRp7zwY';
+const ECOUNT_ONLY = new URLSearchParams(location.search).get('stockSource') === 'ecount';
 const INVENTORY_MANAGER_SHEET_ID = '1iwZL8sVWvXG4G6lJQXnmHcx8DnHp60opjYxlequk5Us';
 const INVENTORY_MANAGER_GIMPO_SHEET = '김포재고장';
 const INVENTORY_MANAGER_GIMPO_GID = '462252528';
@@ -732,12 +733,14 @@ function normCode(v) {
 async function fetchCsvRows(sheetName, spreadsheetId = SHEET_ID) {
   const res = await fetchWithTimeout(csvUrl(sheetName, spreadsheetId), 30000);
   const txt = await res.text();
+  if (!res.ok || /^\s*(?:<!doctype|<html)/i.test(txt)) throw new Error(`원본 시트 읽기 실패: ${sheetName} (${res.status})`);
   return csvToRows(txt);
 }
 async function fetchExportCsvRows(spreadsheetId, sheetGid) {
   const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${sheetGid}&cb=${Date.now()}`;
   const res = await fetchWithTimeout(url, 30000);
   const txt = await res.text();
+  if (!res.ok || /^\s*(?:<!doctype|<html)/i.test(txt)) throw new Error(`원본 시트 읽기 실패: ${spreadsheetId} / gid=${sheetGid} (${res.status})`);
   return csvToRows(txt);
 }
 // 기본 데이터(매핑/품절/kcfi 등) — Apps Script doGet 응답과 동일 구조로 빌드
@@ -800,7 +803,8 @@ async function loadRawViaCSV() {
     fetchCsvRows('사방넷단품원본'),
     fetchCsvRows('이카운트원본'),
     // GViz는 숫자·문자 코드가 섞인 열의 문자값을 빈칸으로 바꾸므로 원본 export를 쓴다.
-    fetchExportCsvRows(INVENTORY_MANAGER_SHEET_ID, INVENTORY_MANAGER_GIMPO_GID),
+    // 2026-09-14 사용자 결정: 김포 원본은 더 이상 사용하지 않는다 (재고관리 시트 김포재고장 탭 폐지).
+    Promise.resolve([]),
   ]);
   return { ok: true, sabRawData, icRaw, gpRaw };
 }
@@ -2544,20 +2548,26 @@ async function runMatch() {
   }
   await refreshSoldoutBeforeMatch();
   try {
-    await loadKCFIFromSheetRaw();
+    if (!ECOUNT_ONLY) await loadKCFIFromSheetRaw();
   } catch(e) {
     log(`[INFO] KCFI 원본상품명 재확인 생략: ${e.message}`, 'info');
   }
   log('[INFO] 매칭 시작...', 'info');
   resultRows = []; nomapRows = [];
+  const ecountByCode = new Map(Object.values(icMap).flat().map(row => [row.품목코드, row]));
+  const savedLogistics = ECOUNT_ONLY ? buildNormalizedSaveMap() : {};
   let cM=0, cU=0, cZ=0, cIC=0, cGP=0, cNM=0;
 
   sabData.forEach(sab => {
     const sc = normCode(sab.사방넷코드);
-    const icRes  = getIcountQty(sab);
-    const gpRes  = getGimpoQty(sc, sab.옵션, sab.상품명, sab.자체코드);
+    // 기존에 검수·저장한 옵션별 물류코드가 이카운트에 있으면 동일 옵션에 직접 연결한다.
+    const savedItem = ecountByCode.get(String(savedLogistics[sc] || '').replace(/^IC:/, ''));
+    const icRes = ECOUNT_ONLY && savedItem
+      ? { qty:savedItem.qty, src:'이카운트(저장매핑)', 품목코드:savedItem.품목코드 }
+      : getIcountQty(sab);
+    const gpRes  = ECOUNT_ONLY ? null : getGimpoQty(sc, sab.옵션, sab.상품명, sab.자체코드);
     const gpAudit = getGimpoAuditCandidate(sab, icRes, gpRes);
-    const kcfiQty = kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
+    const kcfiQty = !ECOUNT_ONLY && kcfiMap[sc] !== undefined ? kcfiMap[sc] : null;
     const kcfiMeta = kcfiMetaMap[sc] || null;
     let finalQty = null, src = '—', 물류품번 = '—';
 
@@ -2752,7 +2762,7 @@ function buildHanaHubStockPayload() {
     .map(row => ({ ...row, sources:[...row.sources].sort() }))
     .sort((a,b) => a.code.localeCompare(b.code));
   const calculatedAt = new Date().toISOString();
-  return { engine:'ASPRO v4.7', calculatedAt, sourceFile:'이카운트 OAPI + 이과장 김포/KCFI 일일 자동계산', rows, optionRows };
+  return { engine:'ASPRO v4.7', calculatedAt, sourceFile:ECOUNT_ONLY ? '이카운트 OAPI 단독 + ASPRO 매핑/운영 예외' : '이카운트 OAPI + 이과장 김포/KCFI 일일 자동계산', rows, optionRows };
 }
 
 function exportHanaHubStock() {
@@ -4234,7 +4244,7 @@ async function autoLoadFromSheets() {
               const r = data2.icRaw[i];
               if (!r || !r[0]) continue;
               const code = String(r[0]).trim();
-              if (!code || code.includes('계') || code.includes('회사명')) continue;
+              if (!code || code === '품목코드' || code.includes('계') || code.includes('회사명')) continue;
               const sabCode = String(r[1]||'').trim();
               const name = String(r[4]||'').trim();
               const qty = parseFloat(String(r[5]||'').replace(/,/g,'')) || 0;
@@ -4252,12 +4262,10 @@ async function autoLoadFromSheets() {
             const icList = document.getElementById('icList');
             // 이카운트원본 시트 A1에서 마지막 sync 시각 추출
             const icHeaderCell = String(data2.icRaw[0]?.[0] || '');
-            const syncMatch = icHeaderCell.match(/최종 동기화:\s*([^\/]+?)\s*\//) || icHeaderCell.match(/\/\s*(20\d{2}[.\s\-0-9:]+)\s*\//);
-            const lastSync = syncMatch ? syncMatch[1].trim() : '?';
-            // 신선도 계산 (오늘 대비 며칠 전)
-            const parseDate = s => { const m = s.match(/(20\d{2})[.\-\s]+(\d{1,2})[.\-\s]+(\d{1,2})/); return m ? new Date(+m[1], +m[2]-1, +m[3]) : null; };
-            const syncDate = parseDate(lastSync);
-            const daysAgo = syncDate ? Math.floor((Date.now() - syncDate.getTime())/86400000) : null;
+            // 형식: "최종 동기화: 2026. 9. 14. 오후 4:14:40 /" 또는 "/ 2026/09/14 / 재고현황"
+            const syncMatch = icHeaderCell.match(/최종 동기화:\s*([^\/]+?)\s*\//);
+            const lastSync = syncMatch ? syncMatch[1].trim() : (icHeaderCell.match(/20\d{2}\s*[.\/\-]\s*\d{1,2}\s*[.\/\-]\s*\d{1,2}/)?.[0] || '?');
+            const daysAgo = inventorySourceDaysAgo(lastSync);
             window.asproSourceMeta.ecount = { status:'loaded', count:icCnt, lastSync, daysAgo };
             const freshTag = daysAgo === null ? '' : daysAgo === 0 ? ' 🟢' : daysAgo === 1 ? ' 🟡 어제' : ` 🔴 ${daysAgo}일 전`;
             if (icList) icList.innerHTML = `<div class="fitem ok"><div class="fdot"></div><div class="fname">☁ Sheets 이카운트원본</div><div class="fcnt">${icCnt}SKU</div></div><div style="font-size:10px;color:var(--text3);padding:2px 6px">📅 ${lastSync}${freshTag}</div>`;
@@ -4303,7 +4311,7 @@ async function autoLoadFromSheets() {
 
           // 3차: 이과장 관리 시트 > KCFI 자동 파싱
           try {
-            await loadKCFIFromSheetRaw();
+            if (!ECOUNT_ONLY) await loadKCFIFromSheetRaw();
           } catch(e3) {
             log(`[INFO] 이과장 KCFI 시트 로드 실패 — 직전 정상 재고 유지`, 'info');
           }
@@ -4311,6 +4319,7 @@ async function autoLoadFromSheets() {
           if (btn) btn.textContent = '☁ Google Sheets 연동';
         }
       } catch(e2) {
+        window.asproRawLoadError = e2.message;
         log(`[WARN] 원본 데이터 로드 실패: ${e2.message} — 파일 직접 업로드 사용`, 'warn');
         if (btn) btn.textContent = '☁ Google Sheets 연동';
       }
